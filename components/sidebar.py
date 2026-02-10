@@ -15,9 +15,11 @@ _NAV_SECTIONS = [
         ("pages/presale.py", "header_presale", "案件管理"),
         ("pages/sales_plan.py", "header_sales_plan", "商機預測"),
         ("pages/pipeline.py", "header_pipeline", "業務漏斗"),
+        ("pages/kanban.py", None, "售前看板"),
     ]),
     ("售後管理", [("pages/postsale.py", "header_postsale", "專案管理")]),
     ("客戶關係管理", [("pages/post_closure.py", "header_post_closure", "已結案客戶")]),
+    (None, [("pages/search.py", None, "全域搜尋")]),
     (None, [("pages/settings.py", None, "設定")]),
 ]
 

@@ -424,7 +424,7 @@ D 系列一旦進入則不可回退
 
 ## 5. 開發任務與順序（Phase 1）
 
-> **Sprint 開發流程**：Phase 1 已拆分為 6 個 Sprint，每個 Sprint 遵循四階段工作流（Planning → Vibe Coding → Review → Retro/Refactor）。
+> **Sprint 開發流程**：Phase 1 已拆分為 6 個 Sprint，每個 Sprint 遵循五階段工作流（Kickoff → Planning → Vibe Coding → Review → Retro/Refactor）。
 > 詳見 [Sprint 方法論指南](SPRINT_GUIDE.md) 與 [各 Sprint 文件](sprints/)。
 >
 > | Sprint | 標題 | 文件 |

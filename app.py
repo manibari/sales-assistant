@@ -12,6 +12,8 @@ pages = st.navigation([
     st.Page("pages/annual_plan.py", title="年度戰略"),
     st.Page("pages/sales_plan.py", title="商機預測"),
     st.Page("pages/crm.py", title="客戶管理"),
+    st.Page("pages/pipeline.py", title="業務漏斗"),
+    st.Page("pages/settings.py", title="設定"),
 ])
 
 pages.run()

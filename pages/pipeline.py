@@ -1,4 +1,4 @@
-"""Pipeline Dashboard — funnel chart, stagnation alerts, revenue forecast."""
+"""Pipeline Dashboard — funnel chart, stagnation alerts, overdue tasks, revenue forecast."""
 
 from datetime import datetime, timedelta
 
@@ -7,10 +7,12 @@ import plotly.express as px
 import streamlit as st
 
 from components.sidebar import render_sidebar
-from constants import INACTIVE_STATUSES, STATUS_CODES
+from constants import DEFAULT_STAGE_PROBABILITIES, INACTIVE_STATUSES, STATUS_CODES
 from services import project as project_svc
+from services import project_task as task_svc
 from services import sales_plan as sp_svc
 from services import settings as settings_svc
+from services import stage_probability as prob_svc
 
 render_sidebar()
 
@@ -93,6 +95,20 @@ else:
     else:
         st.success("目前沒有停滯超過 14 天的案件。")
 
+    # --- Overdue tasks ---
+    st.subheader("逾期待辦")
+
+    overdue_tasks = [t for t in task_svc.get_upcoming(days=0) if t["due_date"] < datetime.now().date()]
+    if overdue_tasks:
+        for t in overdue_tasks:
+            days_overdue = (datetime.now().date() - t["due_date"]).days
+            st.error(
+                f"**{t['task_name']}** — {t.get('project_name', '')} "
+                f"（{t.get('owner') or '未指派'}）逾期 {days_overdue} 天"
+            )
+    else:
+        st.success("目前沒有逾期的待辦任務。")
+
     # --- Revenue forecast ---
     st.subheader("業績預測（本月 / 下月）")
 
@@ -119,17 +135,39 @@ else:
 
         if forecast_plans:
             forecast_df = pd.DataFrame(forecast_plans)
-            forecast_df["加權金額"] = forecast_df["amount"].astype(float) * forecast_df["confidence_level"].astype(float)
+            forecast_df["加權金額（手動）"] = forecast_df["amount"].astype(float) * forecast_df["confidence_level"].astype(float)
+
+            # Stage probability weighting
+            prob_rows = prob_svc.get_all()
+            prob_map = {r["status_code"]: float(r["probability"]) for r in prob_rows}
+            project_map = {p["project_id"]: p for p in projects}
+
+            def _get_stage_prob(pid):
+                proj = project_map.get(pid)
+                if not proj:
+                    return 0.5
+                code = proj["status_code"]
+                return prob_map.get(code, DEFAULT_STAGE_PROBABILITIES.get(code, 0.5))
+
+            forecast_df["階段機率"] = forecast_df["project_id"].map(_get_stage_prob)
+            forecast_df["加權金額（階段）"] = forecast_df["amount"].astype(float) * forecast_df["階段機率"]
 
             # Add project name for display
-            project_map = {p["project_id"]: p["project_name"] for p in projects}
-            forecast_df["專案名稱"] = forecast_df["project_id"].map(project_map)
+            forecast_df["專案名稱"] = forecast_df["project_id"].map(
+                lambda pid: project_map.get(pid, {}).get("project_name", "?")
+            )
 
-            display_cols = ["plan_id", "專案名稱", "expected_invoice_date", "amount", "confidence_level", "加權金額"]
+            display_cols = [
+                "plan_id", "專案名稱", "expected_invoice_date", "amount",
+                "confidence_level", "加權金額（手動）", "階段機率", "加權金額（階段）",
+            ]
             st.dataframe(
                 forecast_df[[c for c in display_cols if c in forecast_df.columns]],
                 width="stretch",
             )
-            st.metric("加權總額", f"${forecast_df['加權金額'].sum():,.0f}")
+
+            mc1, mc2 = st.columns(2)
+            mc1.metric("手動信心加權總額", f"${forecast_df['加權金額（手動）'].sum():,.0f}")
+            mc2.metric("階段機率加權總額", f"${forecast_df['加權金額（階段）'].sum():,.0f}")
         else:
             st.info("本月與下月無預計開票的商機。")

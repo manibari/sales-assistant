@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS project_task (
     estimated_hours NUMERIC NOT NULL DEFAULT 0,
     actual_hours    NUMERIC NOT NULL DEFAULT 0,
     sort_order      INTEGER NOT NULL DEFAULT 0,
+    due_date        DATE,
+    is_next_action  BOOLEAN DEFAULT FALSE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -118,6 +120,29 @@ CREATE TABLE IF NOT EXISTS account_contact (
     role         TEXT NOT NULL DEFAULT 'champion',
     sort_order   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (client_id, contact_id)
+);
+
+-- S11: Stage probability + project-contact linking
+
+CREATE TABLE IF NOT EXISTS stage_probability (
+    status_code  TEXT PRIMARY KEY,
+    probability  NUMERIC NOT NULL DEFAULT 0.5
+        CHECK (probability >= 0 AND probability <= 1),
+    sort_order   INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO stage_probability (status_code, probability, sort_order) VALUES
+    ('L0', 0.05, 1), ('L1', 0.10, 2), ('L2', 0.20, 3), ('L3', 0.30, 4),
+    ('L4', 0.50, 5), ('L5', 0.60, 6), ('L6', 0.75, 7), ('L7', 1.00, 8),
+    ('P0', 1.00, 9), ('P1', 1.00, 10), ('P2', 1.00, 11),
+    ('LOST', 0.00, 12), ('HOLD', 0.05, 13)
+ON CONFLICT (status_code) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS project_contact (
+    project_id   INTEGER NOT NULL REFERENCES project_list(project_id) ON DELETE CASCADE,
+    contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'participant',
+    PRIMARY KEY (project_id, contact_id)
 );
 
 -- Phase 3 reserved tables

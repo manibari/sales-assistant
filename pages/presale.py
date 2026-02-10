@@ -28,6 +28,17 @@ if projects:
     display_cols = ["project_id", "project_name", "client_id", "product_id",
                     "status_code", "sales_owner", "presale_owner", "priority", "status_updated_at"]
     st.dataframe(df[[c for c in display_cols if c in df.columns]], width="stretch")
+
+    st.subheader("案件詳情")
+    for p in projects:
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            status_label = f'{p["status_code"]} {STATUS_CODES.get(p["status_code"], "")}'
+            st.write(f'[{status_label}] {p["project_name"]}')
+        with col2:
+            if st.button("查看詳情", key=f'detail_{p["project_id"]}'):
+                st.query_params["project_id"] = str(p["project_id"])
+                st.switch_page("pages/presale_detail.py")
 else:
     st.info("尚無售前專案資料。")
 

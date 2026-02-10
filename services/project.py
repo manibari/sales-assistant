@@ -136,3 +136,41 @@ def transition_status(project_id, new_status):
                        WHERE project_id = %s""",
                     (project_id,),
                 )
+
+
+def link_contact(project_id, contact_id, role="participant"):
+    """Link a contact to a project."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO project_contact (project_id, contact_id, role)
+                   VALUES (%s, %s, %s)
+                   ON CONFLICT (project_id, contact_id) DO UPDATE SET role = %s""",
+                (project_id, contact_id, role, role),
+            )
+
+
+def unlink_contact(project_id, contact_id):
+    """Remove a contact from a project."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM project_contact WHERE project_id = %s AND contact_id = %s",
+                (project_id, contact_id),
+            )
+
+
+def get_contacts(project_id):
+    """Get all contacts linked to a project."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT c.*, pc.role
+                   FROM contact c
+                   JOIN project_contact pc ON c.contact_id = pc.contact_id
+                   WHERE pc.project_id = %s
+                   ORDER BY c.name""",
+                (project_id,),
+            )
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]

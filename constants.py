@@ -66,3 +66,14 @@ VALID_TRANSITIONS = {
     "LOST": [],
     "HOLD": [],
 }
+
+# Default stage probabilities (fallback when DB table is unavailable)
+DEFAULT_STAGE_PROBABILITIES = {
+    "L0": 0.05, "L1": 0.10, "L2": 0.20, "L3": 0.30,
+    "L4": 0.50, "L5": 0.60, "L6": 0.75, "L7": 1.00,
+    "P0": 1.00, "P1": 1.00, "P2": 1.00,
+    "LOST": 0.00, "HOLD": 0.05,
+}
+
+# Project-contact roles
+CONTACT_ROLES = ["participant", "champion", "decision_maker"]

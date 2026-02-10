@@ -99,9 +99,17 @@ with tab_list:
                                           index=cur_idx, key="edit_task_status")
                 c3, c4 = st.columns(2)
                 with c3:
+                    due_date = st.date_input("到期日", value=current_task.get("due_date"),
+                                              key="edit_due_date")
+                with c4:
+                    is_next_action = st.checkbox("標記為下一步行動",
+                                                  value=bool(current_task.get("is_next_action")),
+                                                  key="edit_next_action")
+                c3b, c4b = st.columns(2)
+                with c3b:
                     start_date = st.date_input("開始日期", value=current_task.get("start_date"),
                                                key="edit_start_date")
-                with c4:
+                with c4b:
                     end_date = st.date_input("結束日期", value=current_task.get("end_date"),
                                              key="edit_end_date")
                 c5, c6, c7 = st.columns(3)
@@ -128,6 +136,8 @@ with tab_list:
                             estimated_hours=est_hours,
                             actual_hours=act_hours,
                             sort_order=sort_order,
+                            due_date=due_date,
+                            is_next_action=is_next_action,
                         )
                         st.success("任務已更新。")
                         st.rerun()
@@ -149,8 +159,13 @@ with tab_add:
                                   key="add_status")
         c3, c4 = st.columns(2)
         with c3:
-            start_date = st.date_input("開始日期", value=date.today(), key="add_start_date")
+            due_date = st.date_input("到期日", value=None, key="add_due_date")
         with c4:
+            is_next_action = st.checkbox("標記為下一步行動", key="add_next_action")
+        c3b, c4b = st.columns(2)
+        with c3b:
+            start_date = st.date_input("開始日期", value=date.today(), key="add_start_date")
+        with c4b:
             end_date = st.date_input("結束日期", value=date.today(), key="add_end_date")
         c5, c6, c7 = st.columns(3)
         with c5:
@@ -172,6 +187,8 @@ with tab_add:
                     estimated_hours=est_hours,
                     actual_hours=act_hours,
                     sort_order=sort_order,
+                    due_date=due_date,
+                    is_next_action=is_next_action,
                 )
                 st.success(f"已新增任務：{task_name}")
                 st.rerun()

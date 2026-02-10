@@ -8,6 +8,7 @@ import streamlit as st
 from components.sidebar import render_sidebar
 from constants import ACTION_TYPES, INACTIVE_STATUSES, STATUS_CODES
 from services import project as project_svc
+from services import project_task as task_svc
 from services import settings as settings_svc
 from services import work_log as work_log_svc
 
@@ -15,6 +16,19 @@ render_sidebar()
 
 headers = settings_svc.get_all_headers()
 st.header(headers.get("header_work_log", "工作日誌"))
+
+# --- Today's tasks reminder ---
+today_tasks = task_svc.get_upcoming(days=0)
+if today_tasks:
+    st.subheader("今日待辦提醒")
+    for t in today_tasks:
+        overdue = t["due_date"] < date.today()
+        icon = ":red[逾期]" if overdue else ":orange[今日]"
+        st.warning(
+            f"{icon} **{t['task_name']}** — {t.get('project_name', '')} "
+            f"（{t.get('owner') or '未指派'}，到期：{t['due_date']}）"
+        )
+    st.divider()
 
 all_projects = project_svc.get_all()
 

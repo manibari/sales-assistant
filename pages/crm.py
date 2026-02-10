@@ -9,6 +9,7 @@ import streamlit as st
 from components.sidebar import render_sidebar
 from services import crm as crm_svc
 from services import settings as settings_svc
+from services import work_log as wl_svc
 
 render_sidebar()
 
@@ -129,6 +130,22 @@ with tab_detail:
             if current.get("notes"):
                 st.divider()
                 st.markdown(f"**備註**: {current['notes']}")
+
+            # Recent activity for this client
+            st.divider()
+            st.markdown("**近期活動**")
+            recent_logs = wl_svc.get_by_client(detail_id, limit=10)
+            if recent_logs:
+                for log in recent_logs:
+                    with st.container():
+                        lc1, lc2 = st.columns([1, 4])
+                        lc1.markdown(f"**{log['log_date']}**")
+                        lc2.markdown(
+                            f":blue[{log['action_type']}] {log.get('project_name', '')} — "
+                            f"{log.get('content') or '—'}　（{log['duration_hours']}h）"
+                        )
+            else:
+                st.info("此客戶尚無活動紀錄。")
 
 
 # ===========================================================================

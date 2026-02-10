@@ -5,17 +5,17 @@ from database.connection import get_connection
 
 def create(project_id, task_name, owner=None, status="planned",
            start_date=None, end_date=None, estimated_hours=0,
-           actual_hours=0, sort_order=0):
+           actual_hours=0, sort_order=0, due_date=None, is_next_action=False):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO project_task
                    (project_id, task_name, owner, status, start_date, end_date,
-                    estimated_hours, actual_hours, sort_order)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    estimated_hours, actual_hours, sort_order, due_date, is_next_action)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING task_id""",
                 (project_id, task_name, owner, status, start_date, end_date,
-                 estimated_hours, actual_hours, sort_order),
+                 estimated_hours, actual_hours, sort_order, due_date, is_next_action),
             )
             return cur.fetchone()[0]
 
@@ -44,7 +44,7 @@ def get_by_id(task_id):
 
 def update(task_id, task_name, owner=None, status="planned",
            start_date=None, end_date=None, estimated_hours=0,
-           actual_hours=0, sort_order=0):
+           actual_hours=0, sort_order=0, due_date=None, is_next_action=False):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -52,10 +52,12 @@ def update(task_id, task_name, owner=None, status="planned",
                    SET task_name = %s, owner = %s, status = %s,
                        start_date = %s, end_date = %s,
                        estimated_hours = %s, actual_hours = %s,
-                       sort_order = %s, updated_at = NOW()
+                       sort_order = %s, due_date = %s, is_next_action = %s,
+                       updated_at = NOW()
                    WHERE task_id = %s""",
                 (task_name, owner, status, start_date, end_date,
-                 estimated_hours, actual_hours, sort_order, task_id),
+                 estimated_hours, actual_hours, sort_order,
+                 due_date, is_next_action, task_id),
             )
 
 
@@ -99,6 +101,27 @@ def get_completed_by_date(project_id):
                    WHERE project_id = %s AND status = 'completed'
                    ORDER BY updated_at::date""",
                 (project_id,),
+            )
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def get_upcoming(days=7):
+    """Get incomplete tasks with due_date within N days (or overdue).
+
+    Returns tasks joined with project_list for project context.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT t.*, p.project_name, p.status_code, p.client_id
+                   FROM project_task t
+                   JOIN project_list p ON t.project_id = p.project_id
+                   WHERE t.status != 'completed'
+                     AND t.due_date IS NOT NULL
+                     AND t.due_date <= CURRENT_DATE + %s
+                   ORDER BY t.due_date, t.project_id""",
+                (days,),
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]

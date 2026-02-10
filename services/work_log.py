@@ -37,3 +37,20 @@ def get_recent(limit=5):
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def get_by_client(client_id, limit=20):
+    """Get work logs for all projects belonging to a client."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT w.*, p.project_name
+                   FROM work_log w
+                   JOIN project_list p ON w.project_id = p.project_id
+                   WHERE p.client_id = %s
+                   ORDER BY w.log_date DESC, w.created_at DESC
+                   LIMIT %s""",
+                (client_id, limit),
+            )
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]

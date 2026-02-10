@@ -12,7 +12,7 @@ SPMS (Sales & Project Management System) — B2B 業務與專案管理系統。T
 # Start PostgreSQL
 docker-compose up -d
 
-# Initialize database (creates all 11 tables)
+# Initialize database (creates all 13 tables)
 python -c "from database.connection import init_db; init_db()"
 
 # Run S09 migration (if upgrading from S08)
@@ -23,6 +23,12 @@ python database/migrate_crm_retro.py
 
 # Run S10 migration (contact normalization)
 python database/migrate_s10.py
+
+# Run S11 migration (stage_probability + project_contact)
+python database/migrate_s11.py
+
+# Run S12 migration (due_date + is_next_action)
+python database/migrate_s12.py
 
 # Load seed data
 python database/seed.py
@@ -52,18 +58,24 @@ Streamlit Pages (pages/*.py)
 - **`constants.py`** is the single source of truth for status codes (L0–L7, P0–P2, LOST, HOLD), action types, task statuses, inactive statuses, and valid transitions.
 - **`app_settings` table** stores customizable page headers; `components/sidebar.py` reads them dynamically.
 - **Presale/postsale separation** — `presale_owner`, `sales_owner`, and `postsale_owner` are separate fields in `project_list`. Pages `presale.py` and `postsale.py` filter by status code prefix.
-- **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections (年度戰略, 售前管理, 售後管理, 客戶關係管理) with bold headers and indented sub-pages.
+- **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections (年度戰略, 售前管理, 售後管理, 客戶關係管理) with bold headers and indented sub-pages. 售前管理含售前看板（kanban.py），全域搜尋為 standalone 頁面。
+- **Stage probability** — `stage_probability` table stores per-status default win probabilities. `services/stage_probability.py` provides CRUD. Used for sales plan prefill and pipeline weighted forecast.
+- **Project-contact linking** — `project_contact` table (many-to-many). `services/project.py` provides link_contact / unlink_contact / get_contacts. Used by `presale_detail.py`.
 
-### Database: 11 Tables
+### Database: 13 Tables
 
-Core (Phase 1-2): `annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`
+Core (Phase 1-2): `annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`, `stage_probability`, `project_contact`
 Reserved (Phase 3): `email_log`, `agent_actions`
 
-`project_list` is the central hub — FK references from `work_log`, `sales_plan`, `project_task`, `email_log`, `agent_actions`.
+`project_list` is the central hub — FK references from `work_log`, `sales_plan`, `project_task`, `project_contact`, `email_log`, `agent_actions`.
 
-`project_task` stores sub-tasks for postsale projects (statuses: planned/in_progress/completed). Used by `postsale_detail.py` for task CRUD, Gantt chart, and burndown chart.
+`project_task` stores sub-tasks for presale/postsale projects (statuses: planned/in_progress/completed, + `due_date` + `is_next_action`). Used by `presale_detail.py` and `postsale_detail.py` for task CRUD, Gantt chart, and burndown chart.
 
-`contact` + `account_contact` normalize CRM contact data (S10). `services/crm.py` dual-writes to both JSONB fields and normalized tables. JSONB fields retained for backward compatibility until S11+ confirms stability.
+`contact` + `account_contact` normalize CRM contact data (S10). `services/crm.py` dual-writes to both JSONB fields and normalized tables.
+
+`stage_probability` stores per-stage default probabilities (L0=5%...L7=100%). Used by `sales_plan.py` for confidence prefill and `pipeline.py` for weighted revenue forecast. Editable via `settings.py`.
+
+`project_contact` links contacts to projects (many-to-many). Used by `presale_detail.py` for managing deal-level stakeholders.
 
 ### State Machine (Status Codes)
 
@@ -77,13 +89,15 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 
 5-stage workflow per Sprint: **Kickoff → Planning → Vibe Coding → Review → Retro & Refactor**
 
-- Sprint files: `docs/sprints/S01.md` through `S09.md`
+- Sprint files: `docs/sprints/S01.md` through `S13.md`
 - Sprint guide: `docs/SPRINT_GUIDE.md`
 - Full dev plan: `docs/DEVELOPMENT_PLAN.md`
 
-S03 and S04 can run in parallel (both depend only on S02). S10-S13 為 Phase 2 進行中。
+S03 and S04 can run in parallel (both depend only on S02). S07-S13 為 Phase 2（已完成）。
 
 Every Sprint **Kickoff** (Stage 0) and **Retro & Refactor** (Stage 4) must automatically commit and push to GitHub. This ensures progress checkpoints are always synced to the remote repository.
+
+After every Sprint **Retro** completes, re-read `docs/DEVELOPMENT_PLAN.md` and compare it against the actual codebase (schema, services, pages, directory structure). If any discrepancies are found (e.g., table count, column names, page list, directory tree, sprint table), alert the developer before proceeding to the next Sprint.
 
 ## Language
 

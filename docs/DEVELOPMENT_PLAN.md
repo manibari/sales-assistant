@@ -1,9 +1,9 @@
 # SPMS - B2B 業務與專案管理系統 開發計畫
 
-> **版本**: v1.1
+> **版本**: v1.2
 > **建立日期**: 2026-02-10
 > **技術架構**: Python + Streamlit + PostgreSQL
-> **狀態**: Phase 2 開發中
+> **狀態**: Phase 2 完成（S07-S13）
 
 ## Context
 
@@ -28,7 +28,7 @@ sales-assistant/
 ├── docs/
 │   ├── DEVELOPMENT_PLAN.md     # 本文件
 │   ├── SPRINT_GUIDE.md         # Sprint 方法論指南
-│   └── sprints/                # 各 Sprint 文件 (S01-S10)
+│   └── sprints/                # 各 Sprint 文件 (S01-S13)
 ├── database/
 │   ├── __init__.py
 │   ├── connection.py           # PostgreSQL 連線池管理 (psycopg2.pool)
@@ -38,7 +38,9 @@ sales-assistant/
 │   ├── migrate_s07.py          # S07 migration
 │   ├── migrate_s08.py          # S08 migration
 │   ├── migrate_s09.py          # S09 migration（project_task 表）
-│   └── migrate_s10.py          # S10 migration（contact 正規化）
+│   ├── migrate_s10.py          # S10 migration（contact 正規化）
+│   ├── migrate_s11.py          # S11 migration（stage_probability + project_contact）
+│   └── migrate_s12.py          # S12 migration（due_date + is_next_action）
 ├── models/
 │   ├── __init__.py
 │   └── schemas.py              # Pydantic 資料驗證模型
@@ -50,6 +52,8 @@ sales-assistant/
 │   ├── project.py              # 專案管理 CRUD + 狀態機（presale/postsale 共用）
 │   ├── project_task.py         # 專案任務 CRUD
 │   ├── contact.py              # 聯絡人 CRUD（S10 正規化）
+│   ├── stage_probability.py    # 階段機率 CRUD（S11）
+│   ├── search.py               # 全域搜尋服務（S13）
 │   ├── work_log.py             # 工作日誌 CRUD
 │   └── settings.py             # 設定 CRUD
 ├── pages/
@@ -61,8 +65,11 @@ sales-assistant/
 │   ├── presale.py              # 案件管理（L0-L7）
 │   ├── postsale.py             # 專案管理（P0-P2）
 │   ├── postsale_detail.py      # 售後專案明細（task CRUD / Gantt / Burndown）
+│   ├── presale_detail.py       # 售前專案明細（狀態流轉 / 聯絡人 / 商機 / 時間軸）
 │   ├── post_closure.py         # 已結案客戶（P2/LOST/HOLD）
-│   └── settings.py             # 設定頁（修改 Header 等）
+│   ├── kanban.py               # 售前看板（L0-L6 欄位式佈局）
+│   ├── search.py               # 全域搜尋（跨表 ILIKE）
+│   └── settings.py             # 設定頁（修改 Header + 階段機率）
 ├── components/
 │   ├── __init__.py
 │   └── sidebar.py              # 共用側邊欄元件
@@ -83,9 +90,9 @@ sales-assistant/
 
 ---
 
-## 2. 資料庫 Schema（11 張表，PostgreSQL）
+## 2. 資料庫 Schema（13 張表，PostgreSQL）
 
-> Phase 1-2 建立全部 11 張表（9 張核心 + Phase 3 預留的 email_log、agent_actions），確保 Schema 一次到位。
+> Phase 1-2 建立全部 13 張表（11 張核心 + Phase 3 預留的 email_log、agent_actions），確保 Schema 一次到位。
 
 ### PostgreSQL 相較 SQLite 的優勢
 - `JSONB` 原生型別：可直接查詢 JSON 內容（如 `decision_maker->>'style'`）
@@ -282,6 +289,8 @@ ON CONFLICT (key) DO NOTHING;
 | status | TEXT | 任務狀態（planned/in_progress/completed） |
 | start_date | DATE | 開始日期 |
 | end_date | DATE | 結束日期 |
+| due_date | DATE | 截止日期（S12 新增） |
+| is_next_action | BOOLEAN | 是否為下一步行動（S12 新增） |
 | estimated_hours | NUMERIC | 預估工時 |
 | actual_hours | NUMERIC | 實際工時 |
 | sort_order | INTEGER | 排序順序 |
@@ -298,6 +307,8 @@ CREATE TABLE IF NOT EXISTS project_task (
     status          TEXT NOT NULL DEFAULT 'planned',
     start_date      DATE,
     end_date        DATE,
+    due_date        DATE,
+    is_next_action  BOOLEAN NOT NULL DEFAULT FALSE,
     estimated_hours NUMERIC NOT NULL DEFAULT 0,
     actual_hours    NUMERIC NOT NULL DEFAULT 0,
     sort_order      INTEGER NOT NULL DEFAULT 0,
@@ -351,9 +362,50 @@ CREATE TABLE IF NOT EXISTS account_contact (
 );
 ```
 
-> **雙寫策略**：`services/crm.py` 的 `create()` 和 `update()` 同時寫入 JSONB 欄位和正規化表。`get_by_id()` 優先從正規化表讀取。JSONB 欄位保留至 S11+ 確認穩定後再移除。
+> **雙寫策略**：`services/crm.py` 的 `create()` 和 `update()` 同時寫入 JSONB 欄位和正規化表。`get_by_id()` 優先從正規化表讀取。JSONB 欄位保留至確認穩定後再移除。
 
-### 2.10 `email_log` — 郵件紀錄表（Phase 3 使用，Phase 1 建表）
+### 2.10 `stage_probability` — 階段機率表（S11 新增）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| status_code | TEXT PK | 狀態碼（L0-L7, P0-P2, LOST, HOLD） |
+| probability | NUMERIC (0~1) | 預設成交機率 |
+| sort_order | INTEGER | 排序順序 |
+
+```sql
+CREATE TABLE IF NOT EXISTS stage_probability (
+    status_code  TEXT PRIMARY KEY,
+    probability  NUMERIC NOT NULL DEFAULT 0
+        CHECK (probability >= 0 AND probability <= 1),
+    sort_order   INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT INTO stage_probability (status_code, probability, sort_order) VALUES
+    ('L0', 0.05, 1), ('L1', 0.10, 2), ('L2', 0.20, 3), ('L3', 0.30, 4),
+    ('L4', 0.50, 5), ('L5', 0.60, 6), ('L6', 0.75, 7), ('L7', 1.00, 8),
+    ('P0', 1.00, 9), ('P1', 1.00, 10), ('P2', 1.00, 11),
+    ('LOST', 0.00, 12), ('HOLD', 0.05, 13)
+ON CONFLICT (status_code) DO NOTHING;
+```
+
+### 2.11 `project_contact` — 專案-聯絡人關聯表（S11 新增）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| project_id | INTEGER FK → project_list | 專案 ID（ON DELETE CASCADE） |
+| contact_id | INTEGER FK → contact | 聯絡人 ID（ON DELETE CASCADE） |
+| role | TEXT | 角色（participant / champion / decision_maker） |
+
+```sql
+CREATE TABLE IF NOT EXISTS project_contact (
+    project_id   INTEGER NOT NULL REFERENCES project_list(project_id) ON DELETE CASCADE,
+    contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'participant',
+    PRIMARY KEY (project_id, contact_id)
+);
+```
+
+### 2.12 `email_log` — 郵件紀錄表（Phase 3 使用，Phase 1 建表）
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -389,7 +441,7 @@ CREATE TABLE IF NOT EXISTS email_log (
 );
 ```
 
-### 2.11 `agent_actions` — Agent 動作佇列（Phase 3 使用，Phase 1 建表）
+### 2.13 `agent_actions` — Agent 動作佇列（Phase 3 使用，Phase 1 建表）
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -497,13 +549,15 @@ CREATE TABLE IF NOT EXISTS agent_actions (
 SPMS
 ├── 工作日誌              [standalone]
 ├── 年度戰略              [section → 產品策略管理]
-├── 售前管理              [section → 4 sub-pages]
+├── 售前管理              [section → 5 sub-pages]
 │   ├── 案件管理 (presale.py)
 │   ├── 商機預測 (sales_plan.py)
 │   ├── 業務漏斗 (pipeline.py)
+│   ├── 售前看板 (kanban.py)
 │   └── 客戶管理 (crm.py)
 ├── 售後管理              [section → 專案管理]
 ├── 客戶關係管理          [section → 已結案客戶]
+├── 全域搜尋              [standalone]
 └── 設定                  [standalone]
 ```
 
@@ -511,16 +565,19 @@ SPMS
 
 | # | 檔案 | 預設標題 | 功能 |
 |---|------|---------|------|
-| 1 | `pages/work_log.py` | 工作日誌 | 每日工作紀錄輸入（主力頁面） |
+| 1 | `pages/work_log.py` | 工作日誌 | 每日工作紀錄輸入（主力頁面）+ 今日待辦提醒 |
 | 2 | `pages/annual_plan.py` | 產品策略管理 | 產品與策略管理 |
-| 3 | `pages/presale.py` | 案件管理 | 售前案件 CRUD + L0-L7 狀態流轉 |
-| 4 | `pages/sales_plan.py` | 商機預測 | 業績與開票預測 |
-| 5 | `pages/pipeline.py` | 業務漏斗 | Dashboard 戰情室 |
-| 6 | `pages/crm.py` | 客戶管理 | 客戶與利害關係人（含部門、詳情頁） |
+| 3 | `pages/presale.py` | 案件管理 | 售前案件 CRUD + L0-L7 狀態流轉 + 查看詳情按鈕 |
+| 4 | `pages/sales_plan.py` | 商機預測 | 業績與開票預測 + 階段機率預填 |
+| 5 | `pages/pipeline.py` | 業務漏斗 | Dashboard 戰情室 + 逾期待辦 + 機率加權預測 |
+| 6 | `pages/crm.py` | 客戶管理 | 客戶與利害關係人（含部門、詳情頁、近期活動摘要） |
 | 7 | `pages/postsale.py` | 專案管理 | 售後案件 CRUD + P0-P2 狀態流轉 |
 | 8 | `pages/post_closure.py` | 已結案客戶 | 結案專案（P2/LOST/HOLD）依客戶分組 |
-| 9 | `pages/settings.py` | 設定 | 自訂頁面 Header |
-| 10 | `pages/postsale_detail.py` | 專案詳情 | 售後專案明細（query param 導航，含 task CRUD / Gantt / Burndown） |
+| 9 | `pages/settings.py` | 設定 | 自訂頁面 Header + 階段機率設定 |
+| 10 | `pages/postsale_detail.py` | 專案詳情 | 售後專案明細（task CRUD / Gantt / Burndown + due_date / is_next_action） |
+| 11 | `pages/presale_detail.py` | 案件詳情 | 售前專案明細（狀態流轉 / 關聯聯絡人 / 商機預測 / 活動時間軸 / 任務管理） |
+| 12 | `pages/search.py` | 全域搜尋 | 跨表搜尋（聯絡人 / 客戶 / 專案）+ smart routing 至詳情頁 |
+| 13 | `pages/kanban.py` | 售前看板 | L0-L6 欄位式看板 + 停滯警示 + 快速推進按鈕 |
 
 ### 頁面 1：工作日誌輸入中心（低摩擦、高效率）
 
@@ -577,6 +634,9 @@ SPMS
 > | S08 | Navigation Restructuring | [S08.md](sprints/S08.md) |
 > | S09 | Work Log Split + Postsale Detail | [S09.md](sprints/S09.md) |
 > | S10 | DB Normalization (Contact) | [S10.md](sprints/S10.md) |
+> | S11 | 階段機率 + Deal-Contact + 售前詳情頁 | [S11.md](sprints/S11.md) |
+> | S12 | 活動時間軸 + 售前任務 + 下一步行動 | [S12.md](sprints/S12.md) |
+> | S13 | 全域搜尋 + Visual Board | [S13.md](sprints/S13.md) |
 
 ### Step 1：基礎建設
 | # | 任務 | 檔案 |
@@ -618,12 +678,14 @@ SPMS
 - S07：客戶回饋 Sprint — CRM 欄位重構（champion→champions, DM 結構更新, data_year）
 - S08：導航重構 — 分組側邊欄、presale/postsale 分離、post_closure 頁面
 - S09：Work Log 分頁 + 售後詳情頁（postsale_detail.py，含 task CRUD / Gantt / Burndown）
-
-**進行中 / 規劃中：**
 - S10：DB 正規化 — Contact 獨立表（contact + account_contact），雙寫策略
-- S11：Contact UI 整合 — 跨客戶聯絡人搜尋、聯絡人獨立管理頁
-- S12：Dashboard 加強 — 趨勢線、工時分析圖表
-- S13：匯出與批次操作 — Excel/CSV 匯出、批次狀態更新
+- S11：階段機率 + Deal-Contact + 售前詳情頁 — stage_probability 表、project_contact 表、presale_detail.py、機率預填
+- S12：活動時間軸 + 售前任務 + 下一步行動 — due_date / is_next_action、今日待辦提醒、逾期警示、近期活動摘要
+- S13：全域搜尋 + Visual Board — 跨表 ILIKE 搜尋、售前看板（L0-L6 欄位式 Kanban）
+
+**規劃中：**
+- Dashboard 加強 — 趨勢線、工時分析圖表
+- 匯出與批次操作 — Excel/CSV 匯出、批次狀態更新
 
 ## 7. Phase 3 — AI Sales Agent 架構
 

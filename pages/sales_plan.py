@@ -18,7 +18,7 @@ st.header(headers.get("header_sales_plan", "商機預測"))
 plans = sp_svc.get_all()
 if plans:
     df = pd.DataFrame(plans)
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
 else:
     st.info("尚無商機預測資料。")
 

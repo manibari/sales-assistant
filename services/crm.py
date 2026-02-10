@@ -1,23 +1,28 @@
-"""CRUD operations for crm table. Uses psycopg2.extras.Json for JSONB fields."""
+"""CRUD operations for crm table. Uses psycopg2.extras.Json for JSONB fields.
+Dual-write: normalized contact/account_contact tables + JSONB fields for backward compat."""
 
 from psycopg2.extras import Json
 
 from database.connection import get_connection
 
 
-def create(client_id, company_name, industry=None, email=None,
-           decision_maker=None, champion=None, contact_info=None, notes=None):
+def create(client_id, company_name, industry=None, department=None, email=None,
+           decision_maker=None, champions=None, contact_info=None, notes=None,
+           data_year=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO crm
-                   (client_id, company_name, industry, email, decision_maker, champion, contact_info, notes)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
-                (client_id, company_name, industry, email,
+                   (client_id, company_name, industry, department, email,
+                    decision_maker, champions, contact_info, notes, data_year)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (client_id, company_name, industry, department, email,
                  Json(decision_maker) if decision_maker else None,
-                 Json(champion) if champion else None,
-                 contact_info, notes),
+                 Json(champions) if champions else None,
+                 contact_info, notes, data_year),
             )
+            # Dual-write: sync to normalized tables
+            _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
 
 
 def get_all():
@@ -29,6 +34,7 @@ def get_all():
 
 
 def get_by_id(client_id):
+    """Get CRM record with contacts assembled from normalized tables when available."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM crm WHERE client_id = %s", (client_id,))
@@ -36,27 +42,175 @@ def get_by_id(client_id):
             if row is None:
                 return None
             cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            result = dict(zip(cols, row))
+
+            # Try to read from normalized tables (preferred source)
+            contacts = _get_normalized_contacts(cur, client_id)
+            if contacts is not None:
+                result["decision_maker"] = contacts["decision_maker"]
+                result["champions"] = contacts["champions"]
+
+            return result
 
 
-def update(client_id, company_name, industry, email,
-           decision_maker, champion, contact_info, notes):
+def update(client_id, company_name, industry, department, email=None,
+           decision_maker=None, champions=None, contact_info=None, notes=None,
+           data_year=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE crm
-                   SET company_name = %s, industry = %s, email = %s,
-                       decision_maker = %s, champion = %s,
-                       contact_info = %s, notes = %s, updated_at = NOW()
+                   SET company_name = %s, industry = %s, department = %s,
+                       email = %s, decision_maker = %s, champions = %s,
+                       contact_info = %s, notes = %s, data_year = %s,
+                       updated_at = NOW()
                    WHERE client_id = %s""",
-                (company_name, industry, email,
+                (company_name, industry, department, email,
                  Json(decision_maker) if decision_maker else None,
-                 Json(champion) if champion else None,
-                 contact_info, notes, client_id),
+                 Json(champions) if champions else None,
+                 contact_info, notes, data_year, client_id),
             )
+            # Dual-write: replace normalized contacts for this client
+            _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
 
 
 def delete(client_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # account_contact rows cascade-deleted via FK
             cur.execute("DELETE FROM crm WHERE client_id = %s", (client_id,))
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for dual-write
+# ---------------------------------------------------------------------------
+
+def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
+    """Replace all normalized contacts for a client with the provided JSONB data."""
+    # Check if contact table exists (graceful during migration period)
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'contact'
+        )
+    """)
+    if not cur.fetchone()[0]:
+        return
+
+    # Remove existing links (contacts orphaned here will be cleaned up later)
+    cur.execute("""
+        DELETE FROM account_contact WHERE client_id = %s
+    """, (client_id,))
+
+    # Collect contact_ids that were linked to this client for cleanup
+    # (We re-insert fresh, so orphaned contacts from old links get cleaned)
+
+    # Insert decision_maker
+    if decision_maker and isinstance(decision_maker, dict) and decision_maker.get("name"):
+        contact_id = _upsert_contact(cur, decision_maker)
+        if contact_id:
+            cur.execute("""
+                INSERT INTO account_contact (client_id, contact_id, role, sort_order)
+                VALUES (%s, %s, 'decision_maker', 0)
+                ON CONFLICT (client_id, contact_id) DO UPDATE
+                SET role = 'decision_maker', sort_order = 0
+            """, (client_id, contact_id))
+
+    # Insert champions
+    if champions and isinstance(champions, list):
+        for idx, ch in enumerate(champions):
+            if isinstance(ch, dict) and ch.get("name"):
+                contact_id = _upsert_contact(cur, ch)
+                if contact_id:
+                    cur.execute("""
+                        INSERT INTO account_contact (client_id, contact_id, role, sort_order)
+                        VALUES (%s, %s, 'champion', %s)
+                        ON CONFLICT (client_id, contact_id) DO UPDATE
+                        SET role = 'champion', sort_order = %s
+                    """, (client_id, contact_id, idx, idx))
+
+    # Clean up orphaned contacts (no links anywhere)
+    cur.execute("""
+        DELETE FROM contact
+        WHERE contact_id NOT IN (SELECT contact_id FROM account_contact)
+    """)
+
+
+def _upsert_contact(cur, data):
+    """Find or create a contact by name+email, return contact_id."""
+    name = (data.get("name") or "").strip()
+    if not name:
+        return None
+
+    email = (data.get("email") or "").strip() or None
+    title = (data.get("title") or "").strip() or None
+    phone = (data.get("phone") or "").strip() or None
+    notes = (data.get("notes") or "").strip() or None
+
+    # Try to find existing contact by name + email
+    cur.execute("""
+        SELECT contact_id FROM contact
+        WHERE name = %s AND COALESCE(email, '') = COALESCE(%s, '')
+    """, (name, email))
+    existing = cur.fetchone()
+
+    if existing:
+        # Update existing contact details
+        contact_id = existing[0]
+        cur.execute("""
+            UPDATE contact SET title = %s, phone = %s, notes = %s, updated_at = NOW()
+            WHERE contact_id = %s
+        """, (title, phone, notes, contact_id))
+        return contact_id
+
+    # Create new contact
+    cur.execute("""
+        INSERT INTO contact (name, title, email, phone, notes)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING contact_id
+    """, (name, title, email, phone, notes))
+    return cur.fetchone()[0]
+
+
+def _get_normalized_contacts(cur, client_id):
+    """Read contacts from normalized tables and assemble into JSONB-compatible format."""
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'account_contact'
+        )
+    """)
+    if not cur.fetchone()[0]:
+        return None
+
+    cur.execute("""
+        SELECT c.name, c.title, c.email, c.phone, c.notes, ac.role, ac.sort_order
+        FROM contact c
+        JOIN account_contact ac ON c.contact_id = ac.contact_id
+        WHERE ac.client_id = %s
+        ORDER BY ac.role DESC, ac.sort_order
+    """, (client_id,))
+
+    rows = cur.fetchall()
+    if not rows:
+        return None
+
+    cols = [d[0] for d in cur.description]
+    contacts = [dict(zip(cols, row)) for row in rows]
+
+    dm = None
+    champs = []
+    for c in contacts:
+        entry = {
+            "name": c["name"] or "",
+            "title": c["title"] or "",
+            "email": c["email"] or "",
+            "phone": c["phone"] or "",
+            "notes": c["notes"] or "",
+        }
+        if c["role"] == "decision_maker":
+            dm = entry
+        else:
+            champs.append(entry)
+
+    return {"decision_maker": dm, "champions": champs if champs else None}

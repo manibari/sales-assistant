@@ -3,7 +3,7 @@
 > **版本**: v1.1
 > **建立日期**: 2026-02-10
 > **技術架構**: Python + Streamlit + PostgreSQL
-> **狀態**: Phase 1 開發中
+> **狀態**: Phase 2 開發中
 
 ## Context
 
@@ -26,12 +26,19 @@ sales-assistant/
 ├── .env                        # DB 連線資訊（不入版控）
 ├── .env.example                # 環境變數範本
 ├── docs/
-│   └── DEVELOPMENT_PLAN.md     # 本文件
+│   ├── DEVELOPMENT_PLAN.md     # 本文件
+│   ├── SPRINT_GUIDE.md         # Sprint 方法論指南
+│   └── sprints/                # 各 Sprint 文件 (S01-S10)
 ├── database/
 │   ├── __init__.py
 │   ├── connection.py           # PostgreSQL 連線池管理 (psycopg2.pool)
 │   ├── schema.sql              # 完整 CREATE TABLE DDL
-│   └── seed.py                 # 初始/示範資料
+│   ├── seed.py                 # 初始/示範資料
+│   ├── migrate_crm_retro.py    # CRM 欄位遷移（champion→champions, DM 結構更新）
+│   ├── migrate_s07.py          # S07 migration
+│   ├── migrate_s08.py          # S08 migration
+│   ├── migrate_s09.py          # S09 migration（project_task 表）
+│   └── migrate_s10.py          # S10 migration（contact 正規化）
 ├── models/
 │   ├── __init__.py
 │   └── schemas.py              # Pydantic 資料驗證模型
@@ -40,7 +47,9 @@ sales-assistant/
 │   ├── annual_plan.py          # 年度戰略 CRUD
 │   ├── sales_plan.py           # 商機預測 CRUD
 │   ├── crm.py                  # 客戶關係 CRUD
-│   ├── project.py              # 專案管理 CRUD + 狀態機
+│   ├── project.py              # 專案管理 CRUD + 狀態機（presale/postsale 共用）
+│   ├── project_task.py         # 專案任務 CRUD
+│   ├── contact.py              # 聯絡人 CRUD（S10 正規化）
 │   ├── work_log.py             # 工作日誌 CRUD
 │   └── settings.py             # 設定 CRUD
 ├── pages/
@@ -48,8 +57,11 @@ sales-assistant/
 │   ├── annual_plan.py          # 年度戰略管理
 │   ├── sales_plan.py           # 商機預測管理
 │   ├── pipeline.py             # 業務漏斗 Dashboard
-│   ├── crm.py                  # 客戶管理
-│   ├── project.py              # 專案總表
+│   ├── crm.py                  # 客戶管理（含部門、詳情頁）
+│   ├── presale.py              # 案件管理（L0-L7）
+│   ├── postsale.py             # 專案管理（P0-P2）
+│   ├── postsale_detail.py      # 售後專案明細（task CRUD / Gantt / Burndown）
+│   ├── post_closure.py         # 已結案客戶（P2/LOST/HOLD）
 │   └── settings.py             # 設定頁（修改 Header 等）
 ├── components/
 │   ├── __init__.py
@@ -71,9 +83,9 @@ sales-assistant/
 
 ---
 
-## 2. 資料庫 Schema（8 張表，PostgreSQL）
+## 2. 資料庫 Schema（11 張表，PostgreSQL）
 
-> Phase 1 建立全部 8 張表（含 Phase 3 預留的 email_log、agent_actions），確保 Schema 一次到位。
+> Phase 1-2 建立全部 11 張表（9 張核心 + Phase 3 預留的 email_log、agent_actions），確保 Schema 一次到位。
 
 ### PostgreSQL 相較 SQLite 的優勢
 - `JSONB` 原生型別：可直接查詢 JSON 內容（如 `decision_maker->>'style'`）
@@ -114,11 +126,13 @@ CREATE TABLE IF NOT EXISTS annual_plan (
 | client_id | TEXT PK | 企業識別碼 |
 | company_name | TEXT NOT NULL | 公司名稱 |
 | industry | TEXT | 產業別 |
+| department | TEXT | 部門（如：麥寮廠 碼槽處） |
 | email | TEXT | 主要聯絡 email（Agent 比對寄件人用） |
-| decision_maker | JSONB | 決策者 `{"name":"...", "title":"...", "style":"..."}` |
-| champion | JSONB | 內部擁護者 `{"name":"...", "title":"...", "notes":"..."}` |
+| decision_maker | JSONB | 決策者 `{"name":"...", "title":"...", "email":"...", "phone":"...", "notes":"..."}` |
+| champions | JSONB | 內部擁護者陣列 `[{"name":"...", "title":"...", "email":"...", "phone":"...", "notes":"..."}, ...]` |
 | contact_info | TEXT | 聯絡資訊 |
 | notes | TEXT | 備註 |
+| data_year | INTEGER | 資料年份 |
 | created_at | TIMESTAMPTZ | 建立時間 |
 | updated_at | TIMESTAMPTZ | 更新時間 |
 
@@ -127,11 +141,13 @@ CREATE TABLE IF NOT EXISTS crm (
     client_id      TEXT PRIMARY KEY,
     company_name   TEXT NOT NULL,
     industry       TEXT,
+    department     TEXT,
     email          TEXT,
-    decision_maker JSONB,
-    champion       JSONB,
+    decision_maker JSONB,       -- {name, title, email, phone, notes}
+    champions      JSONB,       -- [{name, title, email, phone, notes}, ...]
     contact_info   TEXT,
     notes          TEXT,
+    data_year      INTEGER,
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -147,7 +163,9 @@ CREATE TABLE IF NOT EXISTS crm (
 | product_id | TEXT FK → annual_plan | 產品 ID |
 | status_code | TEXT | 狀態碼（見狀態機） |
 | status_updated_at | TIMESTAMPTZ | 狀態更新時間（用於停滯偵測） |
-| owner | TEXT | 負責人 |
+| presale_owner | TEXT | 售前負責人 |
+| sales_owner | TEXT | 業務負責人 |
+| postsale_owner | TEXT | 售後負責人 |
 | priority | TEXT | 優先級 (High/Medium/Low) |
 | created_at | TIMESTAMPTZ | 建立時間 |
 | updated_at | TIMESTAMPTZ | 更新時間 |
@@ -158,9 +176,11 @@ CREATE TABLE IF NOT EXISTS project_list (
     project_name      TEXT NOT NULL,
     client_id         TEXT REFERENCES crm(client_id),
     product_id        TEXT REFERENCES annual_plan(product_id),
-    status_code       TEXT NOT NULL DEFAULT 'S01',
+    status_code       TEXT NOT NULL DEFAULT 'L0',
     status_updated_at TIMESTAMPTZ DEFAULT NOW(),
-    owner             TEXT,
+    presale_owner     TEXT,
+    sales_owner       TEXT,
+    postsale_owner    TEXT,
     priority          TEXT DEFAULT 'Medium',
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     updated_at        TIMESTAMPTZ DEFAULT NOW()
@@ -240,16 +260,100 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 
 INSERT INTO app_settings (key, value) VALUES
-    ('header_annual_plan', '年度戰略'),
+    ('header_work_log', '工作日誌'),
+    ('header_presale', '案件管理'),
+    ('header_postsale', '專案管理'),
+    ('header_annual_plan', '產品策略管理'),
     ('header_sales_plan', '商機預測'),
-    ('header_pipeline', '業務漏斗'),
     ('header_crm', '客戶管理'),
-    ('header_project', '專案管理'),
-    ('header_work_log', '工作日誌')
+    ('header_pipeline', '業務漏斗'),
+    ('header_post_closure', '已結案客戶')
 ON CONFLICT (key) DO NOTHING;
 ```
 
-### 2.7 `email_log` — 郵件紀錄表（Phase 3 使用，Phase 1 建表）
+### 2.7 `project_task` — 專案任務分項表
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| task_id | SERIAL PK | 流水號 |
+| project_id | INTEGER FK → project_list | 關聯專案（ON DELETE CASCADE） |
+| task_name | TEXT NOT NULL | 任務名稱 |
+| owner | TEXT | 負責人 |
+| status | TEXT | 任務狀態（planned/in_progress/completed） |
+| start_date | DATE | 開始日期 |
+| end_date | DATE | 結束日期 |
+| estimated_hours | NUMERIC | 預估工時 |
+| actual_hours | NUMERIC | 實際工時 |
+| sort_order | INTEGER | 排序順序 |
+| created_at | TIMESTAMPTZ | 建立時間 |
+| updated_at | TIMESTAMPTZ | 更新時間 |
+
+```sql
+CREATE TABLE IF NOT EXISTS project_task (
+    task_id         SERIAL PRIMARY KEY,
+    project_id      INTEGER NOT NULL REFERENCES project_list(project_id)
+                    ON DELETE CASCADE,
+    task_name       TEXT NOT NULL,
+    owner           TEXT,
+    status          TEXT NOT NULL DEFAULT 'planned',
+    start_date      DATE,
+    end_date        DATE,
+    estimated_hours NUMERIC NOT NULL DEFAULT 0,
+    actual_hours    NUMERIC NOT NULL DEFAULT 0,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 2.8 `contact` — 聯絡人表（S10 正規化）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| contact_id | SERIAL PK | 流水號 |
+| name | TEXT NOT NULL | 姓名 |
+| title | TEXT | 職稱 |
+| email | TEXT | Email |
+| phone | TEXT | 電話 |
+| notes | TEXT | 備註 |
+| created_at | TIMESTAMPTZ | 建立時間 |
+| updated_at | TIMESTAMPTZ | 更新時間 |
+
+```sql
+CREATE TABLE IF NOT EXISTS contact (
+    contact_id   SERIAL PRIMARY KEY,
+    name         TEXT NOT NULL,
+    title        TEXT,
+    email        TEXT,
+    phone        TEXT,
+    notes        TEXT,
+    created_at   TIMESTAMPTZ DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 2.9 `account_contact` — 客戶-聯絡人關聯表（S10 正規化）
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| client_id | TEXT FK → crm | 客戶 ID（ON DELETE CASCADE） |
+| contact_id | INTEGER FK → contact | 聯絡人 ID（ON DELETE CASCADE） |
+| role | TEXT | 角色（decision_maker / champion） |
+| sort_order | INTEGER | 排序順序 |
+
+```sql
+CREATE TABLE IF NOT EXISTS account_contact (
+    client_id    TEXT NOT NULL REFERENCES crm(client_id) ON DELETE CASCADE,
+    contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'champion',
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (client_id, contact_id)
+);
+```
+
+> **雙寫策略**：`services/crm.py` 的 `create()` 和 `update()` 同時寫入 JSONB 欄位和正規化表。`get_by_id()` 優先從正規化表讀取。JSONB 欄位保留至 S11+ 確認穩定後再移除。
+
+### 2.10 `email_log` — 郵件紀錄表（Phase 3 使用，Phase 1 建表）
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -285,7 +389,7 @@ CREATE TABLE IF NOT EXISTS email_log (
 );
 ```
 
-### 2.8 `agent_actions` — Agent 動作佇列（Phase 3 使用，Phase 1 建表）
+### 2.11 `agent_actions` — Agent 動作佇列（Phase 3 使用，Phase 1 建表）
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
@@ -322,7 +426,7 @@ CREATE TABLE IF NOT EXISTS agent_actions (
 // draft_email
 {"to": "wang@tsmc.com", "subject": "Re: 定價方案", "body": "...", "reasoning": "..."}
 // update_status
-{"current_status": "S02", "proposed_status": "S03", "confidence": 0.85, "reasoning": "..."}
+{"current_status": "L1", "proposed_status": "L2", "confidence": 0.85, "reasoning": "..."}
 // alert
 {"severity": "high", "message": "專案停滯 21 天，建議跟進"}
 ```
@@ -333,41 +437,49 @@ CREATE TABLE IF NOT EXISTS agent_actions (
 
 ### 狀態碼定義
 
-| 系列 | 代碼 | 名稱 | 說明 |
-|------|------|------|------|
-| S (Sales) | S01 | 開發 | 初始接觸、發掘商機 |
-| | S02 | 追蹤 | 持續跟進中 |
-| | S03 | 提案 | 已提出方案 |
-| | S04 | 立案 | 正式立案追蹤 |
-| T (Tech) | T01 | POC 執行 | 概念驗證進行中 |
-| | T02 | POC 完成 | 概念驗證結束 |
-| C (Closing) | C01 | 議價 | 價格協商 |
-| | C02 | 條款 | 合約條款協商 |
-| | C03 | 審查 | 內部審查流程 |
-| | C04 | 簽約 | 合約簽署 |
-| D (Delivery) | D01 | 規劃 | 交付規劃 |
-| | D02 | 開發 | 交付開發中 |
-| | D03 | 驗收 | 客戶驗收（終態） |
-| 特殊 | LOST | 遺失 | 案件遺失 |
-| | HOLD | 擱置 | 暫時擱置 |
+**售前 (Pre-sale) L0-L7：**
+
+| 代碼 | 名稱 | 說明 |
+|------|------|------|
+| L0 | 客戶開發 | 初始接觸、發掘商機 |
+| L1 | 等待追蹤 | 持續跟進中 |
+| L2 | 提案 | 已完成 first call，提出方案 |
+| L3 | 確認意願 | 客戶有意願，內部立案 |
+| L4 | 執行 POC | 概念驗證進行中 |
+| L5 | 完成 POC | 概念驗證結束 |
+| L6 | 議價 | 價格協商 |
+| L7 | 簽約 | 合約簽署（售前終態） |
+
+**售後 (Post-sale) P0-P2：**
+
+| 代碼 | 名稱 | 說明 |
+|------|------|------|
+| P0 | 規劃 | 交付規劃 |
+| P1 | 執行 | 交付執行中 |
+| P2 | 驗收 | 客戶驗收（售後終態） |
+
+**特殊狀態：**
+
+| 代碼 | 名稱 | 說明 |
+|------|------|------|
+| LOST | 遺失 | 案件遺失 |
+| HOLD | 擱置 | 暫時擱置 |
 
 ### 合法狀態轉換
 
 ```
-S01 → S02 → S03 → S04
-                       ↘
-                        T01 → T02
-                       ↗         ↘
-S04 ─────────────────→ C01 → C02 → C03 → C04 → D01 → D02 → D03
-                       ↑
-                       T02
+售前: L0 → L1 → L2 → L3 → L4 → L5 → L6 → L7
+      所有 L0-L6 階段均可轉為 LOST 或 HOLD
 
-所有 S/T/C 階段均可轉為 LOST 或 HOLD
-D 系列一旦進入則不可回退
+轉換點: L7（簽約完成）→ P0（進入售後規劃），由售後負責人接手
+
+售後: P0 → P1 → P2
+      售後一旦進入則不可回退
 ```
 
 ### 非活躍狀態（不顯示在 Work Log 專案選單）
-- `D03`（已驗收）
+- `L7`（已簽約）
+- `P2`（已驗收）
 - `LOST`（已遺失）
 - `HOLD`（已擱置）
 
@@ -377,24 +489,43 @@ D 系列一旦進入則不可回退
 
 ### 導航架構
 
-使用 `st.navigation()` API，在 `app.py` 中統一定義所有頁面。頁面標題從 `app_settings` 表讀取，實現動態自訂 Header。
+使用 `st.navigation()` API，在 `app.py` 中統一定義所有頁面。頁面標題從 `app_settings` 表讀取，實現動態自訂 Header。Sidebar 採分組導航架構（`_NAV_SECTIONS`）。
+
+### 導航結構
+
+```
+SPMS
+├── 工作日誌              [standalone]
+├── 年度戰略              [section → 產品策略管理]
+├── 售前管理              [section → 4 sub-pages]
+│   ├── 案件管理 (presale.py)
+│   ├── 商機預測 (sales_plan.py)
+│   ├── 業務漏斗 (pipeline.py)
+│   └── 客戶管理 (crm.py)
+├── 售後管理              [section → 專案管理]
+├── 客戶關係管理          [section → 已結案客戶]
+└── 設定                  [standalone]
+```
 
 ### 頁面清單
 
 | # | 檔案 | 預設標題 | 功能 |
 |---|------|---------|------|
 | 1 | `pages/work_log.py` | 工作日誌 | 每日工作紀錄輸入（主力頁面） |
-| 2 | `pages/project.py` | 專案管理 | 專案 CRUD + 狀態流轉 |
-| 3 | `pages/annual_plan.py` | 年度戰略 | 產品與策略管理 |
+| 2 | `pages/annual_plan.py` | 產品策略管理 | 產品與策略管理 |
+| 3 | `pages/presale.py` | 案件管理 | 售前案件 CRUD + L0-L7 狀態流轉 |
 | 4 | `pages/sales_plan.py` | 商機預測 | 業績與開票預測 |
-| 5 | `pages/crm.py` | 客戶管理 | 客戶與利害關係人 |
-| 6 | `pages/pipeline.py` | 業務漏斗 | Dashboard 戰情室 |
-| 7 | `pages/settings.py` | 設定 | 自訂頁面 Header |
+| 5 | `pages/pipeline.py` | 業務漏斗 | Dashboard 戰情室 |
+| 6 | `pages/crm.py` | 客戶管理 | 客戶與利害關係人（含部門、詳情頁） |
+| 7 | `pages/postsale.py` | 專案管理 | 售後案件 CRUD + P0-P2 狀態流轉 |
+| 8 | `pages/post_closure.py` | 已結案客戶 | 結案專案（P2/LOST/HOLD）依客戶分組 |
+| 9 | `pages/settings.py` | 設定 | 自訂頁面 Header |
+| 10 | `pages/postsale_detail.py` | 專案詳情 | 售後專案明細（query param 導航，含 task CRUD / Gantt / Burndown） |
 
 ### 頁面 1：工作日誌輸入中心（低摩擦、高效率）
 
 - **專案選擇器**：下拉選單，自動過濾 INACTIVE_STATUSES
-  - 顯示格式：`[S02] TSMC AI 客服導入案`
+  - 顯示格式：`[L1] TSMC AI 客服導入案`
 - **智慧表單**：
   - 日期：date_input，預設今天
   - 工時：number_input，預設 1.0 小時，步進 0.5
@@ -402,21 +533,28 @@ D 系列一旦進入則不可回退
   - 內容描述：text_area，寬敞空間
 - **即時反饋**：送出後下方顯示最近 5 筆紀錄（dataframe）
 
-### 頁面 2-5：資料表 CRUD 管理頁
+### 頁面 2-3：售前/售後管理
+
+- **售前管理**：只顯示 L0-L7 + LOST + HOLD 狀態案件，有售前負責人欄位
+- **售後管理**：只顯示 P0-P2 狀態案件，有售後負責人欄位
+- 上方：資料列表（st.dataframe，可排序）
+- 下方：新增/編輯/狀態流轉 tabs（只顯示合法的下一步狀態）
+
+### 頁面 4-6：資料表 CRUD 管理頁
 
 - 上方：資料列表（st.dataframe，可排序）
 - 下方：新增/編輯表單（st.form）
-- 專案總表特殊功能：狀態流轉按鈕（只顯示合法的下一步狀態）
+- CRM 頁面：客戶詳情 tab 可查看完整 DM/Champion 資訊，列表只顯示姓名
 
-### 頁面 6：業務漏斗 Dashboard
+### 頁面 7：業務漏斗 Dashboard
 
-- **漏斗圖**：各階段（S/T/C/D）案件數量（Plotly bar chart）
+- **漏斗圖**：各階段（L 售前 / P 售後 / LOST / HOLD）案件數量（Plotly bar chart）
 - **停滯警示**：`status_updated_at` 距今 > 14 天的案件標紅顯示
 - **業績預測表**：基於 sales_plan，列出本月/下月預計開票的案子與金額
 
-### 頁面 7：設定頁
+### 頁面 9：設定頁
 
-- 6 個 text_input，分別對應 6 個頁面的 Header 標題
+- 8 個 text_input，分別對應 8 個頁面的 Header 標題
 - 「儲存」按鈕，寫入 `app_settings` 表
 - 儲存後頁面 rerun，側邊欄標題立即更新
 
@@ -435,13 +573,17 @@ D 系列一旦進入則不可回退
 > | S04 | Supporting Pages | [S04.md](sprints/S04.md) |
 > | S05 | Dashboard & Settings | [S05.md](sprints/S05.md) |
 > | S06 | Integration & Polish | [S06.md](sprints/S06.md) |
+> | S07 | Customer Feedback Sprint | [S07.md](sprints/S07.md) |
+> | S08 | Navigation Restructuring | [S08.md](sprints/S08.md) |
+> | S09 | Work Log Split + Postsale Detail | [S09.md](sprints/S09.md) |
+> | S10 | DB Normalization (Contact) | [S10.md](sprints/S10.md) |
 
 ### Step 1：基礎建設
 | # | 任務 | 檔案 |
 |---|------|------|
 | 1.1 | 建立專案骨架與依賴 | `requirements.txt`, `docker-compose.yml`, `.env.example`, 各 `__init__.py` |
 | 1.2 | 定義常數（狀態碼、動作類型） | `constants.py` |
-| 1.3 | 撰寫資料庫 DDL | `database/schema.sql`（8 張表，PostgreSQL 語法） |
+| 1.3 | 撰寫資料庫 DDL | `database/schema.sql`（11 張表，PostgreSQL 語法） |
 | 1.4 | 實作 DB 連線池與初始化 | `database/connection.py`（psycopg2.pool） |
 
 ### Step 2：資料模型與服務層
@@ -470,12 +612,18 @@ D 系列一旦進入則不可回退
 
 ---
 
-## 6. Phase 2 增強（未來）
+## 6. Phase 2 增強
 
-- Dashboard 加入趨勢線、工時分析圖表
-- 匯出功能（Excel / CSV）
-- 進階篩選與搜尋
-- 批次狀態更新
+**已完成：**
+- S07：客戶回饋 Sprint — CRM 欄位重構（champion→champions, DM 結構更新, data_year）
+- S08：導航重構 — 分組側邊欄、presale/postsale 分離、post_closure 頁面
+- S09：Work Log 分頁 + 售後詳情頁（postsale_detail.py，含 task CRUD / Gantt / Burndown）
+
+**進行中 / 規劃中：**
+- S10：DB 正規化 — Contact 獨立表（contact + account_contact），雙寫策略
+- S11：Contact UI 整合 — 跨客戶聯絡人搜尋、聯絡人獨立管理頁
+- S12：Dashboard 加強 — 趨勢線、工時分析圖表
+- S13：匯出與批次操作 — Excel/CSV 匯出、批次狀態更新
 
 ## 7. Phase 3 — AI Sales Agent 架構
 
@@ -525,7 +673,7 @@ Streamlit Agent 控制台 (pages/agent.py)
 
 #### 流程 B：定時掃描 → 停滯偵測 → 推進建議
 1. Agent 定時檢查 `status_updated_at` 超過閾值的案件
-   - S 系列 > 14 天 / T 系列 > 21 天 / C 系列 > 7 天
+   - L 系列 > 14 天 / P 系列 > 21 天
 2. Claude 分析脈絡 → 建議推進/HOLD/LOST/具體行動
 3. 寫入 `agent_actions` → 人工審核
 
@@ -577,7 +725,7 @@ agent/
 ### Phase 1 驗證
 1. `docker-compose up -d` 啟動 PostgreSQL
 2. `streamlit run app.py` 啟動應用
-3. 確認 PostgreSQL 中 8 張表存在
+3. 確認 PostgreSQL 中 11 張表存在
 4. 在設定頁修改任一 Header → 確認側邊欄標題即時更新
 5. 新增一筆專案 → 在工作日誌頁下拉選單看到該專案
 6. 新增工作日誌 → 確認最近 5 筆顯示正確

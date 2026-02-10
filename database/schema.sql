@@ -1,5 +1,5 @@
 -- SPMS Database Schema (PostgreSQL)
--- 8 tables: 6 for Phase 1, 2 reserved for Phase 3
+-- 11 tables: 9 core + 2 reserved for Phase 3
 
 CREATE TABLE IF NOT EXISTS annual_plan (
     product_id      TEXT PRIMARY KEY,
@@ -15,11 +15,13 @@ CREATE TABLE IF NOT EXISTS crm (
     client_id      TEXT PRIMARY KEY,
     company_name   TEXT NOT NULL,
     industry       TEXT,
+    department     TEXT,
     email          TEXT,
-    decision_maker JSONB,
-    champion       JSONB,
+    decision_maker JSONB,       -- {name, title, email, phone, notes}
+    champions      JSONB,       -- [{name, title, email, phone, notes}, ...]
     contact_info   TEXT,
     notes          TEXT,
+    data_year      INTEGER,
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -29,9 +31,11 @@ CREATE TABLE IF NOT EXISTS project_list (
     project_name      TEXT NOT NULL,
     client_id         TEXT REFERENCES crm(client_id),
     product_id        TEXT REFERENCES annual_plan(product_id),
-    status_code       TEXT NOT NULL DEFAULT 'S01',
+    status_code       TEXT NOT NULL DEFAULT 'L0',
     status_updated_at TIMESTAMPTZ DEFAULT NOW(),
-    owner             TEXT,
+    presale_owner     TEXT,
+    sales_owner       TEXT,
+    postsale_owner    TEXT,
     priority          TEXT DEFAULT 'Medium',
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     updated_at        TIMESTAMPTZ DEFAULT NOW()
@@ -63,19 +67,58 @@ CREATE TABLE IF NOT EXISTS work_log (
     created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS project_task (
+    task_id         SERIAL PRIMARY KEY,
+    project_id      INTEGER NOT NULL REFERENCES project_list(project_id)
+                    ON DELETE CASCADE,
+    task_name       TEXT NOT NULL,
+    owner           TEXT,
+    status          TEXT NOT NULL DEFAULT 'planned',
+    start_date      DATE,
+    end_date        DATE,
+    estimated_hours NUMERIC NOT NULL DEFAULT 0,
+    actual_hours    NUMERIC NOT NULL DEFAULT 0,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
 
 INSERT INTO app_settings (key, value) VALUES
-    ('header_annual_plan', '年度戰略'),
+    ('header_work_log', '工作日誌'),
+    ('header_presale', '案件管理'),
+    ('header_postsale', '專案管理'),
+    ('header_annual_plan', '產品策略管理'),
     ('header_sales_plan', '商機預測'),
-    ('header_pipeline', '業務漏斗'),
     ('header_crm', '客戶管理'),
-    ('header_project', '專案管理'),
-    ('header_work_log', '工作日誌')
+    ('header_pipeline', '業務漏斗'),
+    ('header_post_closure', '已結案客戶')
 ON CONFLICT (key) DO NOTHING;
+
+-- S10: Contact normalization tables
+
+CREATE TABLE IF NOT EXISTS contact (
+    contact_id   SERIAL PRIMARY KEY,
+    name         TEXT NOT NULL,
+    title        TEXT,
+    email        TEXT,
+    phone        TEXT,
+    notes        TEXT,
+    created_at   TIMESTAMPTZ DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS account_contact (
+    client_id    TEXT NOT NULL REFERENCES crm(client_id) ON DELETE CASCADE,
+    contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    role         TEXT NOT NULL DEFAULT 'champion',
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (client_id, contact_id)
+);
 
 -- Phase 3 reserved tables
 

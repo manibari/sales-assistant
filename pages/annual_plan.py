@@ -10,13 +10,13 @@ from services import settings as settings_svc
 render_sidebar()
 
 headers = settings_svc.get_all_headers()
-st.header(headers.get("header_annual_plan", "年度戰略"))
+st.header(headers.get("header_annual_plan", "產品策略管理"))
 
 # --- Product list ---
 products = ap_svc.get_all()
 if products:
     df = pd.DataFrame(products)
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
 else:
     st.info("尚無年度戰略資料。")
 

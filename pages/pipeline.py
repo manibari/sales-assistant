@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from components.sidebar import render_sidebar
-from constants import STATUS_CODES
+from constants import INACTIVE_STATUSES, STATUS_CODES
 from services import project as project_svc
 from services import sales_plan as sp_svc
 from services import settings as settings_svc
@@ -20,20 +20,22 @@ st.header(headers.get("header_pipeline", "業務漏斗"))
 projects = project_svc.get_all()
 
 if not projects:
-    st.info("尚無專案資料。請先至專案管理頁面新增專案。")
+    st.info("尚無專案資料。請先至售前管理或售後管理頁面新增專案。")
 else:
     # --- Funnel bar chart ---
     st.subheader("各階段案件數量")
 
     df = pd.DataFrame(projects)
 
-    # Group by stage prefix (S/T/C/D/LOST/HOLD)
+    # Group by stage: presale (L), postsale (P), LOST, HOLD
     def stage_group(code):
         if code in ("LOST", "HOLD"):
             return code
-        return code[0] if code else "?"
-
-    df["stage"] = df["status_code"].apply(stage_group)
+        if code.startswith("L"):
+            return "售前"
+        if code.startswith("P"):
+            return "售後"
+        return "?"
 
     # Count per individual status code
     status_counts = df["status_code"].value_counts().reset_index()
@@ -42,18 +44,34 @@ else:
         lambda c: f"{c} {STATUS_CODES.get(c, '')}"
     )
     status_counts["stage"] = status_counts["status_code"].apply(stage_group)
-    status_counts = status_counts.sort_values("status_code")
+
+    # Sort: L0-L7, P0-P2, LOST, HOLD
+    sort_order = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7",
+                  "P0", "P1", "P2", "LOST", "HOLD"]
+    status_counts["sort_key"] = status_counts["status_code"].map(
+        lambda c: sort_order.index(c) if c in sort_order else 99
+    )
+    status_counts = status_counts.sort_values("sort_key")
+
+    # Color mapping: L series blue gradient, P series green gradient
+    color_map = {
+        "L0": "#a8d8ea", "L1": "#7ec8e3", "L2": "#5ab3d6",
+        "L3": "#3498db", "L4": "#2980b9", "L5": "#2471a3",
+        "L6": "#1f618d", "L7": "#1a5276",
+        "P0": "#82e0aa", "P1": "#2ecc71", "P2": "#1e8449",
+        "LOST": "#e74c3c", "HOLD": "#95a5a6",
+    }
 
     fig = px.bar(
         status_counts,
         x="label",
         y="count",
-        color="stage",
-        color_discrete_map={"S": "#3498db", "T": "#9b59b6", "C": "#e67e22", "D": "#2ecc71", "LOST": "#e74c3c", "HOLD": "#95a5a6"},
-        labels={"label": "狀態", "count": "案件數", "stage": "階段"},
+        color="status_code",
+        color_discrete_map=color_map,
+        labels={"label": "狀態", "count": "案件數", "status_code": "狀態碼"},
     )
     fig.update_layout(showlegend=True, xaxis_tickangle=-45)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # --- Stagnation alerts ---
     st.subheader("停滯警示")
@@ -62,14 +80,14 @@ else:
     stagnant = [
         p for p in projects
         if p["status_updated_at"] and p["status_updated_at"] < threshold
-        and p["status_code"] not in ("D03", "LOST", "HOLD")
+        and p["status_code"] not in INACTIVE_STATUSES
     ]
 
     if stagnant:
         for p in stagnant:
             days = (datetime.now().astimezone() - p["status_updated_at"]).days
             st.error(
-                f"**[{p['status_code']}] {p['project_name']}** — "
+                f"**[{p['status_code']} {STATUS_CODES.get(p['status_code'], '')}] {p['project_name']}** — "
                 f"停滯 {days} 天（上次更新：{p['status_updated_at'].strftime('%Y-%m-%d')}）"
             )
     else:
@@ -110,7 +128,7 @@ else:
             display_cols = ["plan_id", "專案名稱", "expected_invoice_date", "amount", "confidence_level", "加權金額"]
             st.dataframe(
                 forecast_df[[c for c in display_cols if c in forecast_df.columns]],
-                use_container_width=True,
+                width="stretch",
             )
             st.metric("加權總額", f"${forecast_df['加權金額'].sum():,.0f}")
         else:

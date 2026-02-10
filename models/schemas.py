@@ -19,12 +19,16 @@ class AnnualPlan(BaseModel):
 class DecisionMaker(BaseModel):
     name: str = ""
     title: str = ""
-    style: str = ""
+    email: str = ""
+    phone: str = ""
+    notes: str = ""
 
 
 class Champion(BaseModel):
     name: str = ""
     title: str = ""
+    email: str = ""
+    phone: str = ""
     notes: str = ""
 
 
@@ -32,11 +36,13 @@ class CRM(BaseModel):
     client_id: str
     company_name: str
     industry: Optional[str] = None
+    department: Optional[str] = None
     email: Optional[str] = None
     decision_maker: Optional[DecisionMaker] = None
-    champion: Optional[Champion] = None
+    champions: Optional[list[Champion]] = None
     contact_info: Optional[str] = None
     notes: Optional[str] = None
+    data_year: Optional[int] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -46,9 +52,10 @@ class Project(BaseModel):
     project_name: str
     client_id: Optional[str] = None
     product_id: Optional[str] = None
-    status_code: str = "S01"
+    status_code: str = "L0"
     status_updated_at: Optional[datetime] = None
-    owner: Optional[str] = None
+    presale_owner: Optional[str] = None
+    postsale_owner: Optional[str] = None
     priority: str = "Medium"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

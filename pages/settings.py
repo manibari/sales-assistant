@@ -16,11 +16,13 @@ headers = settings_svc.get_all_headers()
 
 HEADER_KEYS = [
     ("header_work_log", "工作日誌"),
-    ("header_project", "專案管理"),
-    ("header_annual_plan", "年度戰略"),
+    ("header_presale", "案件管理"),
+    ("header_postsale", "專案管理"),
+    ("header_annual_plan", "產品策略管理"),
     ("header_sales_plan", "商機預測"),
     ("header_crm", "客戶管理"),
     ("header_pipeline", "業務漏斗"),
+    ("header_post_closure", "已結案客戶"),
 ]
 
 with st.form("settings_form"):

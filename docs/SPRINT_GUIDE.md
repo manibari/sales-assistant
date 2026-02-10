@@ -220,13 +220,16 @@
 | [S04](sprints/S04.md) | Supporting Pages | pages/annual_plan.py, pages/crm.py, pages/sales_plan.py | S02 |
 | [S05](sprints/S05.md) | Dashboard & Settings | pages/pipeline.py, pages/settings.py | S03, S04 |
 | [S06](sprints/S06.md) | Integration & Polish | app.py, database/seed.py, end-to-end verification | S05 |
+| [S07](sprints/S07.md) | Customer Feedback Sprint | CRM 欄位重構（champion→champions, DM 結構, data_year） | S06 |
+| [S08](sprints/S08.md) | Navigation Restructuring | 分組側邊欄, presale/postsale 分離, post_closure 頁面 | S07 |
+| [S09](sprints/S09.md) | Work Log Split + Postsale Detail | 工作日誌分頁, postsale_detail (task CRUD/Gantt/Burndown) | S08 |
 
 ```
 S01 → S02 → S03 ─┐
-            └ S04 ─┤→ S05 → S06
+            └ S04 ─┤→ S05 → S06 → S07 → S08 → S09
 ```
 
-> **備註**: S03 與 S04 可平行進行（皆僅依賴 S02）。
+> **備註**: S03 與 S04 可平行進行（皆僅依賴 S02）。S07 起為線性依賴。
 
 ---
 

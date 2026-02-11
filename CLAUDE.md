@@ -97,6 +97,52 @@ Post-sale: P0 規劃 → P1 執行 → P2 驗收
 
 All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transitions to P0 post-sale). Inactive statuses (L7, P2, LOST, HOLD) are filtered from work log project selectors.
 
+## File Registry
+
+### Services (services/*.py)
+
+| 檔案 | 行數 | Public API |
+|------|------|-----------|
+| crm.py | 208 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
+| project.py | 176 | `create`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
+| client_health.py | 139 | `compute_health_score`, `compute_all_scores` |
+| project_task.py | 127 | `create`, `get_by_project`, `get_by_id`, `update`, `delete`, `get_summary`, `get_completed_by_date`, `get_upcoming` |
+| contact.py | 87 | `create`, `get_by_id`, `get_by_client`, `update`, `delete`, `link_to_client`, `unlink_from_client` |
+| work_log.py | 82 | `create`, `get_by_project`, `get_recent`, `get_by_client`, `get_client_only` |
+| sales_plan.py | 77 | `create`, `get_all`, `get_by_id`, `update`, `delete`, `get_summary_by_client` |
+| search.py | 55 | `search_all` |
+| annual_plan.py | 50 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
+| stage_probability.py | 36 | `get_all`, `get_by_code`, `update` |
+| settings.py | 22 | `get_all_headers`, `update_header` |
+
+### Pages (pages/*.py)
+
+| 檔案 | 行數 | 用途 |
+|------|------|------|
+| crm.py | 378 | 客戶管理：CRUD + 聯絡人編輯 + 健康分數 |
+| presale_detail.py | 352 | 售前案件詳情：狀態轉換、任務、聯絡人、活動記錄 |
+| postsale_detail.py | 302 | 售後專案詳情：任務 CRUD、Gantt chart、Burndown chart |
+| presale.py | 191 | 售前案件列表：建立/編輯案件 |
+| postsale.py | 185 | 售後專案列表：建立/編輯專案 |
+| pipeline.py | 173 | 業務漏斗：加權營收、階段分布圖 |
+| work_log.py | 160 | 工作日誌（首頁）：專案/客戶層級活動記錄 |
+| sales_plan.py | 144 | 商機預測：CRUD + 階段機率 prefill |
+| post_closure.py | 89 | 已結案客戶：P2/LOST/HOLD 專案一覽 |
+| kanban.py | 86 | 售前看板：按階段分欄顯示 |
+| annual_plan.py | 80 | 產品策略管理：年度目標 CRUD |
+| settings.py | 71 | 設定：頁面標題、階段機率編輯 |
+| search.py | 61 | 全域搜尋：跨聯絡人/客戶/專案 |
+
+### Infrastructure
+
+| 檔案 | 行數 | 用途 |
+|------|------|------|
+| constants.py | 90 | 狀態碼、轉換規則、Action types、健康分數權重/閾值 |
+| components/sidebar.py | 69 | 分組式側邊欄導航（`_NAV_SECTIONS` + `render_sidebar`） |
+| database/connection.py | 52 | psycopg2 連線池（`get_connection`, `init_db`） |
+| database/schema.sql | 200 | 13 表 DDL + idempotent migrations (S14/S16) |
+| app.py | 28 | Streamlit 入口：init_db → navigation → run |
+
 ## Sprint Methodology
 
 5-stage workflow per Sprint: **Kickoff → Planning → Vibe Coding → Review → Retro & Refactor**

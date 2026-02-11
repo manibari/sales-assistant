@@ -1,10 +1,12 @@
-"""Client health score computation (S16).
+"""Client health service — health score computation (S16).
 
-Score range: 0-100 based on four dimensions:
-  - activity_recency (30): days since last interaction
-  - activity_frequency (25): activity count in last 90 days
-  - deal_value (25): total pipeline amount
-  - deal_progress (20): best stage progress
+Score range: 0-100, four weighted dimensions (constants.HEALTH_SCORE_WEIGHTS):
+  activity_recency (30), activity_frequency (25), deal_value (25), deal_progress (20).
+Thresholds: ≥70 healthy, ≥40 at_risk, <40 critical (constants.HEALTH_SCORE_THRESHOLDS).
+
+Public API:
+    compute_health_score(client_id) → dict  # {score, status, breakdown}
+    compute_all_scores() → list[dict]       # [{client_id, score, status, breakdown}, ...]
 """
 
 from database.connection import get_connection

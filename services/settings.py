@@ -1,4 +1,9 @@
-"""CRUD operations for app_settings table."""
+"""Settings service — CRUD for app_settings table (customizable page headers).
+
+Public API:
+    get_all_headers() → dict       # {key: value} for all settings
+    update_header(key, value) → None  # upsert
+"""
 
 from database.connection import get_connection
 

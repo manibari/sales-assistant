@@ -1,4 +1,19 @@
-"""CRUD operations + state machine for project_list table."""
+"""Project service — CRUD + state machine + contact linking for project_list.
+
+Public API:
+    create(...) → project_id
+    get_all() → list[dict]
+    get_by_id(project_id) → dict | None
+    get_presale() → list[dict]      # L0-L7, LOST, HOLD
+    get_postsale() → list[dict]     # P0-P2
+    get_closed() → list[dict]       # P2, LOST, HOLD (with client info)
+    update(project_id, ...) → None
+    delete(project_id) → None
+    transition_status(project_id, new_status) → None  # raises ValueError
+    link_contact(project_id, contact_id, role) → None
+    unlink_contact(project_id, contact_id) → None
+    get_contacts(project_id) → list[dict]
+"""
 
 from constants import PRESALE_STATUS_CODES, POSTSALE_STATUS_CODES, VALID_TRANSITIONS
 from database.connection import get_connection

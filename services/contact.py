@@ -1,4 +1,16 @@
-"""CRUD operations for contact + account_contact tables."""
+"""Contact service — CRUD for contact + account_contact tables.
+
+Uses ON CONFLICT upsert on UNIQUE INDEX (name, COALESCE(email, '')) since S16.
+
+Public API:
+    create(name, ...) → contact_id          # upsert by name+email
+    get_by_id(contact_id) → dict | None
+    get_by_client(client_id) → list[dict]   # with role, sort_order
+    update(contact_id, ...) → None
+    delete(contact_id) → None
+    link_to_client(client_id, contact_id, role, sort_order) → None
+    unlink_from_client(client_id, contact_id) → None
+"""
 
 from database.connection import get_connection
 

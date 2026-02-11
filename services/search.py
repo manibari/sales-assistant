@@ -1,4 +1,8 @@
-"""Cross-table search service — ILIKE search across contact, crm, project_list."""
+"""Search service — cross-table ILIKE search across contact, crm, project_list.
+
+Public API:
+    search_all(query) → dict  # {contacts: [...], clients: [...], projects: [...]}
+"""
 
 from database.connection import get_connection
 

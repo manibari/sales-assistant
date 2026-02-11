@@ -1,4 +1,13 @@
-"""CRUD operations for sales_plan table."""
+"""Sales plan service — CRUD for sales_plan table.
+
+Public API:
+    create(project_id, ...) → plan_id
+    get_all() → list[dict]
+    get_by_id(plan_id) → dict | None
+    update(plan_id, ...) → None
+    delete(plan_id) → None
+    get_summary_by_client(client_id) → dict  # {deal_count, total_amount, weighted_amount}
+"""
 
 from database.connection import get_connection
 

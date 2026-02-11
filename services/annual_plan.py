@@ -1,4 +1,12 @@
-"""CRUD operations for annual_plan table."""
+"""Annual plan service — CRUD for annual_plan table (product strategy + quotas).
+
+Public API:
+    create(product_id, product_name, ...) → None
+    get_all() → list[dict]
+    get_by_id(product_id) → dict | None
+    update(product_id, ...) → None
+    delete(product_id) → None
+"""
 
 from database.connection import get_connection
 

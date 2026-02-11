@@ -1,4 +1,13 @@
-"""CRUD operations for stage_probability table."""
+"""Stage probability service — CRUD for stage_probability table.
+
+Per-stage default win probabilities (L0=5%...L7=100%). Used by sales_plan.py
+for confidence prefill and pipeline.py for weighted revenue forecast.
+
+Public API:
+    get_all() → list[dict]
+    get_by_code(status_code) → float | None
+    update(status_code, probability) → None
+"""
 
 from database.connection import get_connection
 

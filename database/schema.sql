@@ -181,3 +181,32 @@ CREATE TABLE IF NOT EXISTS agent_actions (
     executed_at  TIMESTAMPTZ,
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ==========================================================================
+-- Idempotent migrations (safe to re-run on every init_db)
+-- ==========================================================================
+
+-- S14: work_log client-level activities
+ALTER TABLE work_log ADD COLUMN IF NOT EXISTS client_id TEXT REFERENCES crm(client_id);
+
+DO $$
+BEGIN
+    -- S14: Make project_id nullable (idempotent: check current nullability first)
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'work_log' AND column_name = 'project_id'
+          AND is_nullable = 'NO'
+    ) THEN
+        ALTER TABLE work_log ALTER COLUMN project_id DROP NOT NULL;
+    END IF;
+
+    -- S14: Add CHECK constraint (at least one of project_id / client_id)
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'work_log_scope_check'
+    ) THEN
+        ALTER TABLE work_log
+        ADD CONSTRAINT work_log_scope_check
+        CHECK (project_id IS NOT NULL OR client_id IS NOT NULL);
+    END IF;
+END
+$$;

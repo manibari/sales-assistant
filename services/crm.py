@@ -1,5 +1,18 @@
-"""CRUD operations for crm table.
-S15: reads contacts from normalized tables only; no longer writes JSONB fields."""
+"""CRM service — Client CRUD, normalized contact sync.
+
+S15: reads/writes contacts via normalized tables only (JSONB dual-write retired).
+
+Public API:
+    create(client_id, ...) → None
+    get_all() → list[dict]          # includes dm_name, champion_names via JOIN
+    get_by_id(client_id) → dict     # includes decision_maker, champions from normalized
+    update(client_id, ...) → None
+    delete(client_id) → None
+Internal:
+    _sync_contacts_to_normalized(cur, client_id, dm, champions)
+    _upsert_contact(cur, data) → contact_id
+    _get_normalized_contacts(cur, client_id) → dict
+"""
 
 from database.connection import get_connection
 

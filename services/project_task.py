@@ -1,4 +1,15 @@
-"""CRUD + aggregation operations for project_task table."""
+"""Project task service — CRUD + aggregation for project_task table.
+
+Public API:
+    create(project_id, task_name, ...) → task_id
+    get_by_project(project_id) → list[dict]
+    get_by_id(task_id) → dict | None
+    update(task_id, ...) → None
+    delete(task_id) → None
+    get_summary(project_id) → dict   # {total_tasks, completed_tasks, total_hours, completed_hours}
+    get_completed_by_date(project_id) → list[dict]  # burndown chart data
+    get_upcoming(days=7) → list[dict]               # due/overdue tasks with project info
+"""
 
 from database.connection import get_connection
 

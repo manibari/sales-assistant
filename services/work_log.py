@@ -1,5 +1,15 @@
-"""CRUD operations for work_log table.
-Supports both project-level and client-level activities (S14)."""
+"""Work log service — CRUD for work_log table.
+
+Supports project-level and client-level activities (S14).
+CHECK constraint: at least one of project_id or client_id must be set.
+
+Public API:
+    create(project_id, ..., client_id) → log_id
+    get_by_project(project_id) → list[dict]
+    get_recent(limit=5) → list[dict]
+    get_by_client(client_id, limit=20) → list[dict]   # project + client logs (UNION)
+    get_client_only(client_id, limit=20) → list[dict]  # client-level only
+"""
 
 from database.connection import get_connection
 

@@ -20,17 +20,18 @@ from database.connection import get_connection
 
 
 def create(project_name, client_id=None, product_id=None, status_code="L0",
-           presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium"):
+           presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium",
+           channel=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO project_list
                    (project_name, client_id, product_id, status_code,
-                    presale_owner, sales_owner, postsale_owner, priority)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    presale_owner, sales_owner, postsale_owner, priority, channel)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING project_id""",
                 (project_name, client_id, product_id, status_code,
-                 presale_owner, sales_owner, postsale_owner, priority),
+                 presale_owner, sales_owner, postsale_owner, priority, channel),
             )
             return cur.fetchone()[0]
 
@@ -99,17 +100,18 @@ def get_closed():
 
 
 def update(project_id, project_name, client_id, product_id,
-           presale_owner, postsale_owner, priority, sales_owner=None):
+           presale_owner, postsale_owner, priority, sales_owner=None, channel=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE project_list
                    SET project_name = %s, client_id = %s, product_id = %s,
                        presale_owner = %s, sales_owner = %s, postsale_owner = %s,
-                       priority = %s, updated_at = NOW()
+                       priority = %s, channel = %s, updated_at = NOW()
                    WHERE project_id = %s""",
                 (project_name, client_id, product_id,
-                 presale_owner, sales_owner, postsale_owner, priority, project_id),
+                 presale_owner, sales_owner, postsale_owner, priority, channel,
+                 project_id),
             )
 
 

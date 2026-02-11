@@ -46,12 +46,13 @@ st.header(project["project_name"])
 client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
 product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
 
-col_status, col_client, col_product, col_owner, col_priority = st.columns(5)
+col_status, col_client, col_product, col_owner, col_priority, col_channel = st.columns(6)
 col_status.metric("狀態", f'{project["status_code"]} {STATUS_CODES.get(project["status_code"], "")}')
 col_client.metric("客戶", client_map.get(project.get("client_id"), project.get("client_id") or "—"))
 col_product.metric("產品", product_map.get(project.get("product_id"), project.get("product_id") or "—"))
 col_owner.metric("售前負責人", project.get("presale_owner") or "—")
 col_priority.metric("優先級", project.get("priority") or "—")
+col_channel.metric("通路", project.get("channel") or "—")
 
 # Stage probability metric
 current_prob = prob_svc.get_by_code(project["status_code"])

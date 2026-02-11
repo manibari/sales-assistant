@@ -26,7 +26,7 @@ if projects:
     df["client_id"] = df["client_id"].map(lambda x: client_map.get(x, x or "—"))
     df["product_id"] = df["product_id"].map(lambda x: product_map.get(x, x or "—"))
     display_cols = ["project_id", "project_name", "client_id", "product_id",
-                    "status_code", "sales_owner", "presale_owner", "priority", "status_updated_at"]
+                    "status_code", "channel", "sales_owner", "presale_owner", "priority", "status_updated_at"]
     st.dataframe(df[[c for c in display_cols if c in df.columns]], width="stretch")
 
     st.subheader("案件詳情")
@@ -78,6 +78,7 @@ with tab_add:
             presale_owner = st.text_input("售前負責人")
         with col5:
             priority = st.selectbox("優先級", options=["High", "Medium", "Low"], index=1)
+        channel = st.text_input("通路 Channel")
 
         if st.form_submit_button("新增"):
             if name.strip():
@@ -88,6 +89,7 @@ with tab_add:
                     presale_owner=presale_owner or None,
                     sales_owner=sales_owner or None,
                     priority=priority,
+                    channel=channel or None,
                 )
                 st.success(f"已新增售前案件：{name}")
                 st.rerun()
@@ -137,6 +139,7 @@ with tab_edit:
                         "優先級", options=priorities,
                         index=priorities.index(current["priority"]) if current["priority"] in priorities else 1,
                     )
+                channel = st.text_input("通路 Channel", value=current.get("channel") or "")
 
                 if st.form_submit_button("儲存"):
                     project_svc.update(
@@ -148,6 +151,7 @@ with tab_edit:
                         postsale_owner=current.get("postsale_owner"),
                         priority=priority,
                         sales_owner=sales_owner or None,
+                        channel=channel or None,
                     )
                     st.success("案件已更新。")
                     st.rerun()

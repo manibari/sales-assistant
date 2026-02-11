@@ -19,6 +19,43 @@ render_sidebar()
 headers = settings_svc.get_all_headers()
 st.header(headers.get("header_work_log", "工作日誌"))
 
+# S17: Quick Add popover for usability
+all_projects = project_svc.get_all()
+all_clients = crm_svc.get_all()
+
+with st.popover("⚡️ 快速記錄"):
+    with st.form("quick_add_form", clear_on_submit=True):
+        quick_scope = st.radio("範圍", ["專案", "客戶"], horizontal=True, key="quick_scope")
+        if quick_scope == "專案":
+            active_projects = [p for p in all_projects if p["status_code"] not in INACTIVE_STATUSES]
+            project_options = {p["project_id"]: f'[{p["status_code"]}] {p["project_name"]}' for p in active_projects}
+            target_id = st.selectbox("選擇專案", options=list(project_options.keys()), format_func=lambda x: project_options[x], key="quick_project")
+        else:
+            client_options = {c["client_id"]: f'{c["client_id"]} — {c["company_name"]}' for c in all_clients}
+            target_id = st.selectbox("選擇客戶", options=list(client_options.keys()), format_func=lambda x: client_options[x], key="quick_client")
+
+        content = st.text_area("內容描述", key="quick_content")
+        submitted = st.form_submit_button("送出")
+
+        if submitted:
+            if content and target_id:
+                kwargs = {
+                    "action_type": ACTION_TYPES[0],
+                    "log_date": date.today(),
+                    "content": content,
+                    "duration_hours": 1.0,
+                }
+                if quick_scope == "專案":
+                    kwargs["project_id"] = target_id
+                else:
+                    kwargs["client_id"] = target_id
+
+                work_log_svc.create(**kwargs)
+                st.success("快速記錄已新增！")
+                st.rerun()
+            else:
+                st.warning("請選擇目標並填寫內容。")
+
 # --- Today's tasks reminder ---
 today_tasks = task_svc.get_upcoming(days=0)
 if today_tasks:
@@ -31,8 +68,6 @@ if today_tasks:
             f"（{t.get('owner') or '未指派'}，到期：{t['due_date']}）"
         )
     st.divider()
-
-all_projects = project_svc.get_all()
 
 tab_entry, tab_history = st.tabs(["填寫工作日誌", "日誌紀錄"])
 
@@ -85,13 +120,12 @@ with tab_entry:
 
     else:
         # --- Client activity (S14) ---
-        clients = crm_svc.get_all()
-        if not clients:
+        if not all_clients:
             st.info("目前沒有客戶資料。請先至客戶管理頁面新增客戶。")
         else:
             client_options = {
                 c["client_id"]: f'{c["client_id"]} — {c["company_name"]}'
-                for c in clients
+                for c in all_clients
             }
 
             with st.form("work_log_client_form", clear_on_submit=True):

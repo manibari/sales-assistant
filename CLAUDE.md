@@ -39,6 +39,9 @@ python database/migrate_s15.py
 # Run S16 migration (contact dedup + UNIQUE INDEX)
 python database/migrate_s16.py
 
+# Import 48 presale projects (products + clients + projects + work_log)
+python database/import_projects.py
+
 # Load seed data
 python database/seed.py
 
@@ -66,7 +69,7 @@ Streamlit Pages (pages/*.py)
 - **State machine** in `services/project.py` — `transition_status()` enforces `VALID_TRANSITIONS` from `constants.py`. Illegal transitions raise `ValueError`.
 - **`constants.py`** is the single source of truth for status codes (L0–L7, P0–P2, LOST, HOLD), action types, task statuses, inactive statuses, valid transitions, and health score weights/thresholds.
 - **`app_settings` table** stores customizable page headers; `components/sidebar.py` reads them dynamically.
-- **Presale/postsale separation** — `presale_owner`, `sales_owner`, and `postsale_owner` are separate fields in `project_list`. Pages `presale.py` and `postsale.py` filter by status code prefix.
+- **Presale/postsale separation** — `presale_owner`, `sales_owner`, `postsale_owner`, and `channel` are separate fields in `project_list`. Pages `presale.py` and `postsale.py` filter by status code prefix.
 - **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections (年度戰略, 售前管理, 售後管理, 客戶關係管理) with bold headers and indented sub-pages. 售前管理含售前看板（kanban.py），全域搜尋為 standalone 頁面。
 - **Stage probability** — `stage_probability` table stores per-status default win probabilities. `services/stage_probability.py` provides CRUD. Used for sales plan prefill and pipeline weighted forecast.
 - **Project-contact linking** — `project_contact` table (many-to-many). `services/project.py` provides link_contact / unlink_contact / get_contacts. Used by `presale_detail.py`.
@@ -103,26 +106,26 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 
 | 檔案 | 行數 | Public API |
 |------|------|-----------|
-| crm.py | 208 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
-| project.py | 176 | `create`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
-| client_health.py | 139 | `compute_health_score`, `compute_all_scores` |
-| project_task.py | 127 | `create`, `get_by_project`, `get_by_id`, `update`, `delete`, `get_summary`, `get_completed_by_date`, `get_upcoming` |
-| contact.py | 87 | `create`, `get_by_id`, `get_by_client`, `update`, `delete`, `link_to_client`, `unlink_from_client` |
-| work_log.py | 82 | `create`, `get_by_project`, `get_recent`, `get_by_client`, `get_client_only` |
-| sales_plan.py | 77 | `create`, `get_all`, `get_by_id`, `update`, `delete`, `get_summary_by_client` |
-| search.py | 55 | `search_all` |
-| annual_plan.py | 50 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
-| stage_probability.py | 36 | `get_all`, `get_by_code`, `update` |
-| settings.py | 22 | `get_all_headers`, `update_header` |
+| crm.py | 221 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
+| project.py | 195 | `create`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
+| client_health.py | 141 | `compute_health_score`, `compute_all_scores` |
+| project_task.py | 138 | `create`, `get_by_project`, `get_by_id`, `update`, `delete`, `get_summary`, `get_completed_by_date`, `get_upcoming` |
+| contact.py | 99 | `create`, `get_by_id`, `get_by_client`, `update`, `delete`, `link_to_client`, `unlink_from_client` |
+| work_log.py | 92 | `create`, `get_by_project`, `get_recent`, `get_by_client`, `get_client_only` |
+| sales_plan.py | 86 | `create`, `get_all`, `get_by_id`, `update`, `delete`, `get_summary_by_client` |
+| search.py | 59 | `search_all` |
+| annual_plan.py | 58 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
+| stage_probability.py | 45 | `get_all`, `get_by_code`, `update` |
+| settings.py | 27 | `get_all_headers`, `update_header` |
 
 ### Pages (pages/*.py)
 
 | 檔案 | 行數 | 用途 |
 |------|------|------|
 | crm.py | 378 | 客戶管理：CRUD + 聯絡人編輯 + 健康分數 |
-| presale_detail.py | 352 | 售前案件詳情：狀態轉換、任務、聯絡人、活動記錄 |
+| presale_detail.py | 353 | 售前案件詳情：狀態轉換、任務、聯絡人、活動記錄 |
 | postsale_detail.py | 302 | 售後專案詳情：任務 CRUD、Gantt chart、Burndown chart |
-| presale.py | 191 | 售前案件列表：建立/編輯案件 |
+| presale.py | 197 | 售前案件列表：建立/編輯案件 |
 | postsale.py | 185 | 售後專案列表：建立/編輯專案 |
 | pipeline.py | 173 | 業務漏斗：加權營收、階段分布圖 |
 | work_log.py | 160 | 工作日誌（首頁）：專案/客戶層級活動記錄 |
@@ -140,7 +143,8 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 | constants.py | 90 | 狀態碼、轉換規則、Action types、健康分數權重/閾值 |
 | components/sidebar.py | 69 | 分組式側邊欄導航（`_NAV_SECTIONS` + `render_sidebar`） |
 | database/connection.py | 52 | psycopg2 連線池（`get_connection`, `init_db`） |
-| database/schema.sql | 200 | 13 表 DDL + idempotent migrations (S14/S16) |
+| database/import_projects.py | 210 | 匯入 4 產品 + 46 客戶 + 48 案件 + work_log |
+| database/schema.sql | 215 | 13 表 DDL + idempotent migrations (S14/S16/S17) |
 | app.py | 28 | Streamlit 入口：init_db → navigation → run |
 
 ## Sprint Methodology

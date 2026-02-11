@@ -186,8 +186,18 @@ CREATE TABLE IF NOT EXISTS agent_actions (
 -- Idempotent migrations (safe to re-run on every init_db)
 -- ==========================================================================
 
+-- S12: Add due_date and is_next_action to project_task
+ALTER TABLE project_task ADD COLUMN IF NOT EXISTS due_date DATE;
+ALTER TABLE project_task ADD COLUMN IF NOT EXISTS is_next_action BOOLEAN DEFAULT FALSE;
+
 -- S14: work_log client-level activities
 ALTER TABLE work_log ADD COLUMN IF NOT EXISTS client_id TEXT REFERENCES crm(client_id);
+
+-- S15: Add client_health_score to crm
+ALTER TABLE crm ADD COLUMN IF NOT EXISTS client_health_score INTEGER DEFAULT 75;
+
+-- S17: project_list channel field
+ALTER TABLE project_list ADD COLUMN IF NOT EXISTS channel TEXT;
 
 DO $$
 BEGIN

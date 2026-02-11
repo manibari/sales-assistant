@@ -3,3 +3,8 @@ psycopg2-binary
 pydantic
 plotly
 python-dotenv
+
+# Development and code quality
+pre-commit
+black
+ruff

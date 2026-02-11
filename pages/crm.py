@@ -7,7 +7,9 @@ import pandas as pd
 import streamlit as st
 
 from components.sidebar import render_sidebar
+from services import client_health as health_svc
 from services import crm as crm_svc
+from services import sales_plan as sp_svc
 from services import settings as settings_svc
 from services import work_log as wl_svc
 
@@ -51,18 +53,22 @@ with tab_overview:
     if not clients:
         st.info("尚無客戶資料。")
     else:
+        # Pre-compute health scores for all clients
+        all_health = {h["client_id"]: h for h in health_svc.compute_all_scores()}
+        status_labels = {"healthy": "良好", "at_risk": "注意", "critical": "警示"}
+
         display_data = []
         for c in clients:
-            dm = _parse_dm(c.get("decision_maker"))
-            champs = _parse_champions(c.get("champions"))
-            champ_names = ", ".join(ch.get("name", "") for ch in champs if ch.get("name"))
+            h = all_health.get(c["client_id"], {})
             display_data.append({
                 "客戶 ID": c["client_id"],
                 "公司名稱": c["company_name"],
+                "健康分數": h.get("score", 0),
+                "狀態": status_labels.get(h.get("status", ""), "—"),
                 "產業別": c.get("industry") or "",
                 "部門": c.get("department") or "",
-                "決策者": dm.get("name", ""),
-                "Champion(s)": champ_names,
+                "決策者": c.get("dm_name") or "",
+                "Champion(s)": c.get("champion_names") or "",
                 "資料年份": c.get("data_year") or "",
             })
         st.dataframe(pd.DataFrame(display_data), width="stretch")
@@ -93,6 +99,39 @@ with tab_detail:
                 st.markdown(f"**部門**: {current.get('department') or '—'}")
             with col3:
                 st.markdown(f"**資料年份**: {current.get('data_year') or '—'}")
+
+            # Revenue metrics (S15)
+            st.divider()
+            rev = sp_svc.get_summary_by_client(detail_id)
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric("商機數", f"{rev['deal_count']} 筆")
+            mc2.metric("總金額", f"${rev['total_amount']:,.0f}")
+            mc3.metric("加權金額", f"${rev['weighted_amount']:,.0f}")
+
+            # Health score widget (S16)
+            st.divider()
+            health = health_svc.compute_health_score(detail_id)
+            score = health["score"]
+            h_status = health["status"]
+            color_map = {"healthy": "green", "at_risk": "orange", "critical": "red"}
+            label_map = {"healthy": "良好", "at_risk": "注意", "critical": "警示"}
+            color = color_map.get(h_status, "gray")
+            label = label_map.get(h_status, "—")
+
+            hc1, hc2 = st.columns([1, 3])
+            with hc1:
+                st.markdown(f"**客戶健康分數**")
+                st.markdown(f"# :{color}[{score}]")
+                st.markdown(f":{color}[{label}]")
+            with hc2:
+                bd = health["breakdown"]
+                st.markdown("**分項明細**")
+                st.markdown(
+                    f"- 活動時效：{bd['activity_recency']}/30\n"
+                    f"- 活動頻率：{bd['activity_frequency']}/25\n"
+                    f"- 商機價值：{bd['deal_value']}/25\n"
+                    f"- 階段進展：{bd['deal_progress']}/20"
+                )
 
             st.divider()
 
@@ -131,7 +170,7 @@ with tab_detail:
                 st.divider()
                 st.markdown(f"**備註**: {current['notes']}")
 
-            # Recent activity for this client
+            # Recent activity for this client (merged project-level + client-level)
             st.divider()
             st.markdown("**近期活動**")
             recent_logs = wl_svc.get_by_client(detail_id, limit=10)
@@ -140,8 +179,10 @@ with tab_detail:
                     with st.container():
                         lc1, lc2 = st.columns([1, 4])
                         lc1.markdown(f"**{log['log_date']}**")
+                        scope_tag = ":green[客戶]" if log.get("log_scope") == "client" else ":blue[專案]"
+                        project_label = log.get("project_name") or ""
                         lc2.markdown(
-                            f":blue[{log['action_type']}] {log.get('project_name', '')} — "
+                            f"{scope_tag} :blue[{log['action_type']}] {project_label} — "
                             f"{log.get('content') or '—'}　（{log['duration_hours']}h）"
                         )
             else:

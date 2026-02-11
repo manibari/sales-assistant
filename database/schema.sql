@@ -1,5 +1,5 @@
 -- SPMS Database Schema (PostgreSQL)
--- 11 tables: 9 core + 2 reserved for Phase 3
+-- 13 tables: 11 core + 2 reserved for Phase 3
 
 CREATE TABLE IF NOT EXISTS annual_plan (
     product_id      TEXT PRIMARY KEY,
@@ -57,14 +57,16 @@ CREATE TABLE IF NOT EXISTS sales_plan (
 
 CREATE TABLE IF NOT EXISTS work_log (
     log_id         SERIAL PRIMARY KEY,
-    project_id     INTEGER NOT NULL REFERENCES project_list(project_id),
+    project_id     INTEGER REFERENCES project_list(project_id),
+    client_id      TEXT REFERENCES crm(client_id),
     log_date       DATE NOT NULL DEFAULT CURRENT_DATE,
     action_type    TEXT NOT NULL,
     content        TEXT,
     duration_hours NUMERIC NOT NULL DEFAULT 1.0,
     source         TEXT NOT NULL DEFAULT 'manual',
     ref_id         INTEGER,
-    created_at     TIMESTAMPTZ DEFAULT NOW()
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT work_log_scope_check CHECK (project_id IS NOT NULL OR client_id IS NOT NULL)
 );
 
 CREATE TABLE IF NOT EXISTS project_task (
@@ -113,6 +115,9 @@ CREATE TABLE IF NOT EXISTS contact (
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS contact_name_email_unique
+ON contact (name, COALESCE(email, ''));
 
 CREATE TABLE IF NOT EXISTS account_contact (
     client_id    TEXT NOT NULL REFERENCES crm(client_id) ON DELETE CASCADE,

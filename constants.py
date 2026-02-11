@@ -77,3 +77,14 @@ DEFAULT_STAGE_PROBABILITIES = {
 
 # Project-contact roles
 CONTACT_ROLES = ["participant", "champion", "decision_maker"]
+
+# Client health score weights (total = 100)
+HEALTH_SCORE_WEIGHTS = {
+    "activity_recency": 30,   # Days since last interaction → ≤7 days=full, >90 days=0
+    "activity_frequency": 25, # Activity count in last 90 days
+    "deal_value": 25,         # Total pipeline deal amount
+    "deal_progress": 20,      # Best stage progress (L6/L7/P* = high)
+}
+
+# Health score thresholds
+HEALTH_SCORE_THRESHOLDS = {"healthy": 70, "at_risk": 40}  # <40 = critical

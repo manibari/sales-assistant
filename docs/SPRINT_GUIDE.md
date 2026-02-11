@@ -223,13 +223,20 @@
 | [S07](sprints/S07.md) | Customer Feedback Sprint | CRM 欄位重構（champion→champions, DM 結構, data_year） | S06 |
 | [S08](sprints/S08.md) | Navigation Restructuring | 分組側邊欄, presale/postsale 分離, post_closure 頁面 | S07 |
 | [S09](sprints/S09.md) | Work Log Split + Postsale Detail | 工作日誌分頁, postsale_detail (task CRUD/Gantt/Burndown) | S08 |
+| [S10](sprints/S10.md) | DB Normalization (Contact) | contact + account_contact 正規化 | S09 |
+| [S11](sprints/S11.md) | 階段機率 + Deal-Contact + 售前詳情頁 | stage_probability, project_contact, presale_detail | S10 |
+| [S12](sprints/S12.md) | 活動時間軸 + 售前任務 + 下一步行動 | due_date, is_next_action, 今日待辦提醒 | S11 |
+| [S13](sprints/S13.md) | 全域搜尋 + Visual Board | search_all(), 售前看板 (kanban.py) | S12 |
+| [S14](sprints/S14.md) | 客戶層級活動記錄 | work_log nullable project_id + client_id FK | S13 |
+| [S15](sprints/S15.md) | 客戶營收彙總 + JSONB 退場 | get_summary_by_client(), JSONB 雙寫退場 | S14 |
+| [S16](sprints/S16.md) | 客戶健康分數 + 聯絡人去重 | client_health.py, contact UNIQUE INDEX | S15 |
 
 ```
 S01 → S02 → S03 ─┐
-            └ S04 ─┤→ S05 → S06 → S07 → S08 → S09
+            └ S04 ─┤→ S05 → S06 → S07 → S08 → S09 → S10 → S11 → S12 → S13 → S14 → S15 → S16
 ```
 
-> **備註**: S03 與 S04 可平行進行（皆僅依賴 S02）。S07 起為線性依賴。
+> **備註**: S03 與 S04 可平行進行（皆僅依賴 S02）。S07 起為線性依賴。S14-S16 為客戶回饋改進。
 
 ---
 

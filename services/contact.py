@@ -4,12 +4,15 @@ from database.connection import get_connection
 
 
 def create(name, title=None, email=None, phone=None, notes=None):
-    """Create a contact and return the contact_id."""
+    """Create or upsert a contact by (name, email). Returns contact_id."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO contact (name, title, email, phone, notes)
                    VALUES (%s, %s, %s, %s, %s)
+                   ON CONFLICT (name, COALESCE(email, ''))
+                   DO UPDATE SET title = EXCLUDED.title, phone = EXCLUDED.phone,
+                                 notes = EXCLUDED.notes, updated_at = NOW()
                    RETURNING contact_id""",
                 (name, title, email, phone, notes),
             )

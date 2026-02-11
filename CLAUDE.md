@@ -30,6 +30,15 @@ python database/migrate_s11.py
 # Run S12 migration (due_date + is_next_action)
 python database/migrate_s12.py
 
+# Run S14 migration (client-level activities: nullable project_id + client_id FK)
+python database/migrate_s14.py
+
+# Run S15 migration (JSONB vs normalized validation report)
+python database/migrate_s15.py
+
+# Run S16 migration (contact dedup + UNIQUE INDEX)
+python database/migrate_s16.py
+
 # Load seed data
 python database/seed.py
 
@@ -53,14 +62,17 @@ Streamlit Pages (pages/*.py)
 ### Key Architectural Decisions
 
 - **psycopg2 + raw SQL** — no ORM, no SQLAlchemy. PostgreSQL is the final target, no abstraction needed.
-- **JSONB fields** in `crm` table (`decision_maker`, `champions`) — use `psycopg2.extras.Json()` for writes.
+- **JSONB fields** in `crm` table (`decision_maker`, `champions`) — legacy columns retained for reference. S15 retired dual-write; all reads/writes now use normalized `contact` + `account_contact` tables only.
 - **State machine** in `services/project.py` — `transition_status()` enforces `VALID_TRANSITIONS` from `constants.py`. Illegal transitions raise `ValueError`.
-- **`constants.py`** is the single source of truth for status codes (L0–L7, P0–P2, LOST, HOLD), action types, task statuses, inactive statuses, and valid transitions.
+- **`constants.py`** is the single source of truth for status codes (L0–L7, P0–P2, LOST, HOLD), action types, task statuses, inactive statuses, valid transitions, and health score weights/thresholds.
 - **`app_settings` table** stores customizable page headers; `components/sidebar.py` reads them dynamically.
 - **Presale/postsale separation** — `presale_owner`, `sales_owner`, and `postsale_owner` are separate fields in `project_list`. Pages `presale.py` and `postsale.py` filter by status code prefix.
 - **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections (年度戰略, 售前管理, 售後管理, 客戶關係管理) with bold headers and indented sub-pages. 售前管理含售前看板（kanban.py），全域搜尋為 standalone 頁面。
 - **Stage probability** — `stage_probability` table stores per-status default win probabilities. `services/stage_probability.py` provides CRUD. Used for sales plan prefill and pipeline weighted forecast.
 - **Project-contact linking** — `project_contact` table (many-to-many). `services/project.py` provides link_contact / unlink_contact / get_contacts. Used by `presale_detail.py`.
+- **Client-level activities (S14)** — `work_log.project_id` is nullable; `work_log.client_id` FK to `crm`. CHECK constraint ensures at least one is set. `pages/work_log.py` has radio toggle for project vs client activity mode.
+- **Client health score (S16)** — `services/client_health.py` computes 0-100 score (activity recency + frequency + deal value + deal progress). Displayed in CRM overview and detail pages. Thresholds in `constants.py`.
+- **Contact dedup (S16)** — `contact` table has UNIQUE INDEX on `(name, COALESCE(email, ''))`. `services/contact.py` uses INSERT ON CONFLICT (upsert).
 
 ### Database: 13 Tables
 
@@ -71,7 +83,7 @@ Reserved (Phase 3): `email_log`, `agent_actions`
 
 `project_task` stores sub-tasks for presale/postsale projects (statuses: planned/in_progress/completed, + `due_date` + `is_next_action`). Used by `presale_detail.py` and `postsale_detail.py` for task CRUD, Gantt chart, and burndown chart.
 
-`contact` + `account_contact` normalize CRM contact data (S10). `services/crm.py` dual-writes to both JSONB fields and normalized tables.
+`contact` + `account_contact` normalize CRM contact data (S10). Since S15, `services/crm.py` writes only to normalized tables (JSONB dual-write retired). `contact` has a UNIQUE INDEX on `(name, COALESCE(email, ''))` since S16.
 
 `stage_probability` stores per-stage default probabilities (L0=5%...L7=100%). Used by `sales_plan.py` for confidence prefill and `pipeline.py` for weighted revenue forecast. Editable via `settings.py`.
 
@@ -89,11 +101,11 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 
 5-stage workflow per Sprint: **Kickoff → Planning → Vibe Coding → Review → Retro & Refactor**
 
-- Sprint files: `docs/sprints/S01.md` through `S13.md`
+- Sprint files: `docs/sprints/S01.md` through `S16.md`
 - Sprint guide: `docs/SPRINT_GUIDE.md`
 - Full dev plan: `docs/DEVELOPMENT_PLAN.md`
 
-S03 and S04 can run in parallel (both depend only on S02). S07-S13 為 Phase 2（已完成）。
+S03 and S04 can run in parallel (both depend only on S02). S07-S13 為 Phase 2（已完成）。S14-S16 為客戶回饋改進（S14→S15→S16 依賴鏈）。
 
 Every Sprint **Kickoff** (Stage 0) and **Retro & Refactor** (Stage 4) must automatically commit and push to GitHub. This ensures progress checkpoints are always synced to the remote repository.
 

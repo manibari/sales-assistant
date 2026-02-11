@@ -1,7 +1,5 @@
-"""CRUD operations for crm table. Uses psycopg2.extras.Json for JSONB fields.
-Dual-write: normalized contact/account_contact tables + JSONB fields for backward compat."""
-
-from psycopg2.extras import Json
+"""CRUD operations for crm table.
+S15: reads contacts from normalized tables only; no longer writes JSONB fields."""
 
 from database.connection import get_connection
 
@@ -11,30 +9,50 @@ def create(client_id, company_name, industry=None, department=None, email=None,
            data_year=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Insert CRM row without JSONB fields
             cur.execute(
                 """INSERT INTO crm
                    (client_id, company_name, industry, department, email,
-                    decision_maker, champions, contact_info, notes, data_year)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    contact_info, notes, data_year)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
                 (client_id, company_name, industry, department, email,
-                 Json(decision_maker) if decision_maker else None,
-                 Json(champions) if champions else None,
                  contact_info, notes, data_year),
             )
-            # Dual-write: sync to normalized tables
+            # Write contacts to normalized tables only
             _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
 
 
 def get_all():
+    """Get all clients with DM and champion names from normalized tables (LEFT JOIN)."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM crm ORDER BY client_id")
+            cur.execute("""
+                SELECT c.*,
+                       dm_contact.name AS dm_name,
+                       champ_agg.champion_names
+                FROM crm c
+                LEFT JOIN (
+                    SELECT ac.client_id, ct.name
+                    FROM account_contact ac
+                    JOIN contact ct ON ac.contact_id = ct.contact_id
+                    WHERE ac.role = 'decision_maker'
+                ) dm_contact ON c.client_id = dm_contact.client_id
+                LEFT JOIN (
+                    SELECT ac.client_id,
+                           STRING_AGG(ct.name, ', ' ORDER BY ac.sort_order) AS champion_names
+                    FROM account_contact ac
+                    JOIN contact ct ON ac.contact_id = ct.contact_id
+                    WHERE ac.role = 'champion'
+                    GROUP BY ac.client_id
+                ) champ_agg ON c.client_id = champ_agg.client_id
+                ORDER BY c.client_id
+            """)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 def get_by_id(client_id):
-    """Get CRM record with contacts assembled from normalized tables when available."""
+    """Get CRM record with contacts from normalized tables."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM crm WHERE client_id = %s", (client_id,))
@@ -44,7 +62,7 @@ def get_by_id(client_id):
             cols = [d[0] for d in cur.description]
             result = dict(zip(cols, row))
 
-            # Try to read from normalized tables (preferred source)
+            # Read from normalized tables (sole source of truth)
             contacts = _get_normalized_contacts(cur, client_id)
             if contacts is not None:
                 result["decision_maker"] = contacts["decision_maker"]
@@ -58,19 +76,17 @@ def update(client_id, company_name, industry, department, email=None,
            data_year=None):
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Update CRM row without JSONB fields
             cur.execute(
                 """UPDATE crm
                    SET company_name = %s, industry = %s, department = %s,
-                       email = %s, decision_maker = %s, champions = %s,
-                       contact_info = %s, notes = %s, data_year = %s,
+                       email = %s, contact_info = %s, notes = %s, data_year = %s,
                        updated_at = NOW()
                    WHERE client_id = %s""",
                 (company_name, industry, department, email,
-                 Json(decision_maker) if decision_maker else None,
-                 Json(champions) if champions else None,
                  contact_info, notes, data_year, client_id),
             )
-            # Dual-write: replace normalized contacts for this client
+            # Write contacts to normalized tables only
             _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
 
 
@@ -82,28 +98,13 @@ def delete(client_id):
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers for dual-write
+# Internal helpers — normalized tables only
 # ---------------------------------------------------------------------------
 
 def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
-    """Replace all normalized contacts for a client with the provided JSONB data."""
-    # Check if contact table exists (graceful during migration period)
-    cur.execute("""
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.tables
-            WHERE table_name = 'contact'
-        )
-    """)
-    if not cur.fetchone()[0]:
-        return
-
-    # Remove existing links (contacts orphaned here will be cleaned up later)
-    cur.execute("""
-        DELETE FROM account_contact WHERE client_id = %s
-    """, (client_id,))
-
-    # Collect contact_ids that were linked to this client for cleanup
-    # (We re-insert fresh, so orphaned contacts from old links get cleaned)
+    """Replace all normalized contacts for a client with the provided data."""
+    # Remove existing links (contacts orphaned here will be cleaned up below)
+    cur.execute("DELETE FROM account_contact WHERE client_id = %s", (client_id,))
 
     # Insert decision_maker
     if decision_maker and isinstance(decision_maker, dict) and decision_maker.get("name"):
@@ -133,6 +134,7 @@ def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
     cur.execute("""
         DELETE FROM contact
         WHERE contact_id NOT IN (SELECT contact_id FROM account_contact)
+          AND contact_id NOT IN (SELECT contact_id FROM project_contact)
     """)
 
 
@@ -155,7 +157,6 @@ def _upsert_contact(cur, data):
     existing = cur.fetchone()
 
     if existing:
-        # Update existing contact details
         contact_id = existing[0]
         cur.execute("""
             UPDATE contact SET title = %s, phone = %s, notes = %s, updated_at = NOW()
@@ -173,16 +174,7 @@ def _upsert_contact(cur, data):
 
 
 def _get_normalized_contacts(cur, client_id):
-    """Read contacts from normalized tables and assemble into JSONB-compatible format."""
-    cur.execute("""
-        SELECT EXISTS (
-            SELECT 1 FROM information_schema.tables
-            WHERE table_name = 'account_contact'
-        )
-    """)
-    if not cur.fetchone()[0]:
-        return None
-
+    """Read contacts from normalized tables and assemble into dict format."""
     cur.execute("""
         SELECT c.name, c.title, c.email, c.phone, c.notes, ac.role, ac.sort_order
         FROM contact c

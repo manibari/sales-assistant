@@ -3,7 +3,7 @@
 > **版本**: v1.2
 > **建立日期**: 2026-02-10
 > **技術架構**: Python + Streamlit + PostgreSQL
-> **狀態**: Phase 2 完成（S07-S13）
+> **狀態**: Phase 2 完成（S07-S13）、客戶回饋改進完成（S14-S16）
 
 ## Context
 
@@ -28,7 +28,7 @@ sales-assistant/
 ├── docs/
 │   ├── DEVELOPMENT_PLAN.md     # 本文件
 │   ├── SPRINT_GUIDE.md         # Sprint 方法論指南
-│   └── sprints/                # 各 Sprint 文件 (S01-S13)
+│   └── sprints/                # 各 Sprint 文件 (S01-S16)
 ├── database/
 │   ├── __init__.py
 │   ├── connection.py           # PostgreSQL 連線池管理 (psycopg2.pool)
@@ -40,7 +40,10 @@ sales-assistant/
 │   ├── migrate_s09.py          # S09 migration（project_task 表）
 │   ├── migrate_s10.py          # S10 migration（contact 正規化）
 │   ├── migrate_s11.py          # S11 migration（stage_probability + project_contact）
-│   └── migrate_s12.py          # S12 migration（due_date + is_next_action）
+│   ├── migrate_s12.py          # S12 migration（due_date + is_next_action）
+│   ├── migrate_s14.py          # S14 migration（work_log nullable project_id + client_id）
+│   ├── migrate_s15.py          # S15 migration（JSONB vs 正規化驗證報告）
+│   └── migrate_s16.py          # S16 migration（contact 去重 + UNIQUE INDEX）
 ├── models/
 │   ├── __init__.py
 │   └── schemas.py              # Pydantic 資料驗證模型
@@ -54,7 +57,8 @@ sales-assistant/
 │   ├── contact.py              # 聯絡人 CRUD（S10 正規化）
 │   ├── stage_probability.py    # 階段機率 CRUD（S11）
 │   ├── search.py               # 全域搜尋服務（S13）
-│   ├── work_log.py             # 工作日誌 CRUD
+│   ├── work_log.py             # 工作日誌 CRUD（S14: 支援 client_id）
+│   ├── client_health.py        # 客戶健康分數（S16）
 │   └── settings.py             # 設定 CRUD
 ├── pages/
 │   ├── work_log.py             # 工作日誌輸入中心
@@ -230,7 +234,8 @@ CREATE TABLE IF NOT EXISTS sales_plan (
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | log_id | SERIAL PK | 流水號 |
-| project_id | INTEGER FK → project_list | 關聯專案 |
+| project_id | INTEGER FK → project_list (nullable) | 關聯專案（S14 改 nullable） |
+| client_id | TEXT FK → crm (nullable) | 關聯客戶（S14 新增） |
 | log_date | DATE | 日誌日期 |
 | action_type | TEXT | 會議/提案/開發/文件/郵件 |
 | content | TEXT | 工作內容（完整保存，供 NLP） |
@@ -239,17 +244,21 @@ CREATE TABLE IF NOT EXISTS sales_plan (
 | ref_id | INTEGER | 關聯的 email_id（Agent 自動建立時） |
 | created_at | TIMESTAMPTZ | 建立時間 |
 
+> **S14 變更**：`project_id` 改為 nullable，新增 `client_id` FK。CHECK 約束確保至少一個有值。支援不綁定專案的客戶活動。
+
 ```sql
 CREATE TABLE IF NOT EXISTS work_log (
     log_id         SERIAL PRIMARY KEY,
-    project_id     INTEGER NOT NULL REFERENCES project_list(project_id),
+    project_id     INTEGER REFERENCES project_list(project_id),
+    client_id      TEXT REFERENCES crm(client_id),
     log_date       DATE NOT NULL DEFAULT CURRENT_DATE,
     action_type    TEXT NOT NULL,
     content        TEXT,
     duration_hours NUMERIC NOT NULL DEFAULT 1.0,
     source         TEXT NOT NULL DEFAULT 'manual',
     ref_id         INTEGER,
-    created_at     TIMESTAMPTZ DEFAULT NOW()
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT work_log_scope_check CHECK (project_id IS NOT NULL OR client_id IS NOT NULL)
 );
 ```
 
@@ -341,6 +350,10 @@ CREATE TABLE IF NOT EXISTS contact (
     created_at   TIMESTAMPTZ DEFAULT NOW(),
     updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- S16: 防止重複聯絡人
+CREATE UNIQUE INDEX IF NOT EXISTS contact_name_email_unique
+ON contact (name, COALESCE(email, ''));
 ```
 
 ### 2.9 `account_contact` — 客戶-聯絡人關聯表（S10 正規化）
@@ -362,7 +375,7 @@ CREATE TABLE IF NOT EXISTS account_contact (
 );
 ```
 
-> **雙寫策略**：`services/crm.py` 的 `create()` 和 `update()` 同時寫入 JSONB 欄位和正規化表。`get_by_id()` 優先從正規化表讀取。JSONB 欄位保留至確認穩定後再移除。
+> **S15 更新**：JSONB 雙寫已退場。`services/crm.py` 的 `create()` 和 `update()` 僅寫入正規化表（contact + account_contact）。`get_all()` 改用 LEFT JOIN 從正規化表讀取。JSONB 欄位（decision_maker, champions）保留為歷史參考，不再寫入。
 
 ### 2.10 `stage_probability` — 階段機率表（S11 新增）
 
@@ -637,13 +650,16 @@ SPMS
 > | S11 | 階段機率 + Deal-Contact + 售前詳情頁 | [S11.md](sprints/S11.md) |
 > | S12 | 活動時間軸 + 售前任務 + 下一步行動 | [S12.md](sprints/S12.md) |
 > | S13 | 全域搜尋 + Visual Board | [S13.md](sprints/S13.md) |
+> | S14 | 客戶層級活動記錄 | [S14.md](sprints/S14.md) |
+> | S15 | 客戶營收彙總 + JSONB 退場 | [S15.md](sprints/S15.md) |
+> | S16 | 客戶健康分數 + 聯絡人去重 | [S16.md](sprints/S16.md) |
 
 ### Step 1：基礎建設
 | # | 任務 | 檔案 |
 |---|------|------|
 | 1.1 | 建立專案骨架與依賴 | `requirements.txt`, `docker-compose.yml`, `.env.example`, 各 `__init__.py` |
 | 1.2 | 定義常數（狀態碼、動作類型） | `constants.py` |
-| 1.3 | 撰寫資料庫 DDL | `database/schema.sql`（11 張表，PostgreSQL 語法） |
+| 1.3 | 撰寫資料庫 DDL | `database/schema.sql`（13 張表，PostgreSQL 語法） |
 | 1.4 | 實作 DB 連線池與初始化 | `database/connection.py`（psycopg2.pool） |
 
 ### Step 2：資料模型與服務層
@@ -682,6 +698,11 @@ SPMS
 - S11：階段機率 + Deal-Contact + 售前詳情頁 — stage_probability 表、project_contact 表、presale_detail.py、機率預填
 - S12：活動時間軸 + 售前任務 + 下一步行動 — due_date / is_next_action、今日待辦提醒、逾期警示、近期活動摘要
 - S13：全域搜尋 + Visual Board — 跨表 ILIKE 搜尋、售前看板（L0-L6 欄位式 Kanban）
+
+**客戶回饋改進（S14-S16）：**
+- S14：客戶層級活動 — work_log nullable project_id + client_id FK、radio toggle、UNION 查詢
+- S15：營收彙總 + JSONB 退場 — get_summary_by_client()、get_all() LEFT JOIN、停止 JSONB 雙寫
+- S16：健康分數 + 聯絡人去重 — client_health.py 4 維度評分、contact UNIQUE INDEX、upsert
 
 **規劃中：**
 - Dashboard 加強 — 趨勢線、工時分析圖表
@@ -787,7 +808,7 @@ agent/
 ### Phase 1 驗證
 1. `docker-compose up -d` 啟動 PostgreSQL
 2. `streamlit run app.py` 啟動應用
-3. 確認 PostgreSQL 中 11 張表存在
+3. 確認 PostgreSQL 中 13 張表存在
 4. 在設定頁修改任一 Header → 確認側邊欄標題即時更新
 5. 新增一筆專案 → 在工作日誌頁下拉選單看到該專案
 6. 新增工作日誌 → 確認最近 5 筆顯示正確

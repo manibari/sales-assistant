@@ -1,4 +1,5 @@
-"""Work Log page — daily work record entry + log history viewer."""
+"""Work Log page — daily work record entry + log history viewer.
+Supports project-level and client-level activities (S14)."""
 
 from datetime import date
 
@@ -7,6 +8,7 @@ import streamlit as st
 
 from components.sidebar import render_sidebar
 from constants import ACTION_TYPES, INACTIVE_STATUSES, STATUS_CODES
+from services import crm as crm_svc
 from services import project as project_svc
 from services import project_task as task_svc
 from services import settings as settings_svc
@@ -34,49 +36,97 @@ all_projects = project_svc.get_all()
 
 tab_entry, tab_history = st.tabs(["填寫工作日誌", "日誌紀錄"])
 
-# === Tab 1: Entry form (active projects only) ===
+# === Tab 1: Entry form ===
 with tab_entry:
-    active_projects = [p for p in all_projects if p["status_code"] not in INACTIVE_STATUSES]
+    # Radio toggle: project vs client activity
+    scope = st.radio(
+        "活動類型",
+        options=["專案活動", "客戶活動"],
+        horizontal=True,
+        key="entry_scope",
+    )
 
-    if not active_projects:
-        st.info("目前沒有活躍的專案。請先至售前管理或售後管理頁面新增專案。")
-    else:
-        project_options = {
-            p["project_id"]: f'[{p["status_code"]} {STATUS_CODES.get(p["status_code"], "")}] {p["project_name"]}'
-            for p in active_projects
-        }
+    if scope == "專案活動":
+        # --- Project activity (original flow) ---
+        active_projects = [p for p in all_projects if p["status_code"] not in INACTIVE_STATUSES]
 
-        with st.form("work_log_form", clear_on_submit=True):
-            selected_id = st.selectbox(
-                "選擇專案",
-                options=list(project_options.keys()),
-                format_func=lambda x: project_options[x],
-            )
-            col1, col2 = st.columns(2)
-            with col1:
-                log_date = st.date_input("日期", value=date.today())
-            with col2:
-                duration = st.number_input("工時（小時）", min_value=0.5, value=1.0, step=0.5)
-            action_type = st.selectbox("工作類型", options=ACTION_TYPES)
-            content = st.text_area("內容描述", height=120)
+        if not active_projects:
+            st.info("目前沒有活躍的專案。請先至售前管理或售後管理頁面新增專案。")
+        else:
+            project_options = {
+                p["project_id"]: f'[{p["status_code"]} {STATUS_CODES.get(p["status_code"], "")}] {p["project_name"]}'
+                for p in active_projects
+            }
 
-            submitted = st.form_submit_button("送出")
-            if submitted:
-                work_log_svc.create(
-                    project_id=selected_id,
-                    action_type=action_type,
-                    log_date=log_date,
-                    content=content,
-                    duration_hours=duration,
+            with st.form("work_log_form", clear_on_submit=True):
+                selected_id = st.selectbox(
+                    "選擇專案",
+                    options=list(project_options.keys()),
+                    format_func=lambda x: project_options[x],
                 )
-                st.success("工作日誌已送出！")
+                col1, col2 = st.columns(2)
+                with col1:
+                    log_date = st.date_input("日期", value=date.today())
+                with col2:
+                    duration = st.number_input("工時（小時）", min_value=0.5, value=1.0, step=0.5)
+                action_type = st.selectbox("工作類型", options=ACTION_TYPES)
+                content = st.text_area("內容描述", height=120)
+
+                submitted = st.form_submit_button("送出")
+                if submitted:
+                    work_log_svc.create(
+                        project_id=selected_id,
+                        action_type=action_type,
+                        log_date=log_date,
+                        content=content,
+                        duration_hours=duration,
+                    )
+                    st.success("工作日誌已送出！")
+
+    else:
+        # --- Client activity (S14) ---
+        clients = crm_svc.get_all()
+        if not clients:
+            st.info("目前沒有客戶資料。請先至客戶管理頁面新增客戶。")
+        else:
+            client_options = {
+                c["client_id"]: f'{c["client_id"]} — {c["company_name"]}'
+                for c in clients
+            }
+
+            with st.form("work_log_client_form", clear_on_submit=True):
+                selected_client = st.selectbox(
+                    "選擇客戶",
+                    options=list(client_options.keys()),
+                    format_func=lambda x: client_options[x],
+                )
+                col1, col2 = st.columns(2)
+                with col1:
+                    log_date = st.date_input("日期", value=date.today(), key="client_log_date")
+                with col2:
+                    duration = st.number_input("工時（小時）", min_value=0.5, value=1.0, step=0.5,
+                                               key="client_duration")
+                action_type = st.selectbox("工作類型", options=ACTION_TYPES, key="client_action")
+                content = st.text_area("內容描述", height=120, key="client_content")
+
+                submitted = st.form_submit_button("送出")
+                if submitted:
+                    work_log_svc.create(
+                        client_id=selected_client,
+                        action_type=action_type,
+                        log_date=log_date,
+                        content=content,
+                        duration_hours=duration,
+                    )
+                    st.success("客戶活動日誌已送出！")
 
     # Recent 5 logs
     st.subheader("最近 5 筆紀錄")
     recent = work_log_svc.get_recent(5)
     if recent:
         df = pd.DataFrame(recent)
-        display_cols = ["log_id", "project_id", "log_date", "action_type", "content", "duration_hours"]
+        display_cols = ["log_id", "project_id", "client_id", "log_date", "action_type",
+                        "content", "duration_hours"]
         st.dataframe(df[[c for c in display_cols if c in df.columns]], width="stretch")
     else:
         st.info("尚無工作日誌紀錄。")

@@ -76,7 +76,8 @@ class SalesPlan(BaseModel):
 
 class WorkLog(BaseModel):
     log_id: Optional[int] = None  # SERIAL, auto-generated
-    project_id: int
+    project_id: Optional[int] = None
+    client_id: Optional[str] = None
     log_date: date = Field(default_factory=date.today)
     action_type: str
     content: Optional[str] = None

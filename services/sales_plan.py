@@ -57,3 +57,21 @@ def delete(plan_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM sales_plan WHERE plan_id = %s", (plan_id,))
+
+
+def get_summary_by_client(client_id):
+    """Aggregate revenue metrics for a client: deal_count, total_amount, weighted_amount."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT COUNT(sp.plan_id) AS deal_count,
+                          COALESCE(SUM(sp.amount), 0) AS total_amount,
+                          COALESCE(SUM(sp.amount * sp.confidence_level), 0) AS weighted_amount
+                   FROM sales_plan sp
+                   JOIN project_list p ON sp.project_id = p.project_id
+                   WHERE p.client_id = %s""",
+                (client_id,),
+            )
+            row = cur.fetchone()
+            cols = [d[0] for d in cur.description]
+            return dict(zip(cols, row))

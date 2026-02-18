@@ -1,12 +1,12 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Universal project specs for all AI-assisted tools (Claude Code, Cursor, Copilot, etc.).
 
 ## Project Overview
 
 SPMS (Sales & Project Management System) — B2B 業務與專案管理系統。Tech stack: **Python + Streamlit + PostgreSQL** (psycopg2, no ORM). Designed for solo + AI-assisted development.
 
-## Development Commands
+## Build & Run
 
 ```bash
 # Start PostgreSQL
@@ -51,7 +51,7 @@ streamlit run app.py
 
 No test framework is set up yet. Validation is manual per Sprint DoD checklists.
 
-## Architecture
+## Project Structure
 
 ### Data Flow
 
@@ -62,7 +62,7 @@ Streamlit Pages (pages/*.py)
     → PostgreSQL (docker-compose.yml)
 ```
 
-### Key Architectural Decisions
+## Architecture Decisions
 
 - **psycopg2 + raw SQL** — no ORM, no SQLAlchemy. PostgreSQL is the final target, no abstraction needed.
 - **JSONB fields** in `crm` table (`decision_maker`, `champions`) — legacy columns retained for reference. S15 retired dual-write; all reads/writes now use normalized `contact` + `account_contact` tables only.
@@ -77,7 +77,7 @@ Streamlit Pages (pages/*.py)
 - **Client health score (S16)** — `services/client_health.py` computes 0-100 score (activity recency + frequency + deal value + deal progress). Displayed in CRM overview and detail pages. Thresholds in `constants.py`.
 - **Contact dedup (S16)** — `contact` table has UNIQUE INDEX on `(name, COALESCE(email, ''))`. `services/contact.py` uses INSERT ON CONFLICT (upsert).
 
-### Database: 13 Tables
+## Database: 13 Tables
 
 Core (Phase 1-2): `annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`, `stage_probability`, `project_contact`
 Reserved (Phase 3): `email_log`, `agent_actions`
@@ -92,7 +92,7 @@ Reserved (Phase 3): `email_log`, `agent_actions`
 
 `project_contact` links contacts to projects (many-to-many). Used by `presale_detail.py` for managing deal-level stakeholders.
 
-### State Machine (Status Codes)
+## State Machine (Status Codes)
 
 Pre-sale: L0 客戶開發 → L1 等待追蹤 → L2 提案 → L3 確認意願 → L4 執行POC → L5 完成POC → L6 議價 → L7 簽約
 
@@ -146,20 +146,6 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 | database/import_projects.py | 210 | 匯入 4 產品 + 46 客戶 + 48 案件 + work_log |
 | database/schema.sql | 215 | 13 表 DDL + idempotent migrations (S14/S16/S17) |
 | app.py | 28 | Streamlit 入口：init_db → navigation → run |
-
-## Sprint Methodology
-
-5-stage workflow per Sprint: **Kickoff → Planning → Vibe Coding → Review → Retro & Refactor**
-
-- Sprint files: `docs/sprints/S01.md` through `S16.md`
-- Sprint guide: `docs/SPRINT_GUIDE.md`
-- Full dev plan: `docs/DEVELOPMENT_PLAN.md`
-
-S03 and S04 can run in parallel (both depend only on S02). S07-S13 為 Phase 2（已完成）。S14-S16 為客戶回饋改進（S14→S15→S16 依賴鏈）。
-
-Every Sprint **Kickoff** (Stage 0) and **Retro & Refactor** (Stage 4) must automatically commit and push to GitHub. This ensures progress checkpoints are always synced to the remote repository.
-
-After every Sprint **Retro** completes, re-read `docs/DEVELOPMENT_PLAN.md` and compare it against the actual codebase (schema, services, pages, directory structure). If any discrepancies are found (e.g., table count, column names, page list, directory tree, sprint table), alert the developer before proceeding to the next Sprint.
 
 ## Language
 

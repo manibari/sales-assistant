@@ -42,6 +42,20 @@ def get_connection():
         p.putconn(conn)
 
 
+def read_sql_file(file_name: str) -> str:
+    """
+    Reads a SQL query from a file in the database/queries directory.
+    """
+    # Construct the full path to the SQL file
+    query_path = os.path.join(os.path.dirname(__file__), "queries", file_name)
+    try:
+        with open(query_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        print(f"ERROR: SQL file not found at {query_path}")
+        raise
+
+
 def init_db():
     """Execute schema.sql to create all tables."""
     schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")

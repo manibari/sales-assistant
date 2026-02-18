@@ -3,39 +3,25 @@
 This service will interact with the Gemini API to extract structured data
 from unstructured text.
 """
-
 import os
 import json
+import yaml
 import google.generativeai as genai
 
-# Configure the Gemini API key
-# The user must have GOOGLE_API_KEY set in their .env file
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+# --- Prompt Loading ---
+def _load_prompts():
+    """Loads prompts from the prompts.yml file."""
+    try:
+        with open("prompts.yml", "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        print("ERROR: prompts.yml not found.")
+        return {}
 
-# System prompt to instruct the Gemini model
-_SYSTEM_PROMPT = """
-You are an expert assistant for a B2B Sales & Project Management System (SPMS).
-Your task is to parse a user's natural language work log entry and extract structured information.
-The user will provide a text entry. You MUST return a single JSON object with the following schema.
-Do not return any other text, just the JSON object.
+_prompts = _load_prompts()
+_SYSTEM_PROMPT = _prompts.get("ai_smart_log", "") # Fallback to empty string
 
-Schema:
-{
-  "company_name": "string or null",  // The name of the client company mentioned.
-  "log_content": "string",             // The full, original text from the user.
-  "action_type": "string"              // Infer the type of activity from the text. Choose one of: "會議", "提案", "開發", "文件", "郵件". Default to "會議".
-}
-
-Example user input:
-"今天拜訪桃園大眾捷運股份有限公司，討論關於車上冰水主機、轉轍器等議題"
-
-Example JSON output:
-{
-  "company_name": "桃園大眾捷運股份有限公司",
-  "log_content": "今天拜訪桃園大眾捷運股份有限公司，討論關於車上冰水主機、轉轍器等議題",
-  "action_type": "會議"
-}
-"""
+# --- Gemini API Call ---
 
 def parse_log_entry(text_input: str) -> dict | None:
     """
@@ -53,21 +39,35 @@ def parse_log_entry(text_input: str) -> dict | None:
     if not text_input or not text_input.strip():
         return None
 
+    if not _SYSTEM_PROMPT:
+        raise ValueError("System prompt for 'ai_smart_log' could not be loaded from prompts.yml.")
+
+    raw_response_text = ""
     try:
         model = genai.GenerativeModel(
-            model_name='gemini-1.5-flash',
+            model_name='gemini-2.5-flash',
             system_instruction=_SYSTEM_PROMPT
         )
         response = model.generate_content(text_input)
+        raw_response_text = response.text.strip()
 
         # Clean the response to get only the JSON part
-        cleaned_response = response.text.strip().replace("```json", "").replace("```", "")
+        cleaned_response = raw_response_text.replace("```json", "").replace("```", "")
         parsed_json = json.loads(cleaned_response)
 
         # Ensure the original text is preserved as log_content
         parsed_json['log_content'] = text_input
         return parsed_json
 
-    except Exception as e:
-        print(f"Error parsing log entry with Gemini: {e}")
+    except json.JSONDecodeError as e:
+        print("="*50)
+        print("AI RESPONSE PARSING FAILED!")
+        print(f"Failed to decode JSON. Error: {e}")
+        print("Raw response from AI model:")
+        print(raw_response_text)
+        print("="*50)
         return None
+    except Exception as e:
+        print(f"An unexpected error occurred in parse_log_entry: {e}")
+        return None
+

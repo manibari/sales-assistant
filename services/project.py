@@ -1,41 +1,92 @@
 """Project service — CRUD + state machine + contact linking for project_list.
-
-Public API:
-    create(...) → project_id
-    get_all() → list[dict]
-    get_by_id(project_id) → dict | None
-    get_presale() → list[dict]      # L0-L7, LOST, HOLD
-    get_postsale() → list[dict]     # P0-P2
-    get_closed() → list[dict]       # P2, LOST, HOLD (with client info)
-    update(project_id, ...) → None
-    delete(project_id) → None
-    transition_status(project_id, new_status) → None  # raises ValueError
-    link_contact(project_id, contact_id, role) → None
-    unlink_contact(project_id, contact_id) → None
-    get_contacts(project_id) → list[dict]
+S31: Refactored connection management to prevent nested connections.
 """
 
+import streamlit as st
+import yaml
 from constants import PRESALE_STATUS_CODES, POSTSALE_STATUS_CODES, VALID_TRANSITIONS
-from database.connection import get_connection
+from database.connection import get_connection, read_sql_file
+from services import meddic as meddic_svc
+
+# --- Rule Loading (S27) ---
+def _load_rules():
+    """Loads business rules from the rules.yml file."""
+    try:
+        with open("rules.yml", "r", encoding="utf-8") as f:
+            rules = yaml.safe_load(f)
+            return rules.get("meddic_gate_rules", {})
+    except FileNotFoundError:
+        print("WARNING: rules.yml not found. MEDDIC gating will be disabled.")
+        return {}
+
+_MEDDIC_GATE_RULES = _load_rules()
+
+
+def _check_meddic_gate(project_id: int, new_status: str):
+    """
+    Checks if the project meets the MEDDIC criteria to transition to the new status.
+    Raises ValueError if the gate is not passed.
+    """
+    rule = _MEDDIC_GATE_RULES.get(new_status)
+    if not rule:
+        return # No gate for this status
+
+    meddic_data = meddic_svc.get_by_project(project_id)
+    if not meddic_data:
+        meddic_data = {}
+
+    missing_fields = [
+        rule["label"] for field in rule["fields"] if not meddic_data.get(field)
+    ]
+
+    if missing_fields:
+        raise ValueError(
+            f"無法進入 {new_status} 狀態。請至 MEDDIC 分頁填寫以下項目：{', '.join(missing_fields)}"
+        )
 
 
 def create(project_name, client_id=None, product_id=None, status_code="L0",
            presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium",
            channel=None):
+    """Public method to create a project. Manages its own connection."""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            return _create(cur, project_name, client_id, product_id, status_code,
+                           presale_owner, postsale_owner, sales_owner, priority, channel)
+
+
+def find_or_create_project(client_id: str, project_name: str, status_code: str) -> int | None:
+    """
+    Finds a project by name for a given client. If not found, creates a new one.
+    This function manages a single connection for the entire find-or-create transaction.
+    Returns the project_id.
+    """
+    if not all([client_id, project_name, status_code]):
+        return None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Try to find an existing project with a similar name for this client
             cur.execute(
-                """INSERT INTO project_list
-                   (project_name, client_id, product_id, status_code,
-                    presale_owner, sales_owner, postsale_owner, priority, channel)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                   RETURNING project_id""",
-                (project_name, client_id, product_id, status_code,
-                 presale_owner, sales_owner, postsale_owner, priority, channel),
+                "SELECT project_id FROM project_list WHERE client_id = %s AND project_name = %s",
+                (client_id, project_name)
             )
-            return cur.fetchone()[0]
+            row = cur.fetchone()
+            if row:
+                return row[0]
+
+            # If not found, create a new one using the internal function
+            new_project_id = _create(
+                cur,
+                project_name=project_name,
+                client_id=client_id,
+                status_code=status_code,
+                channel="direct sales" # Mark as created by AI
+            )
+            return new_project_id
 
 
+@st.cache_data
 def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -86,15 +137,8 @@ def get_closed():
     closed_codes = ["P2", "LOST", "HOLD"]
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT p.*, c.company_name, c.department,
-                          c.decision_maker, c.champions, c.industry
-                   FROM project_list p
-                   LEFT JOIN crm c ON p.client_id = c.client_id
-                   WHERE p.status_code = ANY(%s)
-                   ORDER BY c.company_name, p.project_id""",
-                (closed_codes,),
-            )
+            sql = read_sql_file("project_get_closed.sql")
+            cur.execute(sql, (closed_codes,))
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -121,20 +165,29 @@ def delete(project_id):
             cur.execute("DELETE FROM project_list WHERE project_id = %s", (project_id,))
 
 
-def transition_status(project_id, new_status):
-    """Transition project status. Raises ValueError if transition is illegal."""
+def transition_status(project_id, new_status, force=False):
+    """
+    Transition project status.
+    Raises ValueError if transition is illegal and force is False.
+    If force is True, bypasses validation rules.
+    """
     project = get_by_id(project_id)
     if project is None:
         raise ValueError(f"Project {project_id} not found")
 
-    current = project["status_code"]
-    allowed = VALID_TRANSITIONS.get(current, [])
+    if not force:
+        # 1. Check MEDDIC gate rules
+        _check_meddic_gate(project_id, new_status)
 
-    if new_status not in allowed:
-        raise ValueError(
-            f"Cannot transition from {current} to {new_status}. "
-            f"Allowed: {allowed}"
-        )
+        # 2. Check standard transition rules
+        current = project["status_code"]
+        allowed = VALID_TRANSITIONS.get(current, [])
+
+        if new_status not in allowed:
+            raise ValueError(
+                f"無法從 {current} 轉換至 {new_status}. "
+                f"允許的轉換: {allowed}"
+            )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -191,3 +244,20 @@ def get_contacts(project_id):
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+# --- Internal Helpers ---
+
+def _create(cur, project_name, client_id=None, product_id=None, status_code="L0",
+            presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium",
+            channel=None):
+    """Internal method to create a project using a provided cursor."""
+    cur.execute(
+        """INSERT INTO project_list
+           (project_name, client_id, product_id, status_code,
+            presale_owner, sales_owner, postsale_owner, priority, channel)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING project_id""",
+        (project_name, client_id, product_id, status_code,
+         presale_owner, sales_owner, postsale_owner, priority, channel),
+    )
+    return cur.fetchone()[0]

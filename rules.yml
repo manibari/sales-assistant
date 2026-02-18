@@ -1,0 +1,24 @@
+# rules.yml
+# Central repository for business logic rules.
+
+# MEDDIC Gating Rules for project status transitions.
+# Used by services/project.py
+meddic_gate_rules:
+  L2:
+    fields: ["identify_pain"]
+    label: "痛點 (Identify Pain)"
+  L3:
+    fields: ["champion"]
+    label: "擁護者 (Champion)"
+  L4:
+    fields: ["decision_criteria"]
+    label: "決策標準 (Decision Criteria)"
+  L5:
+    fields: ["metrics"]
+    label: "量化指標 (Metrics)"
+  L6:
+    fields: ["economic_buyer"]
+    label: "經濟決策者 (Economic Buyer)"
+  L7:
+    fields: ["decision_process"]
+    label: "決策流程 (Decision Process)"

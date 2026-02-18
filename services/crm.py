@@ -1,6 +1,7 @@
 """CRM service — Client CRUD, normalized contact sync.
 
 S15: reads/writes contacts via normalized tables only (JSONB dual-write retired).
+S30: Refactored connection management to prevent nested connections.
 
 Public API:
     create(client_id, ...) → None
@@ -10,59 +11,76 @@ Public API:
     delete(client_id) → None
     find_or_create_client(company_name) -> str  # Returns client_id
 Internal:
+    _create(cur, client_id, ...)
     _sync_contacts_to_normalized(cur, client_id, dm, champions)
     _upsert_contact(cur, data) → contact_id
     _get_normalized_contacts(cur, client_id) → dict
 """
 import re
 from datetime import date
-from database.connection import get_connection
+import streamlit as st
+from database.connection import get_connection, read_sql_file
 
 
 def create(client_id, company_name, industry=None, department=None, email=None,
            decision_maker=None, champions=None, contact_info=None, notes=None,
            data_year=None):
+    """Public method to create a client. Manages its own connection."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Insert CRM row without JSONB fields
-            cur.execute(
-                """INSERT INTO crm
-                   (client_id, company_name, industry, department, email,
-                    contact_info, notes, data_year)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                   ON CONFLICT (client_id) DO NOTHING""",
-                (client_id, company_name, industry, department, email,
-                 contact_info, notes, data_year or date.today().year),
-            )
-            # Write contacts to normalized tables only
-            _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
+            _create(cur, client_id, company_name, industry, department, email,
+                    decision_maker, champions, contact_info, notes, data_year)
 
 
+def find_or_create_client(company_name: str) -> str | None:
+    """
+    Finds a client by company name. If not found, creates a new one
+    with a standard sequential ID (CLI-XXX).
+    This function manages a single connection for the entire find-or-create transaction.
+    Returns the client_id.
+    """
+    if not company_name or not company_name.strip():
+        return None
+
+    company_name = company_name.strip()
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Try to find an existing client
+            cur.execute("SELECT client_id FROM crm WHERE company_name = %s", (company_name,))
+            row = cur.fetchone()
+            if row:
+                return row[0]
+
+            # If not found, create a new one with a sequential ID
+            cur.execute("SELECT client_id FROM crm WHERE client_id LIKE 'CLI-%'")
+            existing_ids = [r[0] for r in cur.fetchall()]
+
+            max_id = 0
+            for client_id in existing_ids:
+                try:
+                    num_part = int(client_id.split('-')[1])
+                    if num_part > max_id:
+                        max_id = num_part
+                except (ValueError, IndexError):
+                    continue
+
+            new_id_num = max_id + 1
+            new_client_id = f"CLI-{new_id_num:03d}"
+
+            # Call the internal _create function with the current cursor
+            _create(cur, client_id=new_client_id, company_name=company_name)
+            
+            return new_client_id
+
+
+@st.cache_data
 def get_all():
     """Get all clients with DM and champion names from normalized tables (LEFT JOIN)."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT c.*,
-                       dm_contact.name AS dm_name,
-                       champ_agg.champion_names
-                FROM crm c
-                LEFT JOIN (
-                    SELECT ac.client_id, ct.name
-                    FROM account_contact ac
-                    JOIN contact ct ON ac.contact_id = ct.contact_id
-                    WHERE ac.role = 'decision_maker'
-                ) dm_contact ON c.client_id = dm_contact.client_id
-                LEFT JOIN (
-                    SELECT ac.client_id,
-                           STRING_AGG(ct.name, ', ' ORDER BY ac.sort_order) AS champion_names
-                    FROM account_contact ac
-                    JOIN contact ct ON ac.contact_id = ct.contact_id
-                    WHERE ac.role = 'champion'
-                    GROUP BY ac.client_id
-                ) champ_agg ON c.client_id = champ_agg.client_id
-                ORDER BY c.client_id
-            """)
+            sql = read_sql_file("crm_get_all.sql")
+            cur.execute(sql)
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -113,50 +131,27 @@ def delete(client_id):
             cur.execute("DELETE FROM crm WHERE client_id = %s", (client_id,))
 
 
-def find_or_create_client(company_name: str) -> str | None:
-    """
-    Finds a client by company name. If not found, creates a new one.
-    Returns the client_id.
-    """
-    if not company_name or not company_name.strip():
-        return None
-
-    company_name = company_name.strip()
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Try to find an existing client
-            cur.execute("SELECT client_id FROM crm WHERE company_name = %s", (company_name,))
-            row = cur.fetchone()
-            if row:
-                return row[0]
-
-            # If not found, create a new one
-            # Generate a simple client_id (e.g., uppercase letters from name)
-            # This is a basic strategy and can be improved
-            id_chars = re.findall(r'[A-Z\d]', company_name.upper())
-            if not id_chars: # Handle non-latin names
-                id_chars = re.findall(r'[\u4e00-\u9fff]', company_name)
-
-            new_id = "".join(id_chars)[:4]
-            
-            # Ensure the ID is unique
-            cur.execute("SELECT client_id FROM crm WHERE client_id LIKE %s", (f"{new_id}%",))
-            existing_ids = [r[0] for r in cur.fetchall()]
-            
-            if new_id in existing_ids:
-                i = 1
-                while f"{new_id}{i}" in existing_ids:
-                    i += 1
-                new_id = f"{new_id}{i}"
-
-            create(client_id=new_id, company_name=company_name)
-            return new_id
-
-
 # ---------------------------------------------------------------------------
-# Internal helpers — normalized tables only
+# Internal helpers — these operate on a provided cursor
 # ---------------------------------------------------------------------------
+
+def _create(cur, client_id, company_name, industry=None, department=None, email=None,
+            decision_maker=None, champions=None, contact_info=None, notes=None,
+            data_year=None):
+    """Internal method to create a client using a provided cursor."""
+    # Insert CRM row without JSONB fields
+    cur.execute(
+        """INSERT INTO crm
+           (client_id, company_name, industry, department, email,
+            contact_info, notes, data_year)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+           ON CONFLICT (client_id) DO NOTHING""",
+        (client_id, company_name, industry, department, email,
+         contact_info, notes, data_year or date.today().year),
+    )
+    # Write contacts to normalized tables only
+    _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
+
 
 def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
     """Replace all normalized contacts for a client with the provided data."""

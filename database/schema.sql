@@ -100,7 +100,8 @@ INSERT INTO app_settings (key, value) VALUES
     ('header_sales_plan', '商機預測'),
     ('header_crm', '客戶管理'),
     ('header_pipeline', '業務漏斗'),
-    ('header_post_closure', '已結案客戶')
+    ('header_post_closure', '已結案客戶'),
+    ('hourly_cost_rate', '100')
 ON CONFLICT (key) DO NOTHING;
 
 -- S10: Contact normalization tables
@@ -150,6 +151,29 @@ CREATE TABLE IF NOT EXISTS project_contact (
     PRIMARY KEY (project_id, contact_id)
 );
 
+-- S25: MEDDIC table
+CREATE TABLE IF NOT EXISTS project_meddic (
+    project_id               INTEGER PRIMARY KEY REFERENCES project_list(project_id) ON DELETE CASCADE,
+    metrics                  TEXT, -- 指標: 客戶希望達成的量化效益
+    economic_buyer           TEXT, -- 經濟決策者: 最終拍板的人是誰
+    decision_criteria        TEXT, -- 決策標準: 客戶用什麼標準來評估廠商
+    decision_process         TEXT, -- 決策流程: 客戶內部的採購流程、時程
+    identify_pain            TEXT, -- 痛點: 他們現在具體遇到了什麼困難
+    champion                 TEXT, -- 擁護者: 我們在客戶內部的「自己人」是誰
+    updated_at               TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- S29: Asynchronous AI task queue
+CREATE TABLE IF NOT EXISTS ai_task_queue (
+    task_id        SERIAL PRIMARY KEY,
+    status         TEXT NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
+    raw_text       TEXT NOT NULL,
+    result_data    JSONB,
+    error_message  TEXT,
+    created_at     TIMESTAMPTZ DEFAULT NOW(),
+    processed_at   TIMESTAMPTZ
+);
+
 -- Phase 3 reserved tables
 
 CREATE TABLE IF NOT EXISTS email_log (
@@ -196,8 +220,18 @@ ALTER TABLE work_log ADD COLUMN IF NOT EXISTS client_id TEXT REFERENCES crm(clie
 -- S15: Add client_health_score to crm
 ALTER TABLE crm ADD COLUMN IF NOT EXISTS client_health_score INTEGER DEFAULT 75;
 
--- S17: project_list channel field
+-- S17: project_list channel field and sales_owner
 ALTER TABLE project_list ADD COLUMN IF NOT EXISTS channel TEXT;
+ALTER TABLE project_list ADD COLUMN IF NOT EXISTS sales_owner TEXT;
+
+-- S29: Annual plan to support strategic initiatives
+ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS pillar TEXT;
+ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS owner TEXT;
+ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS kpis TEXT;
+ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Q2 計劃';
+
+-- S31: Add battlefront to annual_plan
+ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS battlefront TEXT;
 
 DO $$
 BEGIN

@@ -4,6 +4,7 @@ pydantic
 plotly
 python-dotenv
 google-generativeai
+PyYAML
 
 # Development and code quality
 pre-commit

@@ -8,19 +8,46 @@ Public API:
     delete(product_id) → None
 """
 
+import streamlit as st
 from database.connection import get_connection
 
 
-def create(product_id, product_name, quota_fy26=0, strategy=None, target_industry=None):
+def create(
+    product_id,
+    product_name,
+    quota_fy26=0,
+    strategy=None,
+    target_industry=None,
+    pillar=None,
+    owner=None,
+    kpis=None,
+    status="Q2 計劃",
+    battlefront=None,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO annual_plan (product_id, product_name, quota_fy26, strategy, target_industry)
-                   VALUES (%s, %s, %s, %s, %s)""",
-                (product_id, product_name, quota_fy26, strategy, target_industry),
+                """INSERT INTO annual_plan (
+                       product_id, product_name, quota_fy26, strategy, target_industry,
+                       pillar, owner, kpis, status, battlefront
+                   )
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    product_id,
+                    product_name,
+                    quota_fy26,
+                    strategy,
+                    target_industry,
+                    pillar,
+                    owner,
+                    kpis,
+                    status,
+                    battlefront,
+                ),
             )
 
 
+@st.cache_data
 def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -40,15 +67,22 @@ def get_by_id(product_id):
             return dict(zip(cols, row))
 
 
-def update(product_id, product_name, quota_fy26, strategy, target_industry):
+def update(
+    product_id, product_name, quota_fy26, strategy, target_industry,
+    pillar, owner, kpis, status, battlefront
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE annual_plan
                    SET product_name = %s, quota_fy26 = %s, strategy = %s,
-                       target_industry = %s, updated_at = NOW()
+                       target_industry = %s, pillar = %s, owner = %s, kpis = %s,
+                       status = %s, battlefront = %s, updated_at = NOW()
                    WHERE product_id = %s""",
-                (product_name, quota_fy26, strategy, target_industry, product_id),
+                (
+                    product_name, quota_fy26, strategy, target_industry,
+                    pillar, owner, kpis, status, battlefront, product_id
+                ),
             )
 
 

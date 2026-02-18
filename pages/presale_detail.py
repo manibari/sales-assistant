@@ -16,6 +16,7 @@ from constants import (
 from services import annual_plan as ap_svc
 from services import contact as contact_svc
 from services import crm as crm_svc
+from services import meddic as meddic_svc
 from services import project as project_svc
 from services import project_task as task_svc
 from services import sales_plan as sp_svc
@@ -47,7 +48,34 @@ client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
 product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
 
 col_status, col_client, col_product, col_owner, col_priority, col_channel = st.columns(6)
-col_status.metric("狀態", f'{project["status_code"]} {STATUS_CODES.get(project["status_code"], "")}')
+
+# --- Editable Status (S23/S25 Refactor) ---
+with col_status:
+    all_status_options = list(PRESALE_STATUS_CODES.keys()) + ["LOST", "HOLD"]
+    current_status = project["status_code"]
+    try:
+        current_status_index = all_status_options.index(current_status)
+    except ValueError:
+        current_status_index = 0
+
+    new_status = st.selectbox(
+        "狀態",
+        options=all_status_options,
+        index=current_status_index,
+        format_func=lambda x: f"{x} {STATUS_CODES.get(x, '')}",
+        key="presale_detail_status_selector"
+    )
+    
+    force_transition = st.checkbox("強制轉換 (繞過規則)", key="force_transition_cb", help="勾選此項以繞過 MEDDIC 關卡和標準流程限制，直接變更狀態。")
+    
+    if st.button("更新狀態", key="update_status_btn"):
+        try:
+            project_svc.transition_status(project_id, new_status, force=force_transition)
+            st.toast(f"狀態已成功更新為: {new_status}", icon="✅")
+            st.rerun()
+        except ValueError as e:
+            st.error(str(e))
+
 col_client.metric("客戶", client_map.get(project.get("client_id"), project.get("client_id") or "—"))
 col_product.metric("產品", product_map.get(project.get("product_id"), project.get("product_id") or "—"))
 col_owner.metric("售前負責人", project.get("presale_owner") or "—")
@@ -63,9 +91,37 @@ st.metric("階段機率", f"{current_prob:.0%}")
 st.divider()
 
 # === Tabs ===
-tab_contacts, tab_sales, tab_timeline, tab_tasks, tab_transition = st.tabs(
-    ["關聯聯絡人", "商機預測", "活動時間軸", "任務管理", "狀態流轉"]
+tab_meddic, tab_contacts, tab_sales, tab_timeline, tab_tasks = st.tabs(
+    ["MEDDIC", "關聯聯絡人", "商機預測", "活動時間軸", "任務管理"]
 )
+
+# --- Tab 0: MEDDIC (S25) ---
+with tab_meddic:
+    st.subheader("MEDDIC 分析")
+    
+    meddic_data = meddic_svc.get_by_project(project_id) or {}
+
+    with st.form("meddic_form"):
+        metrics = st.text_area("Metrics (量化指標)", value=meddic_data.get("metrics", ""), height=100, help="客戶希望達成的量化效益，例如：提升 20% 產能、降低 15% 成本")
+        economic_buyer = st.text_area("Economic Buyer (經濟決策者)", value=meddic_data.get("economic_buyer", ""), height=100, help="最終有預算簽字權的人是誰？他的主要考量是什麼？")
+        decision_criteria = st.text_area("Decision Criteria (決策標準)", value=meddic_data.get("decision_criteria", ""), height=100, help="客戶用什麼具體標準來評估供應商？（技術、價格、品牌、服務...）")
+        decision_process = st.text_area("Decision Process (決策流程)", value=meddic_data.get("decision_process", ""), height=100, help="客戶內部的採購流程、時程、及參與者有誰？")
+        identify_pain = st.text_area("Identify Pain (痛點)", value=meddic_data.get("identify_pain", ""), height=100, help="他們現在具體遇到了什麼困難？這個困難對他們的業務造成了什麼影響？")
+        champion = st.text_area("Champion (擁護者)", value=meddic_data.get("champion", ""), height=100, help="我們在客戶內部的「自己人」是誰？他能為我們帶來什麼資訊或影響力？")
+
+        submitted = st.form_submit_button("儲存 MEDDIC 分析")
+        if submitted:
+            meddic_svc.save_or_update(
+                project_id=project_id,
+                metrics=metrics,
+                economic_buyer=economic_buyer,
+                decision_criteria=decision_criteria,
+                decision_process=decision_process,
+                identify_pain=identify_pain,
+                champion=champion,
+            )
+            st.success("MEDDIC 分析已儲存！")
+            st.rerun()
 
 # --- Tab 1: Linked contacts ---
 with tab_contacts:

@@ -3,7 +3,6 @@ Supports project-level and client-level activities (S14).
 S29: Refactored for asynchronous AI task processing.
 """
 
-import os
 from datetime import date
 
 import pandas as pd
@@ -17,6 +16,7 @@ from services import project_task as task_svc
 from services import settings as settings_svc
 from services import work_log as work_log_svc
 from services import task_queue as task_queue_svc
+from services.ai_provider import check_ai_available
 
 render_sidebar()
 
@@ -74,14 +74,18 @@ tab_ai, tab_queue, tab_entry, tab_history = st.tabs(["🤖 AI 智慧記錄", "AI
 
 # === AI Smart Log Entry (S18/S29) ===
 with tab_ai:
-    if not os.getenv("GOOGLE_API_KEY"):
-        st.error("⚠️ 未偵測到 GOOGLE_API_KEY，AI 功能已停用。")
-        with st.expander("🔑 如何設定 API 金鑰？"):
+    ai_ok, ai_msg = check_ai_available()
+    if not ai_ok:
+        st.error(f"⚠️ {ai_msg}　AI 功能已停用。")
+        with st.expander("🔑 如何設定 AI Provider？"):
             st.markdown("""
-                為了啟用 AI 智慧記錄功能，您需要設定您的 Google API 金鑰。
-                **步驟 1**: 在專案根目錄下建立一個名為 `.env` 的檔案。
-                **步驟 2**: 在 `.env` 檔案中新增一行 `GOOGLE_API_KEY="YOUR_API_KEY_HERE"` 並貼上您的金鑰。
-                **步驟 3**: 儲存檔案並重新啟動應用程式。
+**在 `.env` 中設定 `AI_PROVIDER` 及對應的金鑰，然後重新啟動應用程式。**
+
+| Provider | `AI_PROVIDER` | 必要環境變數 |
+|---|---|---|
+| Google Gemini（預設） | `gemini` | `GOOGLE_API_KEY` |
+| Azure OpenAI | `azure_openai` | `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_DEPLOYMENT` |
+| Anthropic Claude | `anthropic` | `ANTHROPIC_API_KEY` |
             """)
     else:
         st.info("輸入您的工作日誌，AI 將在背景為您解析客戶、建立紀錄與專案。")

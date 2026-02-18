@@ -4,6 +4,8 @@ pydantic
 plotly
 python-dotenv
 google-generativeai
+openai
+anthropic
 PyYAML
 
 # Development and code quality

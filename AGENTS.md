@@ -76,13 +76,18 @@ Streamlit Pages (pages/*.py)
 - **Client-level activities (S14)** — `work_log.project_id` is nullable; `work_log.client_id` FK to `crm`. CHECK constraint ensures at least one is set. `pages/work_log.py` has radio toggle for project vs client activity mode.
 - **Client health score (S16)** — `services/client_health.py` computes 0-100 score (activity recency + frequency + deal value + deal progress). Displayed in CRM overview and detail pages. Thresholds in `constants.py`.
 - **Contact dedup (S16)** — `contact` table has UNIQUE INDEX on `(name, COALESCE(email, ''))`. `services/contact.py` uses INSERT ON CONFLICT (upsert).
+- **MEDDIC stage gating (S25)** — `project_meddic` table stores per-project MEDDIC data. `services/project.py` checks `rules.yml` gate rules before allowing status transitions; `force=True` bypasses.
+- **Async AI processing (S29)** — `ai_task_queue` table + `worker.py` poll loop. `pages/work_log.py` submits text to queue; worker calls Gemini API via `services/intelligent_log.py`.
+- **Cursor-to-dict helpers** — `database/connection.py` provides `row_to_dict(cur)` / `rows_to_dicts(cur)` used by all services.
+- **Centralized config loading** — `services/config.py` uses `@lru_cache` for `rules.yml` and `prompts.yml`, consumed by `project.py` and `intelligent_log.py`.
 
-## Database: 13 Tables
+## Database: 15 Tables
 
 Core (Phase 1-2): `annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`, `stage_probability`, `project_contact`
+Feature (S25/S29): `project_meddic`, `ai_task_queue`
 Reserved (Phase 3): `email_log`, `agent_actions`
 
-`project_list` is the central hub — FK references from `work_log`, `sales_plan`, `project_task`, `project_contact`, `email_log`, `agent_actions`.
+`project_list` is the central hub — FK references from `work_log`, `sales_plan`, `project_task`, `project_contact`, `project_meddic`, `email_log`, `agent_actions`.
 
 `project_task` stores sub-tasks for presale/postsale projects (statuses: planned/in_progress/completed, + `due_date` + `is_next_action`). Used by `presale_detail.py` and `postsale_detail.py` for task CRUD, Gantt chart, and burndown chart.
 
@@ -91,6 +96,10 @@ Reserved (Phase 3): `email_log`, `agent_actions`
 `stage_probability` stores per-stage default probabilities (L0=5%...L7=100%). Used by `sales_plan.py` for confidence prefill and `pipeline.py` for weighted revenue forecast. Editable via `settings.py`.
 
 `project_contact` links contacts to projects (many-to-many). Used by `presale_detail.py` for managing deal-level stakeholders.
+
+`project_meddic` stores per-project MEDDIC assessment (metrics, economic_buyer, decision_criteria, decision_process, identify_pain, champion). FK to `project_list`. Used by `presale_detail.py` MEDDIC tab and stage gating in `services/project.py`.
+
+`ai_task_queue` stores async AI processing tasks (status: pending/processing/completed/failed, raw_text, result_data JSONB). Managed by `services/task_queue.py`, consumed by `worker.py`.
 
 ## State Machine (Status Codes)
 
@@ -106,45 +115,51 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 
 | 檔案 | 行數 | Public API |
 |------|------|-----------|
-| crm.py | 221 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
-| project.py | 195 | `create`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
+| crm.py | 253 | `create`, `find_or_create_client`, `get_all`, `get_by_id`, `update`, `delete` |
+| project.py | 241 | `create`, `find_or_create_project`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
 | client_health.py | 141 | `compute_health_score`, `compute_all_scores` |
-| project_task.py | 138 | `create`, `get_by_project`, `get_by_id`, `update`, `delete`, `get_summary`, `get_completed_by_date`, `get_upcoming` |
-| contact.py | 99 | `create`, `get_by_id`, `get_by_client`, `update`, `delete`, `link_to_client`, `unlink_from_client` |
-| work_log.py | 92 | `create`, `get_by_project`, `get_recent`, `get_by_client`, `get_client_only` |
-| sales_plan.py | 86 | `create`, `get_all`, `get_by_id`, `update`, `delete`, `get_summary_by_client` |
-| search.py | 59 | `search_all` |
-| annual_plan.py | 58 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
-| stage_probability.py | 45 | `get_all`, `get_by_code`, `update` |
+| project_task.py | 129 | `create`, `get_by_project`, `get_by_id`, `update`, `delete`, `get_summary`, `get_completed_by_date`, `get_upcoming` |
+| task_queue.py | 100 | `create_task`, `get_next_pending`, `get_recent_tasks`, `update_task_status` |
+| contact.py | 94 | `create`, `get_by_id`, `get_by_client`, `update`, `delete`, `link_to_client`, `unlink_from_client` |
+| work_log.py | 88 | `create`, `get_by_project`, `get_recent`, `get_by_client`, `get_client_only` |
+| annual_plan.py | 87 | `create`, `get_all`, `get_by_id`, `update`, `delete` |
+| sales_plan.py | 79 | `create`, `get_all`, `get_by_id`, `update`, `delete`, `get_summary_by_client` |
+| analytics.py | 76 | `get_manpower_by_initiative`, `get_potential_pipeline_by_initiative` |
+| intelligent_log.py | 61 | `parse_log_entry` |
+| search.py | 56 | `search_all` |
+| meddic.py | 51 | `get_by_project`, `save_or_update` |
+| stage_probability.py | 44 | `get_all`, `get_by_code`, `update` |
+| config.py | 35 | `get_meddic_gate_rules`, `get_ai_prompt` |
 | settings.py | 27 | `get_all_headers`, `update_header` |
 
 ### Pages (pages/*.py)
 
 | 檔案 | 行數 | 用途 |
 |------|------|------|
+| presale_detail.py | 409 | 售前案件詳情：狀態轉換、MEDDIC、任務、聯絡人、活動記錄 |
 | crm.py | 378 | 客戶管理：CRUD + 聯絡人編輯 + 健康分數 |
-| presale_detail.py | 353 | 售前案件詳情：狀態轉換、任務、聯絡人、活動記錄 |
 | postsale_detail.py | 302 | 售後專案詳情：任務 CRUD、Gantt chart、Burndown chart |
-| presale.py | 197 | 售前案件列表：建立/編輯案件 |
+| presale.py | 195 | 售前案件列表：建立/編輯案件 |
 | postsale.py | 185 | 售後專案列表：建立/編輯專案 |
+| work_log.py | 182 | 工作日誌（首頁）：AI 智慧記錄 + 手動模式 + 任務佇列 |
+| annual_plan.py | 181 | 產品策略管理：年度目標 CRUD + 戰情室 |
 | pipeline.py | 173 | 業務漏斗：加權營收、階段分布圖 |
-| work_log.py | 160 | 工作日誌（首頁）：專案/客戶層級活動記錄 |
 | sales_plan.py | 144 | 商機預測：CRUD + 階段機率 prefill |
 | post_closure.py | 89 | 已結案客戶：P2/LOST/HOLD 專案一覽 |
 | kanban.py | 86 | 售前看板：按階段分欄顯示 |
-| annual_plan.py | 80 | 產品策略管理：年度目標 CRUD |
-| settings.py | 71 | 設定：頁面標題、階段機率編輯 |
+| settings.py | 80 | 設定：頁面標題、階段機率編輯、清除快取 |
 | search.py | 61 | 全域搜尋：跨聯絡人/客戶/專案 |
 
 ### Infrastructure
 
 | 檔案 | 行數 | 用途 |
 |------|------|------|
+| database/import_projects.py | 280 | 匯入 4 產品 + 46 客戶 + 48 案件 + work_log |
+| database/schema.sql | 256 | 15 表 DDL + idempotent migrations (S14–S29) |
+| worker.py | 103 | 非同步 AI 任務 worker（輪詢 ai_task_queue） |
 | constants.py | 90 | 狀態碼、轉換規則、Action types、健康分數權重/閾值 |
+| database/connection.py | 81 | psycopg2 連線池 + `row_to_dict` / `rows_to_dicts` helpers |
 | components/sidebar.py | 69 | 分組式側邊欄導航（`_NAV_SECTIONS` + `render_sidebar`） |
-| database/connection.py | 52 | psycopg2 連線池（`get_connection`, `init_db`） |
-| database/import_projects.py | 210 | 匯入 4 產品 + 46 客戶 + 48 案件 + work_log |
-| database/schema.sql | 215 | 13 表 DDL + idempotent migrations (S14/S16/S17) |
 | app.py | 28 | Streamlit 入口：init_db → navigation → run |
 
 ## Language

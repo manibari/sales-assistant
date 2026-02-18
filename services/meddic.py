@@ -1,6 +1,6 @@
 """MEDDIC service — CRUD for the project_meddic table."""
 
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict
 
 def get_by_project(project_id: int) -> dict | None:
     """
@@ -12,12 +12,7 @@ def get_by_project(project_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM project_meddic WHERE project_id = %s", (project_id,))
-            row = cur.fetchone()
-            if not row:
-                return None
-            
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 def save_or_update(
     project_id: int,

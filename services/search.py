@@ -4,7 +4,7 @@ Public API:
     search_all(query) → dict  # {contacts: [...], clients: [...], projects: [...]}
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, rows_to_dicts
 
 
 def search_all(query):
@@ -24,8 +24,7 @@ def search_all(query):
                    LIMIT 50""",
                 (pattern, pattern, pattern, pattern),
             )
-            cols = [d[0] for d in cur.description]
-            results["contacts"] = [dict(zip(cols, row)) for row in cur.fetchall()]
+            results["contacts"] = rows_to_dicts(cur)
 
             # Search clients (crm)
             cur.execute(
@@ -37,8 +36,7 @@ def search_all(query):
                    LIMIT 50""",
                 (pattern, pattern, pattern, pattern),
             )
-            cols = [d[0] for d in cur.description]
-            results["clients"] = [dict(zip(cols, row)) for row in cur.fetchall()]
+            results["clients"] = rows_to_dicts(cur)
 
             # Search projects
             cur.execute(
@@ -53,7 +51,6 @@ def search_all(query):
                    LIMIT 50""",
                 (pattern, pattern, pattern, pattern),
             )
-            cols = [d[0] for d in cur.description]
-            results["projects"] = [dict(zip(cols, row)) for row in cur.fetchall()]
+            results["projects"] = rows_to_dicts(cur)
 
     return results

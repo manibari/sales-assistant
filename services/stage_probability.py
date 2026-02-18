@@ -9,7 +9,7 @@ Public API:
     update(status_code, probability) → None
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, rows_to_dicts
 
 
 def get_all():
@@ -17,8 +17,7 @@ def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM stage_probability ORDER BY sort_order")
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_code(status_code):

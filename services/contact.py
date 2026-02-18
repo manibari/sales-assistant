@@ -12,7 +12,7 @@ Public API:
     unlink_from_client(client_id, contact_id) → None
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def create(name, title=None, email=None, phone=None, notes=None):
@@ -35,11 +35,7 @@ def get_by_id(contact_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM contact WHERE contact_id = %s", (contact_id,))
-            row = cur.fetchone()
-            if row is None:
-                return None
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def get_by_client(client_id):
@@ -54,8 +50,7 @@ def get_by_client(client_id):
                    ORDER BY ac.role DESC, ac.sort_order""",
                 (client_id,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def update(contact_id, name, title=None, email=None, phone=None, notes=None):

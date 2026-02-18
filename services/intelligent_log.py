@@ -5,21 +5,8 @@ from unstructured text.
 """
 import os
 import json
-import yaml
 import google.generativeai as genai
-
-# --- Prompt Loading ---
-def _load_prompts():
-    """Loads prompts from the prompts.yml file."""
-    try:
-        with open("prompts.yml", "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        print("ERROR: prompts.yml not found.")
-        return {}
-
-_prompts = _load_prompts()
-_SYSTEM_PROMPT = _prompts.get("ai_smart_log", "") # Fallback to empty string
+from services.config import get_ai_prompt
 
 # --- Gemini API Call ---
 
@@ -39,14 +26,15 @@ def parse_log_entry(text_input: str) -> dict | None:
     if not text_input or not text_input.strip():
         return None
 
-    if not _SYSTEM_PROMPT:
+    system_prompt = get_ai_prompt()
+    if not system_prompt:
         raise ValueError("System prompt for 'ai_smart_log' could not be loaded from prompts.yml.")
 
     raw_response_text = ""
     try:
         model = genai.GenerativeModel(
             model_name='gemini-2.5-flash',
-            system_instruction=_SYSTEM_PROMPT
+            system_instruction=system_prompt
         )
         response = model.generate_content(text_input)
         raw_response_text = response.text.strip()

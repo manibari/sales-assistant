@@ -11,7 +11,7 @@ Public API:
     get_upcoming(days=7) → list[dict]               # due/overdue tasks with project info
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def create(project_id, task_name, owner=None, status="planned",
@@ -38,19 +38,14 @@ def get_by_project(project_id):
                 "SELECT * FROM project_task WHERE project_id = %s ORDER BY sort_order, task_id",
                 (project_id,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_id(task_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM project_task WHERE task_id = %s", (task_id,))
-            row = cur.fetchone()
-            if row is None:
-                return None
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def update(task_id, task_name, owner=None, status="planned",
@@ -92,9 +87,7 @@ def get_summary(project_id):
                    WHERE project_id = %s""",
                 (project_id,),
             )
-            row = cur.fetchone()
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def get_completed_by_date(project_id):
@@ -113,8 +106,7 @@ def get_completed_by_date(project_id):
                    ORDER BY updated_at::date""",
                 (project_id,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_upcoming(days=7):
@@ -134,5 +126,4 @@ def get_upcoming(days=7):
                    ORDER BY t.due_date, t.project_id""",
                 (days,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)

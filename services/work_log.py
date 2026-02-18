@@ -11,7 +11,7 @@ Public API:
     get_client_only(client_id, limit=20) → list[dict]  # client-level only
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, rows_to_dicts
 
 
 def create(project_id=None, action_type=None, log_date=None, content=None,
@@ -38,8 +38,7 @@ def get_by_project(project_id):
                 "SELECT * FROM work_log WHERE project_id = %s ORDER BY log_date DESC, created_at DESC",
                 (project_id,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_recent(limit=5):
@@ -49,8 +48,7 @@ def get_recent(limit=5):
                 "SELECT * FROM work_log ORDER BY created_at DESC LIMIT %s",
                 (limit,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_client(client_id, limit=20):
@@ -72,8 +70,7 @@ def get_by_client(client_id, limit=20):
                    LIMIT %s""",
                 (client_id, client_id, limit),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_client_only(client_id, limit=20):
@@ -88,5 +85,4 @@ def get_client_only(client_id, limit=20):
                    LIMIT %s""",
                 (client_id, limit),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)

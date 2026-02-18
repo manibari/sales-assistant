@@ -9,7 +9,7 @@ Public API:
 """
 
 import streamlit as st
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def create(
@@ -52,19 +52,14 @@ def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM annual_plan ORDER BY product_id")
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_id(product_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM annual_plan WHERE product_id = %s", (product_id,))
-            row = cur.fetchone()
-            if row is None:
-                return None
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def update(

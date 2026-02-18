@@ -3,23 +3,10 @@ S31: Refactored connection management to prevent nested connections.
 """
 
 import streamlit as st
-import yaml
 from constants import PRESALE_STATUS_CODES, POSTSALE_STATUS_CODES, VALID_TRANSITIONS
-from database.connection import get_connection, read_sql_file
+from database.connection import get_connection, read_sql_file, row_to_dict, rows_to_dicts
 from services import meddic as meddic_svc
-
-# --- Rule Loading (S27) ---
-def _load_rules():
-    """Loads business rules from the rules.yml file."""
-    try:
-        with open("rules.yml", "r", encoding="utf-8") as f:
-            rules = yaml.safe_load(f)
-            return rules.get("meddic_gate_rules", {})
-    except FileNotFoundError:
-        print("WARNING: rules.yml not found. MEDDIC gating will be disabled.")
-        return {}
-
-_MEDDIC_GATE_RULES = _load_rules()
+from services.config import get_meddic_gate_rules
 
 
 def _check_meddic_gate(project_id: int, new_status: str):
@@ -27,7 +14,7 @@ def _check_meddic_gate(project_id: int, new_status: str):
     Checks if the project meets the MEDDIC criteria to transition to the new status.
     Raises ValueError if the gate is not passed.
     """
-    rule = _MEDDIC_GATE_RULES.get(new_status)
+    rule = get_meddic_gate_rules().get(new_status)
     if not rule:
         return # No gate for this status
 
@@ -91,19 +78,14 @@ def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM project_list ORDER BY project_id")
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_id(project_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM project_list WHERE project_id = %s", (project_id,))
-            row = cur.fetchone()
-            if row is None:
-                return None
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def get_presale():
@@ -115,8 +97,7 @@ def get_presale():
                 "SELECT * FROM project_list WHERE status_code = ANY(%s) ORDER BY project_id",
                 (presale_codes,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_postsale():
@@ -128,8 +109,7 @@ def get_postsale():
                 "SELECT * FROM project_list WHERE status_code = ANY(%s) ORDER BY project_id",
                 (postsale_codes,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_closed():
@@ -139,8 +119,7 @@ def get_closed():
         with conn.cursor() as cur:
             sql = read_sql_file("project_get_closed.sql")
             cur.execute(sql, (closed_codes,))
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def update(project_id, project_name, client_id, product_id,
@@ -242,8 +221,7 @@ def get_contacts(project_id):
                    ORDER BY c.name""",
                 (project_id,),
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 # --- Internal Helpers ---
 

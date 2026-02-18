@@ -9,7 +9,7 @@ Public API:
     get_summary_by_client(client_id) → dict  # {deal_count, total_amount, weighted_amount}
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def create(project_id, product_id=None, expected_invoice_date=None,
@@ -32,19 +32,14 @@ def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM sales_plan ORDER BY plan_id")
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_id(plan_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM sales_plan WHERE plan_id = %s", (plan_id,))
-            row = cur.fetchone()
-            if row is None:
-                return None
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 
 def update(plan_id, project_id, product_id, expected_invoice_date,
@@ -81,6 +76,4 @@ def get_summary_by_client(client_id):
                    WHERE p.client_id = %s""",
                 (client_id,),
             )
-            row = cur.fetchone()
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)

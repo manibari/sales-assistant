@@ -16,10 +16,9 @@ Internal:
     _upsert_contact(cur, data) → contact_id
     _get_normalized_contacts(cur, client_id) → dict
 """
-import re
 from datetime import date
 import streamlit as st
-from database.connection import get_connection, read_sql_file
+from database.connection import get_connection, read_sql_file, row_to_dict, rows_to_dicts
 
 
 def create(client_id, company_name, industry=None, department=None, email=None,
@@ -81,8 +80,7 @@ def get_all():
         with conn.cursor() as cur:
             sql = read_sql_file("crm_get_all.sql")
             cur.execute(sql)
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def get_by_id(client_id):
@@ -90,11 +88,9 @@ def get_by_id(client_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM crm WHERE client_id = %s", (client_id,))
-            row = cur.fetchone()
-            if row is None:
+            result = row_to_dict(cur)
+            if result is None:
                 return None
-            cols = [d[0] for d in cur.description]
-            result = dict(zip(cols, row))
 
             # Read from normalized tables (sole source of truth)
             contacts = _get_normalized_contacts(cur, client_id)
@@ -235,12 +231,9 @@ def _get_normalized_contacts(cur, client_id):
         ORDER BY ac.role DESC, ac.sort_order
     """, (client_id,))
 
-    rows = cur.fetchall()
-    if not rows:
+    contacts = rows_to_dicts(cur)
+    if not contacts:
         return None
-
-    cols = [d[0] for d in cur.description]
-    contacts = [dict(zip(cols, row)) for row in rows]
 
     dm = None
     champs = []

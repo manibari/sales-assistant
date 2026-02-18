@@ -5,7 +5,7 @@ This service encapsulates all database interactions for the asynchronous
 AI processing queue.
 """
 
-from database.connection import get_connection
+from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 def create_task(raw_text: str) -> int:
     """
@@ -53,12 +53,7 @@ def get_next_pending() -> dict | None:
                 RETURNING *
                 """
             )
-            row = cur.fetchone()
-            if not row:
-                return None
-            
-            cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            return row_to_dict(cur)
 
 def get_recent_tasks(limit: int = 20) -> list[dict]:
     """
@@ -70,8 +65,7 @@ def get_recent_tasks(limit: int = 20) -> list[dict]:
                 "SELECT * FROM ai_task_queue ORDER BY created_at DESC LIMIT %s",
                 (limit,)
             )
-            cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in cur.fetchall()]
+            return rows_to_dicts(cur)
 
 
 def update_task_status(

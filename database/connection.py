@@ -56,6 +56,21 @@ def read_sql_file(file_name: str) -> str:
         raise
 
 
+def row_to_dict(cur):
+    """Convert single cursor row to dict. Returns None if no row."""
+    row = cur.fetchone()
+    if row is None:
+        return None
+    cols = [d[0] for d in cur.description]
+    return dict(zip(cols, row))
+
+
+def rows_to_dicts(cur):
+    """Convert all cursor rows to list of dicts."""
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
 def init_db():
     """Execute schema.sql to create all tables."""
     schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")

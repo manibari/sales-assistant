@@ -66,8 +66,8 @@ try:
             icon = ":red[逾期]" if overdue else ":orange[今日]"
             st.warning(f"{icon} **{t['task_name']}** — {t.get('project_name', '')} （{t.get('owner') or '未指派'}，到期：{t['due_date']}）")
         st.divider()
-except Exception:
-    pass
+except Exception as e:
+    st.error(f"載入今日待辦時發生錯誤：{e}")
 
 # --- Main Tabs ---
 tab_ai, tab_queue, tab_entry, tab_history = st.tabs(["🤖 AI 智慧記錄", "AI 任務佇列", "傳統手動模式", "歷史日誌紀錄"])

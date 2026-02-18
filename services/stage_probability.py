@@ -9,9 +9,12 @@ Public API:
     update(status_code, probability) → None
 """
 
+import streamlit as st
+
 from database.connection import get_connection, rows_to_dicts
 
 
+@st.cache_data
 def get_all():
     """Return all stage probabilities ordered by sort_order."""
     with get_connection() as conn:

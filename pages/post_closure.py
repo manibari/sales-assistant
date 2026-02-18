@@ -5,9 +5,9 @@ import json
 import pandas as pd
 import streamlit as st
 
+from components.selectors import get_product_map, map_id_columns
 from components.sidebar import render_sidebar
 from constants import STATUS_CODES
-from services import annual_plan as ap_svc
 from services import project as project_svc
 from services import settings as settings_svc
 
@@ -52,6 +52,8 @@ else:
         clients.setdefault(client_name, {"info": p, "projects": []})
         clients[client_name]["projects"].append(p)
 
+    product_map = get_product_map()
+
     for client_name, data in clients.items():
         info = data["info"]
         projects = data["projects"]
@@ -77,9 +79,7 @@ else:
 
             # Project list
             df = pd.DataFrame(projects)
-            product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
-            df["status_code"] = df["status_code"].map(lambda x: f"{x} {STATUS_CODES.get(x, '')}")
-            df["product_id"] = df["product_id"].map(lambda x: product_map.get(x, x or "—"))
+            map_id_columns(df, product_map=product_map)
             display_cols = ["project_id", "project_name", "product_id",
                             "status_code", "sales_owner", "presale_owner", "postsale_owner",
                             "priority", "status_updated_at"]

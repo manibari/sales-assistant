@@ -7,8 +7,12 @@ Public API:
     get_ai_prompt() -> str
 """
 
-import yaml
+import logging
 from functools import lru_cache
+
+import yaml
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -19,7 +23,7 @@ def get_meddic_gate_rules() -> dict:
             rules = yaml.safe_load(f)
             return rules.get("meddic_gate_rules", {})
     except FileNotFoundError:
-        print("WARNING: rules.yml not found. MEDDIC gating will be disabled.")
+        logger.warning("rules.yml not found. MEDDIC gating will be disabled.")
         return {}
 
 
@@ -31,5 +35,5 @@ def get_ai_prompt() -> str:
             prompts = yaml.safe_load(f)
             return prompts.get("ai_smart_log", "")
     except FileNotFoundError:
-        print("ERROR: prompts.yml not found.")
+        logger.error("prompts.yml not found.")
         return ""

@@ -1,7 +1,10 @@
 """PostgreSQL connection pool management using psycopg2."""
 
+import logging
 import os
 from contextlib import contextmanager
+
+logger = logging.getLogger(__name__)
 
 import psycopg2
 from psycopg2 import pool
@@ -52,7 +55,7 @@ def read_sql_file(file_name: str) -> str:
         with open(query_path, "r", encoding="utf-8") as f:
             return f.read()
     except FileNotFoundError:
-        print(f"ERROR: SQL file not found at {query_path}")
+        logger.error("SQL file not found at %s", query_path)
         raise
 
 

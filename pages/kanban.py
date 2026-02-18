@@ -4,9 +4,9 @@ from datetime import datetime
 
 import streamlit as st
 
+from components.selectors import get_client_map
 from components.sidebar import render_sidebar
 from constants import PRESALE_STATUS_CODES, PRESALE_TRANSITIONS, STATUS_CODES
-from services import crm as crm_svc
 from services import project as project_svc
 
 render_sidebar()
@@ -28,7 +28,7 @@ if not selected_stages:
 
 # Load data
 projects = project_svc.get_presale()
-client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
+client_map = get_client_map()
 
 # Group by stage
 stage_projects = {s: [] for s in selected_stages}

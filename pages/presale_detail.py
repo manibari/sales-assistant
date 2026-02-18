@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+from components.selectors import get_client_map, get_product_map
 from components.sidebar import render_sidebar
 from constants import (
     CONTACT_ROLES,
@@ -13,7 +14,6 @@ from constants import (
     STATUS_CODES,
     TASK_STATUSES,
 )
-from services import annual_plan as ap_svc
 from services import contact as contact_svc
 from services import crm as crm_svc
 from services import meddic as meddic_svc
@@ -44,8 +44,8 @@ if not project:
 # === Header + metrics ===
 st.header(project["project_name"])
 
-client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
-product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
+client_map = get_client_map()
+product_map = get_product_map()
 
 col_status, col_client, col_product, col_owner, col_priority, col_channel = st.columns(6)
 

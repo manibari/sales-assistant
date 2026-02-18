@@ -3,10 +3,9 @@
 import pandas as pd
 import streamlit as st
 
+from components.selectors import get_client_map, get_product_map, map_id_columns, safe_index
 from components.sidebar import render_sidebar
 from constants import POSTSALE_TRANSITIONS, STATUS_CODES, POSTSALE_STATUS_CODES
-from services import annual_plan as ap_svc
-from services import crm as crm_svc
 from services import project as project_svc
 from services import settings as settings_svc
 
@@ -19,12 +18,9 @@ st.header(headers.get("header_postsale", "專案管理"))
 projects = project_svc.get_postsale()
 if projects:
     df = pd.DataFrame(projects)
-    # Chinese display for codes
-    client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
-    product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
-    df["status_code"] = df["status_code"].map(lambda x: f"{x} {STATUS_CODES.get(x, '')}")
-    df["client_id"] = df["client_id"].map(lambda x: client_map.get(x, x or "—"))
-    df["product_id"] = df["product_id"].map(lambda x: product_map.get(x, x or "—"))
+    client_map = get_client_map()
+    product_map = get_product_map()
+    map_id_columns(df, client_map=client_map, product_map=product_map)
     display_cols = ["project_id", "project_name", "client_id", "product_id",
                     "status_code", "postsale_owner", "priority", "status_updated_at"]
     st.dataframe(df[[c for c in display_cols if c in df.columns]], width="stretch")
@@ -45,10 +41,8 @@ else:
 st.divider()
 
 # --- Helper: load dropdown options ---
-all_clients = crm_svc.get_all()
-all_products = ap_svc.get_all()
-client_options = {c["client_id"]: c["company_name"] for c in all_clients}
-product_options = {p["product_id"]: p["product_name"] for p in all_products}
+client_options = get_client_map()
+product_options = get_product_map()
 
 # --- Add / Edit / Transition ---
 tab_add, tab_edit, tab_transition = st.tabs(["新增售後案件", "編輯案件", "狀態流轉"])
@@ -111,7 +105,7 @@ with tab_edit:
                 col1, col2 = st.columns(2)
                 with col1:
                     client_keys = [""] + list(client_options.keys())
-                    client_idx = client_keys.index(current["client_id"]) if current["client_id"] in client_keys else 0
+                    client_idx = safe_index(client_keys, current["client_id"])
                     client_id = st.selectbox(
                         "客戶", options=client_keys,
                         format_func=lambda x: client_options.get(x, "（不指定）"),
@@ -119,7 +113,7 @@ with tab_edit:
                     )
                 with col2:
                     product_keys = [""] + list(product_options.keys())
-                    product_idx = product_keys.index(current["product_id"]) if current["product_id"] in product_keys else 0
+                    product_idx = safe_index(product_keys, current["product_id"])
                     product_id = st.selectbox(
                         "產品", options=product_keys,
                         format_func=lambda x: product_options.get(x, "（不指定）"),
@@ -132,7 +126,7 @@ with tab_edit:
                     priorities = ["High", "Medium", "Low"]
                     priority = st.selectbox(
                         "優先級", options=priorities,
-                        index=priorities.index(current["priority"]) if current["priority"] in priorities else 1,
+                        index=safe_index(priorities, current["priority"], 1),
                     )
 
                 if st.form_submit_button("儲存"):

@@ -3,9 +3,9 @@
 import pandas as pd
 import streamlit as st
 
+from components.selectors import get_product_map, safe_index
 from components.sidebar import render_sidebar
 from constants import DEFAULT_STAGE_PROBABILITIES
-from services import annual_plan as ap_svc
 from services import project as project_svc
 from services import sales_plan as sp_svc
 from services import settings as settings_svc
@@ -28,9 +28,8 @@ st.divider()
 
 # --- Helper: dropdown options ---
 all_projects = project_svc.get_all()
-all_products = ap_svc.get_all()
 project_options = {p["project_id"]: p["project_name"] for p in all_projects}
-product_options = {p["product_id"]: p["product_name"] for p in all_products}
+product_options = get_product_map()
 
 # --- Add / Edit ---
 tab_add, tab_edit = st.tabs(["新增商機", "編輯商機"])
@@ -103,14 +102,14 @@ with tab_edit:
         if current:
             with st.form("edit_sp_form"):
                 project_keys = list(project_options.keys())
-                project_idx = project_keys.index(current["project_id"]) if current["project_id"] in project_keys else 0
+                project_idx = safe_index(project_keys, current["project_id"])
                 project_id = st.selectbox(
                     "關聯專案", options=project_keys,
                     format_func=lambda x: project_options[x],
                     index=project_idx, key="edit_sp_project",
                 )
                 product_keys = [""] + list(product_options.keys())
-                product_idx = product_keys.index(current["product_id"]) if current["product_id"] in product_keys else 0
+                product_idx = safe_index(product_keys, current["product_id"])
                 product_id = st.selectbox(
                     "關聯產品", options=product_keys,
                     format_func=lambda x: product_options.get(x, "（不指定）"),

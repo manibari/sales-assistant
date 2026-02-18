@@ -7,10 +7,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from components.selectors import get_client_map, get_product_map
 from components.sidebar import render_sidebar
 from constants import STATUS_CODES, TASK_STATUSES
-from services import annual_plan as ap_svc
-from services import crm as crm_svc
 from services import project as project_svc
 from services import project_task as task_svc
 
@@ -35,8 +34,8 @@ if not project:
 # === Header + metrics ===
 st.header(project["project_name"])
 
-client_map = {c["client_id"]: c["company_name"] for c in crm_svc.get_all()}
-product_map = {p["product_id"]: p["product_name"] for p in ap_svc.get_all()}
+client_map = get_client_map()
+product_map = get_product_map()
 
 col_status, col_client, col_product, col_owner, col_priority = st.columns(5)
 col_status.metric("狀態", f'{project["status_code"]} {STATUS_CODES.get(project["status_code"], "")}')

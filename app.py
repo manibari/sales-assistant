@@ -1,6 +1,13 @@
 """SPMS — Streamlit entry point."""
 
+import logging
+
 import streamlit as st
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 from database.connection import init_db
 from services import settings

@@ -4,7 +4,32 @@ Universal project specs for all AI-assisted tools (Claude Code, Cursor, Copilot,
 
 ## Project Overview
 
-SPMS (Sales & Project Management System) — B2B 業務與專案管理系統。Tech stack: **Python + Streamlit + PostgreSQL** (psycopg2, no ORM). Designed for solo + AI-assisted development.
+**Project Nexus（太陽型戰略控制台）** — 以「人」為核心、「AI 語音」驅動輸入、「資訊槓桿」為輸出導向的 B2B 個人戰略大腦。
+
+建立在既有 SPMS（Sales & Project Management System）之上，擴展為三層架構：移動端語音/截圖輸入 → 雲端 AI 處理 → PostgreSQL + Streamlit 管理後台 + 關係網絡圖。
+
+Tech stack: **Python + Streamlit + FastAPI + PostgreSQL** (psycopg2, no ORM) + **pyvis/networkx**（關係網絡圖）。設計為 solo + AI-assisted development。
+
+### Success Metrics
+
+- **輸入極簡化**: 語音/截圖輸入至結構化入庫 < 15 秒
+- **情報關聯率**: 每筆新情報自動映射至少一個 Stakeholder
+
+## Architecture (IPO)
+
+```
+A. 輸入層 (Capture)          B. 處理層 (AI Logic)         C. 儲存與戰略層 (Board)
+┌──────────────────┐      ┌──────────────────────┐      ┌──────────────────────┐
+│ iOS Shortcuts    │      │ Make.com / n8n       │      │ PostgreSQL (SSOT)    │
+│ Mac 右鍵捷徑     │─────→│ Whisper API (STT)    │─────→│ FastAPI 薄 API 層    │
+│ Streamlit 文字框 │      │ GPT-4o / Claude      │      │ Streamlit 管理後台   │
+│ (既有 AI 記錄)   │      │ (結構化擷取)          │      │ pyvis 關係網絡圖     │
+└──────────────────┘      └──────────────────────┘      │ Notion 戰略看板(同步)│
+                                                        └──────────────────────┘
+```
+
+- **PostgreSQL 是單一事實來源**，Notion 僅做單向同步的戰略視覺化看板
+- **FastAPI** 暴露 webhook 端點供 Make.com 呼叫，資料流入既有 services 層
 
 ## Build & Run
 
@@ -12,31 +37,17 @@ SPMS (Sales & Project Management System) — B2B 業務與專案管理系統。T
 # Start PostgreSQL
 docker-compose up -d
 
-# Initialize database (creates all 13 tables)
+# Initialize database (creates all tables)
 python -c "from database.connection import init_db; init_db()"
 
-# Run S09 migration (if upgrading from S08)
+# Run migrations (in order if upgrading)
 python database/migrate_s09.py
-
-# Run CRM retro migration (champion→champions, DM structure)
 python database/migrate_crm_retro.py
-
-# Run S10 migration (contact normalization)
 python database/migrate_s10.py
-
-# Run S11 migration (stage_probability + project_contact)
 python database/migrate_s11.py
-
-# Run S12 migration (due_date + is_next_action)
 python database/migrate_s12.py
-
-# Run S14 migration (client-level activities: nullable project_id + client_id FK)
 python database/migrate_s14.py
-
-# Run S15 migration (JSONB vs normalized validation report)
 python database/migrate_s15.py
-
-# Run S16 migration (contact dedup + UNIQUE INDEX)
 python database/migrate_s16.py
 
 # Import 48 presale projects (products + clients + projects + work_log)
@@ -45,8 +56,14 @@ python database/import_projects.py
 # Load seed data
 python database/seed.py
 
-# Run the app
+# Run the Streamlit app
 streamlit run app.py
+
+# Run the async AI worker
+python worker.py
+
+# Run the FastAPI webhook server (Phase 4)
+# uvicorn api:app --port 8000
 ```
 
 No test framework is set up yet. Validation is manual per Sprint DoD checklists.
@@ -56,10 +73,22 @@ No test framework is set up yet. Validation is manual per Sprint DoD checklists.
 ### Data Flow
 
 ```
-Streamlit Pages (pages/*.py)
-    → Services (services/*.py) — raw SQL CRUD, no ORM
+iOS Shortcuts / 語音
+    → Make.com (Whisper STT)
+    → FastAPI webhook (/api/ingest)
+    → ai_task_queue (PostgreSQL)
+    → worker.py (poll loop)
+    → Services (services/*.py) — raw SQL CRUD
     → Connection Pool (database/connection.py) — psycopg2.pool
-    → PostgreSQL (docker-compose.yml)
+    → PostgreSQL
+
+Streamlit Pages (pages/*.py)
+    → Services (services/*.py)
+    → PostgreSQL
+
+pyvis 關係網絡圖 (pages/network.py)
+    → services/network.py (graph queries)
+    → PostgreSQL (contact, stakeholder_relation, intel)
 ```
 
 ## Architecture Decisions
@@ -70,51 +99,83 @@ Streamlit Pages (pages/*.py)
 - **`constants.py`** is the single source of truth for status codes (L0–L7, P0–P2, LOST, HOLD), action types, task statuses, inactive statuses, valid transitions, and health score weights/thresholds.
 - **`app_settings` table** stores customizable page headers; `components/sidebar.py` reads them dynamically.
 - **Presale/postsale separation** — `presale_owner`, `sales_owner`, `postsale_owner`, and `channel` are separate fields in `project_list`. Pages `presale.py` and `postsale.py` filter by status code prefix.
-- **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections (年度戰略, 售前管理, 售後管理, 客戶關係管理) with bold headers and indented sub-pages. 售前管理含售前看板（kanban.py），全域搜尋為 standalone 頁面。
-- **Stage probability** — `stage_probability` table stores per-status default win probabilities. `services/stage_probability.py` provides CRUD. Used for sales plan prefill and pipeline weighted forecast.
-- **Project-contact linking** — `project_contact` table (many-to-many). `services/project.py` provides link_contact / unlink_contact / get_contacts. Used by `presale_detail.py`.
-- **Client-level activities (S14)** — `work_log.project_id` is nullable; `work_log.client_id` FK to `crm`. CHECK constraint ensures at least one is set. `pages/work_log.py` has radio toggle for project vs client activity mode.
-- **Client health score (S16)** — `services/client_health.py` computes 0-100 score (activity recency + frequency + deal value + deal progress). Displayed in CRM overview and detail pages. Thresholds in `constants.py`.
-- **Contact dedup (S16)** — `contact` table has UNIQUE INDEX on `(name, COALESCE(email, ''))`. `services/contact.py` uses INSERT ON CONFLICT (upsert).
+- **Grouped sidebar navigation** — `components/sidebar.py` uses `_NAV_SECTIONS` to render pages in sections with bold headers and indented sub-pages.
+- **Stage probability** — `stage_probability` table stores per-status default win probabilities. Used for sales plan prefill and pipeline weighted forecast.
+- **Project-contact linking** — `project_contact` table (many-to-many). Used by `presale_detail.py`.
+- **Client-level activities (S14)** — `work_log.project_id` is nullable; `work_log.client_id` FK to `crm`. CHECK constraint ensures at least one is set.
+- **Client health score (S16)** — `services/client_health.py` computes 0-100 score. Thresholds in `constants.py`.
+- **Contact dedup (S16)** — `contact` table has UNIQUE INDEX on `(name, COALESCE(email, ''))`. Uses INSERT ON CONFLICT (upsert).
 - **MEDDIC stage gating (S25)** — `project_meddic` table stores per-project MEDDIC data. `services/project.py` checks `rules.yml` gate rules before allowing status transitions; `force=True` bypasses.
-- **Async AI processing (S29)** — `ai_task_queue` table + `worker.py` poll loop. `pages/work_log.py` submits text to queue; worker calls Gemini API via `services/intelligent_log.py`.
+- **Async AI processing (S29)** — `ai_task_queue` table + `worker.py` poll loop. Supports batch entries (multiple parsed results per task).
 - **Cursor-to-dict helpers** — `database/connection.py` provides `row_to_dict(cur)` / `rows_to_dicts(cur)` used by all services.
-- **Centralized config loading** — `services/config.py` uses `@lru_cache` for `rules.yml` and `prompts.yml`, consumed by `project.py` and `intelligent_log.py`.
+- **Centralized config loading** — `services/config.py` uses `@lru_cache` for `rules.yml` and `prompts.yml`.
+- **Stakeholder relationship graph (Phase 4)** — `stakeholder_relation` + `intel` + `intel_org` tables model cross-org influence and intelligence leverage. Visualized via pyvis in `pages/network.py`.
+- **FastAPI webhook layer (Phase 4)** — thin API for external intake (voice/screenshot from iOS Shortcuts via Make.com), feeds into existing `ai_task_queue` + worker pipeline.
 
-## Database: 15 Tables
+## Database Schema
 
-Core (Phase 1-2): `annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`, `stage_probability`, `project_contact`
-Feature (S25/S29): `project_meddic`, `ai_task_queue`
-Reserved (Phase 3): `email_log`, `agent_actions`
+### Core Tables (Phase 1-2, S01–S16): 11 tables
+
+`annual_plan`, `crm`, `project_list`, `sales_plan`, `work_log`, `project_task`, `app_settings`, `contact`, `account_contact`, `stage_probability`, `project_contact`
+
+### Feature Tables (S25/S29): 2 tables
+
+`project_meddic`, `ai_task_queue`
+
+### Phase 4 — Nexus Tables (planned): 3 tables
+
+```sql
+-- Stakeholder cross-org influence
+stakeholder_relation (
+    id SERIAL PRIMARY KEY,
+    from_contact_id INTEGER REFERENCES contact(contact_id),
+    to_contact_id   INTEGER REFERENCES contact(contact_id),
+    relation_type   TEXT NOT NULL,  -- 'referral', 'reports_to', 'influences', 'competitor_of'
+    notes           TEXT,
+    leverage_value  TEXT DEFAULT 'medium',  -- 'high', 'medium', 'low'
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Intelligence / leverage items
+intel (
+    id SERIAL PRIMARY KEY,
+    title             TEXT NOT NULL,
+    summary           TEXT,
+    leverage_value    TEXT DEFAULT 'medium',
+    source_contact_id INTEGER REFERENCES contact(contact_id),
+    created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Many-to-many: intel ↔ organizations
+intel_org (
+    intel_id INTEGER REFERENCES intel(id) ON DELETE CASCADE,
+    crm_id   TEXT REFERENCES crm(client_id) ON DELETE CASCADE,
+    PRIMARY KEY (intel_id, crm_id)
+);
+```
+
+### Reserved Tables (Phase 3): 2 tables
+
+`email_log`, `agent_actions`
+
+### Key Relationships
 
 `project_list` is the central hub — FK references from `work_log`, `sales_plan`, `project_task`, `project_contact`, `project_meddic`, `email_log`, `agent_actions`.
 
-`project_task` stores sub-tasks for presale/postsale projects (statuses: planned/in_progress/completed, + `due_date` + `is_next_action`). Used by `presale_detail.py` and `postsale_detail.py` for task CRUD, Gantt chart, and burndown chart.
-
-`contact` + `account_contact` normalize CRM contact data (S10). Since S15, `services/crm.py` writes only to normalized tables (JSONB dual-write retired). `contact` has a UNIQUE INDEX on `(name, COALESCE(email, ''))` since S16.
-
-`stage_probability` stores per-stage default probabilities (L0=5%...L7=100%). Used by `sales_plan.py` for confidence prefill and `pipeline.py` for weighted revenue forecast. Editable via `settings.py`.
-
-`project_contact` links contacts to projects (many-to-many). Used by `presale_detail.py` for managing deal-level stakeholders.
-
-`project_meddic` stores per-project MEDDIC assessment (metrics, economic_buyer, decision_criteria, decision_process, identify_pain, champion). FK to `project_list`. Used by `presale_detail.py` MEDDIC tab and stage gating in `services/project.py`.
-
-`ai_task_queue` stores async AI processing tasks (status: pending/processing/completed/failed, raw_text, result_data JSONB). Managed by `services/task_queue.py`, consumed by `worker.py`.
+`contact` is the people hub — FK references from `account_contact`, `project_contact`, `stakeholder_relation` (both sides), `intel`.
 
 ## State Machine (Status Codes)
 
-Pre-sale: L0 客戶開發 → L1 等待追蹤 → L2 提案 → L3 確認意願 → L4 執行POC → L5 完成POC → L6 議價 → L7 簽約
-
-Post-sale: P0 規劃 → P1 執行 → P2 驗收
-
-All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transitions to P0 post-sale). Inactive statuses (L7, P2, LOST, HOLD) are filtered from work log project selectors.
+Pre-sale: L0 → L1 → L2 → L3 → L4 → L5 → L6 → L7
+Post-sale: P0 → P1 → P2
+All L0-L6 can transition to LOST or HOLD. L7 transitions to P0. Inactive statuses (L7, P2, LOST, HOLD) filtered from work log selectors.
 
 ## File Registry
 
 ### Services (services/*.py)
 
-| 檔案 | 行數 | Public API |
-|------|------|-----------|
+| File | Lines | Public API |
+|------|-------|-----------|
 | crm.py | 253 | `create`, `find_or_create_client`, `get_all`, `get_by_id`, `update`, `delete` |
 | project.py | 241 | `create`, `find_or_create_project`, `get_all`, `get_by_id`, `get_presale`, `get_postsale`, `get_closed`, `update`, `delete`, `transition_status`, `link_contact`, `unlink_contact`, `get_contacts` |
 | client_health.py | 141 | `compute_health_score`, `compute_all_scores` |
@@ -134,34 +195,50 @@ All L0-L6 stages can transition to LOST or HOLD. L7 is pre-sale terminal (transi
 
 ### Pages (pages/*.py)
 
-| 檔案 | 行數 | 用途 |
-|------|------|------|
-| presale_detail.py | 409 | 售前案件詳情：狀態轉換、MEDDIC、任務、聯絡人、活動記錄 |
-| crm.py | 378 | 客戶管理：CRUD + 聯絡人編輯 + 健康分數 |
-| postsale_detail.py | 302 | 售後專案詳情：任務 CRUD、Gantt chart、Burndown chart |
-| presale.py | 195 | 售前案件列表：建立/編輯案件 |
-| postsale.py | 185 | 售後專案列表：建立/編輯專案 |
-| work_log.py | 182 | 工作日誌（首頁）：AI 智慧記錄 + 手動模式 + 任務佇列 |
-| annual_plan.py | 181 | 產品策略管理：年度目標 CRUD + 戰情室 |
-| pipeline.py | 173 | 業務漏斗：加權營收、階段分布圖 |
-| sales_plan.py | 144 | 商機預測：CRUD + 階段機率 prefill |
-| post_closure.py | 89 | 已結案客戶：P2/LOST/HOLD 專案一覽 |
-| kanban.py | 86 | 售前看板：按階段分欄顯示 |
-| settings.py | 80 | 設定：頁面標題、階段機率編輯、清除快取 |
-| search.py | 61 | 全域搜尋：跨聯絡人/客戶/專案 |
+| File | Lines | Purpose |
+|------|-------|---------|
+| presale_detail.py | 409 | Presale deal detail: status transitions, MEDDIC, tasks, contacts, activity log |
+| crm.py | 378 | Client management: CRUD + contacts + health score |
+| postsale_detail.py | 302 | Postsale project detail: tasks, Gantt, Burndown |
+| presale.py | 195 | Presale deal list |
+| postsale.py | 185 | Postsale project list |
+| work_log.py | 182 | Work log (home): AI smart log + manual mode + task queue |
+| annual_plan.py | 181 | Product strategy: annual goals CRUD + war room |
+| pipeline.py | 173 | Sales funnel: weighted revenue, stage distribution |
+| sales_plan.py | 144 | Opportunity forecast: CRUD + stage probability prefill |
+| post_closure.py | 89 | Closed deals: P2/LOST/HOLD overview |
+| kanban.py | 86 | Presale kanban: columns by stage |
+| settings.py | 80 | Settings: page headers, stage probability, cache clear |
+| search.py | 61 | Global search: contacts/clients/projects |
 
 ### Infrastructure
 
-| 檔案 | 行數 | 用途 |
-|------|------|------|
-| database/import_projects.py | 280 | 匯入 4 產品 + 46 客戶 + 48 案件 + work_log |
-| database/schema.sql | 256 | 15 表 DDL + idempotent migrations (S14–S29) |
-| worker.py | 103 | 非同步 AI 任務 worker（輪詢 ai_task_queue） |
-| constants.py | 90 | 狀態碼、轉換規則、Action types、健康分數權重/閾值 |
-| database/connection.py | 81 | psycopg2 連線池 + `row_to_dict` / `rows_to_dicts` helpers |
-| components/sidebar.py | 69 | 分組式側邊欄導航（`_NAV_SECTIONS` + `render_sidebar`） |
-| app.py | 28 | Streamlit 入口：init_db → navigation → run |
+| File | Lines | Purpose |
+|------|-------|---------|
+| database/import_projects.py | 280 | Import 4 products + 46 clients + 48 projects + work_log |
+| database/schema.sql | 256 | 15+ table DDL + idempotent migrations |
+| worker.py | 103 | Async AI task worker (polls ai_task_queue) |
+| constants.py | 90 | Status codes, transitions, action types, health weights |
+| database/connection.py | 81 | psycopg2 pool + `row_to_dict` / `rows_to_dicts` |
+| components/sidebar.py | 69 | Grouped sidebar navigation |
+| app.py | 28 | Streamlit entry: init_db → navigation → run |
+
+## Development Phases
+
+### Phase 1-2 (S01–S16): SPMS Foundation — COMPLETED
+Core CRM, presale/postsale pipeline, work log, contacts, health scores.
+
+### Phase 3 Iterative (S17–S32): AI & Stability — COMPLETED
+AI smart log, MEDDIC gating, async worker, batch parsing, connection management fixes.
+
+### Phase 4: Project Nexus — IN PROGRESS
+1. **Batch AI parsing** — multi-entry AI log parsing with sales_owner/presale_owner/channel (uncommitted)
+2. **Relationship network graph** — `stakeholder_relation` + `intel` tables, pyvis visualization in `pages/network.py`
+3. **FastAPI webhook layer** — `/api/ingest` endpoint for voice/screenshot intake from iOS Shortcuts via Make.com
+4. **Whisper integration** — `transcribe_audio()` in `intelligent_log.py`
+5. **Notion sync** — one-way push from PostgreSQL strategic views to Notion boards
+6. **Dynamic glossary** — entity resolution improvement with client/contact name dictionary in prompts
 
 ## Language
 
-All documentation and UI text is in **Traditional Chinese (繁體中文)**. Code identifiers and comments are in English.
+All documentation and UI text is in **Traditional Chinese**. Code identifiers and comments are in English.

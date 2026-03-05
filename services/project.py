@@ -42,7 +42,14 @@ def create(project_name, client_id=None, product_id=None, status_code="L0",
                            presale_owner, postsale_owner, sales_owner, priority, channel)
 
 
-def find_or_create_project(client_id: str, project_name: str, status_code: str) -> int | None:
+def find_or_create_project(
+    client_id: str,
+    project_name: str,
+    status_code: str,
+    sales_owner: str | None = None,
+    presale_owner: str | None = None,
+    channel: str | None = None,
+) -> int | None:
     """
     Finds a project by name for a given client. If not found, creates a new one.
     This function manages a single connection for the entire find-or-create transaction.
@@ -68,7 +75,9 @@ def find_or_create_project(client_id: str, project_name: str, status_code: str) 
                 project_name=project_name,
                 client_id=client_id,
                 status_code=status_code,
-                channel="direct sales" # Mark as created by AI
+                sales_owner=sales_owner,
+                presale_owner=presale_owner,
+                channel=channel or "direct sales",
             )
             return new_project_id
 

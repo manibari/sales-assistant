@@ -13,15 +13,16 @@ logger = logging.getLogger(__name__)
 
 # --- AI Log Parsing ---
 
-def parse_log_entry(text_input: str) -> dict | None:
+def parse_log_entry(text_input: str) -> list[dict] | None:
     """
     Parses a natural language log entry using the configured AI provider.
 
     Args:
-        text_input: The user's unstructured text log.
+        text_input: The user's unstructured text log (single or batch).
 
     Returns:
-        A dictionary with the structured data, or None if parsing fails.
+        A list of dicts with the structured data, or None if parsing fails.
+        Always returns a list (even for single entries) for uniform handling.
     """
     available, msg = check_ai_available()
     if not available:
@@ -42,8 +43,17 @@ def parse_log_entry(text_input: str) -> dict | None:
         cleaned_response = raw_response_text.replace("```json", "").replace("```", "")
         parsed_json = json.loads(cleaned_response)
 
-        # Ensure the original text is preserved as log_content
-        parsed_json['log_content'] = text_input
+        # Defensive: AI might return a single dict instead of a list
+        if isinstance(parsed_json, dict):
+            parsed_json = [parsed_json]
+
+        if not isinstance(parsed_json, list) or not parsed_json:
+            return None
+
+        # For single-entry input, preserve the original text as log_content
+        if len(parsed_json) == 1:
+            parsed_json[0]['log_content'] = text_input
+
         return parsed_json
 
     except json.JSONDecodeError as e:

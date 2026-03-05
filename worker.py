@@ -29,6 +29,7 @@ from services import work_log as work_log_svc
 def process_single_task():
     """
     Fetches and processes a single pending task from the queue.
+    Supports batch entries: AI may return multiple parsed entries for one task.
     """
     logger.info("Checking for new tasks...")
     task = task_queue_svc.get_next_pending()
@@ -42,50 +43,81 @@ def process_single_task():
     logger.info("Processing task #%d...", task_id)
 
     try:
-        # 1. Parse text with AI
-        parsed_data = il_svc.parse_log_entry(raw_text)
-        if not parsed_data or not parsed_data.get("company_name"):
-            raise ValueError("AI parsing failed to return a valid company name.")
+        # 1. Parse text with AI (returns list[dict] or None)
+        entries = il_svc.parse_log_entry(raw_text)
+        if not entries:
+            raise ValueError("AI parsing returned no entries.")
 
-        company_name = parsed_data["company_name"]
-        logger.info("  AI parsed company: %s", company_name)
+        logger.info("  AI returned %d entry/entries.", len(entries))
 
-        # 2. Find or create CRM entry
-        client_id = crm_svc.find_or_create_client(company_name)
-        if not client_id:
-            raise ValueError(f"Failed to find or create client ID for '{company_name}'.")
-        logger.info("  Found/Created client: %s", client_id)
+        results = []
+        errors = []
 
-        # 3. Create work log
-        work_log_svc.create(
-            client_id=client_id,
-            action_type=parsed_data.get("action_type", ACTION_TYPES[0]),
-            log_date=date.today(),
-            content=parsed_data.get("log_content", raw_text),
-            duration_hours=1.0,
-            source="ai"
-        )
-        logger.info("  Created work log entry.")
+        for i, entry in enumerate(entries):
+            try:
+                company_name = entry.get("company_name")
+                if not company_name:
+                    errors.append(f"Entry {i+1}: missing company_name")
+                    continue
 
-        # 4. Create project if implied
-        project_name = parsed_data.get("project_name")
-        status_code = parsed_data.get("project_status_code")
-        if project_name and status_code:
-            project_id = project_svc.find_or_create_project(
-                client_id=client_id,
-                project_name=project_name,
-                status_code=status_code
+                logger.info("  [%d/%d] Processing: %s", i+1, len(entries), company_name)
+
+                # 2. Find or create CRM entry
+                client_id = crm_svc.find_or_create_client(company_name)
+                if not client_id:
+                    errors.append(f"Entry {i+1} ({company_name}): failed to find/create client")
+                    continue
+
+                # 3. Create work log
+                work_log_svc.create(
+                    client_id=client_id,
+                    action_type=entry.get("action_type", ACTION_TYPES[0]),
+                    log_date=date.today(),
+                    content=entry.get("log_content", raw_text),
+                    duration_hours=1.0,
+                    source="ai"
+                )
+
+                # 4. Create project if implied
+                project_name = entry.get("project_name")
+                status_code = entry.get("project_status_code")
+                if project_name and status_code:
+                    project_id = project_svc.find_or_create_project(
+                        client_id=client_id,
+                        project_name=project_name,
+                        status_code=status_code,
+                        sales_owner=entry.get("sales_owner"),
+                        presale_owner=entry.get("presale_owner"),
+                        channel=entry.get("channel"),
+                    )
+                    if project_id:
+                        logger.info("    Found/Created project #%s", project_id)
+
+                results.append(entry)
+
+            except Exception as e:
+                errors.append(f"Entry {i+1} ({entry.get('company_name', '?')}): {e}")
+
+        # 5. Determine final status
+        if results:
+            error_msg = "; ".join(errors) if errors else None
+            task_queue_svc.update_task_status(
+                task_id=task_id,
+                status="completed",
+                result_data=results,
+                error_message=error_msg,
             )
-            if project_id:
-                logger.info("  Found/Created project: %s", project_id)
-
-        # 5. Mark task as completed
-        task_queue_svc.update_task_status(
-            task_id=task_id,
-            status="completed",
-            result_data=parsed_data
-        )
-        logger.info("Task #%d completed successfully.", task_id)
+            logger.info(
+                "Task #%d completed: %d succeeded, %d failed.",
+                task_id, len(results), len(errors),
+            )
+        else:
+            task_queue_svc.update_task_status(
+                task_id=task_id,
+                status="failed",
+                error_message="; ".join(errors) if errors else "All entries failed.",
+            )
+            logger.error("Task #%d failed: all entries failed.", task_id)
 
     except Exception as e:
         error_message = str(e)

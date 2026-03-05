@@ -22,12 +22,12 @@ def compute_health_score(client_id):
             # 1. Activity recency: days since last activity (project-level or client-level)
             cur.execute("""
                 SELECT MIN(days_ago) FROM (
-                    SELECT EXTRACT(DAY FROM NOW() - MAX(w.log_date))::int AS days_ago
+                    SELECT CAST(julianday('now') - julianday(MAX(w.log_date)) AS INTEGER) AS days_ago
                     FROM work_log w
                     JOIN project_list p ON w.project_id = p.project_id
                     WHERE p.client_id = %s
                   UNION ALL
-                    SELECT EXTRACT(DAY FROM NOW() - MAX(w.log_date))::int AS days_ago
+                    SELECT CAST(julianday('now') - julianday(MAX(w.log_date)) AS INTEGER) AS days_ago
                     FROM work_log w
                     WHERE w.client_id = %s AND w.project_id IS NULL
                 ) sub

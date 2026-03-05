@@ -8,6 +8,10 @@ openai
 anthropic
 PyYAML
 
+# Backend API
+fastapi
+uvicorn[standard]
+
 # Development and code quality
 pre-commit
 black

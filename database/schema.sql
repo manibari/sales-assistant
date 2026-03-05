@@ -206,6 +206,32 @@ CREATE TABLE IF NOT EXISTS agent_actions (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- S33: Nexus tables — stakeholder relationships + intelligence leverage
+CREATE TABLE IF NOT EXISTS stakeholder_relation (
+    id              SERIAL PRIMARY KEY,
+    from_contact_id INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    to_contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
+    relation_type   TEXT NOT NULL,  -- 'referral', 'reports_to', 'influences', 'competitor_of'
+    notes           TEXT,
+    leverage_value  TEXT DEFAULT 'medium',  -- 'high', 'medium', 'low'
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS intel (
+    id                SERIAL PRIMARY KEY,
+    title             TEXT NOT NULL,
+    summary           TEXT,
+    leverage_value    TEXT DEFAULT 'medium',  -- 'high', 'medium', 'low'
+    source_contact_id INTEGER REFERENCES contact(contact_id),
+    created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS intel_org (
+    intel_id INTEGER NOT NULL REFERENCES intel(id) ON DELETE CASCADE,
+    crm_id   TEXT NOT NULL REFERENCES crm(client_id) ON DELETE CASCADE,
+    PRIMARY KEY (intel_id, crm_id)
+);
+
 -- ==========================================================================
 -- Idempotent migrations (safe to re-run on every init_db)
 -- ==========================================================================

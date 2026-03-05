@@ -8,27 +8,34 @@ Claude Code specific instructions for this repository. For universal project spe
 
 5-stage workflow per Sprint: **Kickoff → Planning → Vibe Coding → Review → Retro & Refactor**
 
-- Sprint files: `docs/sprints/S01.md` through `S32.md`
+- Sprint files: `docs/sprints/S01.md` through current
 - Sprint guide: `docs/SPRINT_GUIDE.md`
 - Full dev plan: `docs/DEVELOPMENT_PLAN.md`
 
 Phase 1-2 (S01–S16): SPMS foundation, completed.
 Phase 3 (S17–S32): AI & stability, completed.
-Phase 4 (S33+): Project Nexus — relationship graph, FastAPI webhook, voice input, Notion sync.
+Phase 4 (S33+): Project Nexus — Next.js + FastAPI full-stack, relationship graph, voice input.
 
 ## Sprint Auto-Behaviors
 
-Every Sprint **Kickoff** (Stage 0) and **Retro & Refactor** (Stage 4) must automatically commit and push to GitHub. This ensures progress checkpoints are always synced to the remote repository.
+Every Sprint **Kickoff** (Stage 0) and **Retro & Refactor** (Stage 4) must automatically commit and push to GitHub.
 
 ## Sprint Retro Codebase Validation
 
-After every Sprint **Retro** completes, re-read `docs/DEVELOPMENT_PLAN.md` and compare it against the actual codebase (schema, services, pages, directory structure). If any discrepancies are found (e.g., table count, column names, page list, directory tree, sprint table), alert the developer before proceeding to the next Sprint.
+After every Sprint **Retro** completes, re-read `docs/DEVELOPMENT_PLAN.md` and compare against actual codebase. Alert on discrepancies before proceeding.
 
 ## Phase 4 Context
 
-Project Nexus integrates on top of existing SPMS. Key principles:
-- PostgreSQL remains the single source of truth
-- FastAPI is a thin webhook layer, not a replacement for Streamlit
-- New tables (`stakeholder_relation`, `intel`, `intel_org`) extend the existing `contact` and `crm` models
-- pyvis/networkx for relationship graph visualization
-- Notion is read-only sync target, never a write source
+- **Next.js** is the primary frontend (React 19 + TypeScript + Tailwind CSS)
+- **FastAPI** wraps existing `services/*.py` as REST API
+- **Streamlit** retained as internal admin only, no new Streamlit pages
+- **D3.js / react-force-graph** for relationship network visualization
+- New tables: `stakeholder_relation`, `intel`, `intel_org`
+- iPhone dictation for voice input (Whisper deferred)
+
+## Frontend Development Rules
+
+- Always design UI/UX before coding (wireframe → component tree → implementation)
+- Use `frontend-design` and `ui-ux-pro-max` skills for design phase
+- Use `plan-check-style` when entering plan mode for frontend tasks
+- TypeScript strict mode, Tailwind CSS, Server Components by default

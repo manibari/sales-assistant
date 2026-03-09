@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Nexus — Q&A Flow Simulation</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+    }
+  }
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  .phone-frame {
+    width: 375px;
+    height: 812px;
+    border-radius: 40px;
+    overflow: hidden;
+    position: relative;
+  }
+  .phone-content {
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .phone-content::-webkit-scrollbar { display: none; }
+  .notch {
+    width: 126px; height: 30px;
+    background: #000;
+    border-radius: 0 0 20px 20px;
+    position: absolute;
+    top: 0; left: 50%; transform: translateX(-50%);
+    z-index: 50;
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideRight {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes progressPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+  .fade-in-up { animation: fadeInUp 0.35s ease-out forwards; }
+  .scale-in { animation: scaleIn 0.3s ease-out forwards; }
+  .slide-right { animation: slideRight 0.3s ease-out forwards; }
+  .btn-option {
+    transition: all 0.15s ease;
+  }
+  .btn-option:active {
+    transform: scale(0.97);
+  }
+  .btn-option.selected {
+    border-color: #3B82F6 !important;
+    background: rgba(59, 130, 246, 0.1) !important;
+    color: #3B82F6 !important;
+  }
+  .log-entry { animation: slideRight 0.25s ease-out forwards; }
+  .check-bounce {
+    animation: scaleIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+</style>
+</head>
+<body class="dark:bg-slate-950 bg-slate-100 min-h-screen flex items-center justify-center p-6 gap-8">
+
+<!-- Theme toggle -->
+<div class="fixed top-4 right-4 z-50 flex items-center gap-3">
+  <button onclick="resetFlow()" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-700 cursor-pointer transition-colors">
+    <i data-lucide="rotate-ccw" class="inline w-3 h-3 mr-1"></i>
+    重置
+  </button>
+  <button onclick="toggleTheme()" class="px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-700 cursor-pointer transition-colors" id="themeBtn">
+    <i data-lucide="moon" class="inline w-3 h-3 mr-1"></i>
+    Light
+  </button>
+</div>
+
+<!-- Title -->
+<div class="fixed top-4 left-6 z-50">
+  <h1 class="text-lg font-bold text-slate-50 dark:text-slate-50">Q&A Flow Simulation</h1>
+  <p class="text-xs text-slate-400 mt-0.5">Interactive walkthrough — tap options to progress</p>
+</div>
+
+<div class="flex items-start gap-8 mt-16">
+
+  <!-- PHONE: Interactive Q&A -->
+  <div class="flex flex-col items-center gap-3">
+    <div class="phone-frame border-2 border-slate-700 dark:border-slate-700 bg-black shadow-2xl shadow-black/40">
+      <div class="notch"></div>
+      <div class="phone-content dark:bg-slate-950 bg-slate-50" id="phoneScreen">
+        <!-- Screen 1: Capture Input -->
+        <div id="screen-capture" class="h-full flex flex-col">
+          <!-- Top bar -->
+          <div class="h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 pt-8">
+            <span class="text-base font-bold text-slate-900 dark:text-slate-50">新增情報</span>
+            <button onclick="toggleTheme()" class="p-2 rounded-lg text-slate-400 hover:bg-slate-800 cursor-pointer">
+              <i data-lucide="sun" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="flex-1 px-4 py-6 flex flex-col gap-5">
+            <!-- Input method tabs -->
+            <div class="flex gap-2 fade-in-up" style="animation-delay:0.05s">
+              <div class="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 min-h-[44px] opacity-50">
+                <i data-lucide="camera" class="w-5 h-5"></i>
+                <span class="text-sm font-medium">拍照</span>
+              </div>
+              <div class="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-blue-500/10 border border-blue-500 text-blue-500 dark:text-blue-400 min-h-[44px]">
+                <i data-lucide="type" class="w-5 h-5"></i>
+                <span class="text-sm font-medium">文字輸入</span>
+              </div>
+            </div>
+
+            <!-- Text input -->
+            <div class="flex-1 flex flex-col gap-2 fade-in-up" style="animation-delay:0.1s">
+              <label class="text-xs font-medium text-slate-500 dark:text-slate-400">會議記錄 / 名片資訊 / 任何情報</label>
+              <div class="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-700 dark:text-slate-300 min-h-[180px]" id="sampleInput">
+                今天去 A 食品拜訪陳副廠長，他提到今年重點是產線自動化，預算約 300K，希望先做 AOI。NDA 已簽。王經理介紹的 SI，叫做 宏碁智雲，做 IoT 整合的。
+              </div>
+              <p class="text-[11px] text-slate-400 dark:text-slate-500">AI 會自動解析人物、組織、痛點、時程等資訊</p>
+            </div>
+
+            <!-- Submit button -->
+            <button onclick="startQA()" class="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer fade-in-up" style="animation-delay:0.15s">
+              <span>送出情報</span>
+              <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <!-- Bottom nav -->
+          <div class="h-16 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 flex-shrink-0">
+            <div class="flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500">
+              <i data-lucide="trending-up" class="w-5 h-5"></i><span class="text-[11px]">商機</span>
+            </div>
+            <div class="flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500">
+              <i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[11px]">行事曆</span>
+            </div>
+            <div class="flex items-center justify-center">
+              <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/25 -mt-4">
+                <i data-lucide="plus" class="w-6 h-6 text-white"></i>
+              </div>
+            </div>
+            <div class="flex flex-col items-center justify-center gap-1 text-blue-500 dark:text-blue-400">
+              <i data-lucide="zap" class="w-5 h-5"></i><span class="text-[11px]">情報</span>
+            </div>
+            <div class="flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500">
+              <i data-lucide="book-user" class="w-5 h-5"></i><span class="text-[11px]">通訊錄</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screen 2: Q&A Flow (hidden initially) -->
+        <div id="screen-qa" class="h-full flex flex-col hidden">
+          <div class="h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 pt-8">
+            <span class="text-base font-bold text-slate-900 dark:text-slate-50">情報問答</span>
+            <button onclick="toggleTheme()" class="p-2 rounded-lg text-slate-400 hover:bg-slate-800 cursor-pointer">
+              <i data-lucide="sun" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="flex-1 px-4 py-6 flex flex-col">
+            <!-- Progress -->
+            <div class="mb-5" id="progressArea">
+              <div class="flex justify-between text-[11px] text-slate-400 dark:text-slate-500 mb-2">
+                <span id="progressLabel">問題 1 / 1</span>
+                <span id="progressPct">100%</span>
+              </div>
+              <div class="h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-500 rounded-full transition-all duration-500" id="progressBar" style="width:100%"></div>
+              </div>
+            </div>
+
+            <!-- Raw input preview -->
+            <div class="mb-5 p-3 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl" id="rawPreview">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">原始輸入</p>
+              <p class="text-sm text-slate-700 dark:text-slate-300 line-clamp-2" id="rawPreviewText"></p>
+            </div>
+
+            <!-- Question area -->
+            <div id="questionArea" class="flex-1 flex flex-col"></div>
+
+            <!-- Skip button -->
+            <div id="skipArea" class="mt-4 flex justify-end hidden">
+              <button onclick="handleSkip()" class="text-slate-400 dark:text-slate-500 hover:text-slate-300 text-sm py-2 flex items-center gap-1 cursor-pointer transition-colors">
+                <span id="skipLabel">稍後再說</span>
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Screen 3: Done -->
+        <div id="screen-done" class="h-full flex flex-col hidden">
+          <div class="h-14 flex items-center px-4 border-b border-slate-200 dark:border-slate-800 pt-8">
+            <span class="text-base font-bold text-slate-900 dark:text-slate-50">完成</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 px-6">
+            <div class="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center check-bounce">
+              <i data-lucide="check" class="w-8 h-8 text-green-500"></i>
+            </div>
+            <div class="text-center">
+              <h2 class="text-xl font-bold text-slate-900 dark:text-slate-50">情報已確認</h2>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">資料已儲存，可在情報 Feed 中查看</p>
+            </div>
+            <div class="w-full space-y-3" id="savedSummary"></div>
+            <div class="flex gap-3 w-full mt-2">
+              <button onclick="resetFlow()" class="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-medium px-4 py-3 rounded-lg min-h-[44px] cursor-pointer transition-colors">
+                再加一筆
+              </button>
+              <button onclick="resetFlow()" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer">
+                查看情報
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="text-xs text-slate-500 text-center">Interactive — tap to progress</p>
+  </div>
+
+  <!-- EVENT LOG -->
+  <div class="w-80 flex-shrink-0">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 sticky top-24">
+      <div class="flex items-center gap-2 mb-4">
+        <i data-lucide="scroll-text" class="w-4 h-4 text-cyan-500"></i>
+        <span class="text-sm font-semibold text-slate-900 dark:text-slate-50">Event Log</span>
+      </div>
+      <div class="space-y-2 max-h-[600px] overflow-y-auto" id="eventLog">
+        <div class="text-xs text-slate-400 dark:text-slate-500 italic">等待互動...</div>
+      </div>
+
+      <!-- TBD list -->
+      <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="circle-dot" class="w-4 h-4 text-amber-500"></i>
+          <span class="text-sm font-semibold text-slate-900 dark:text-slate-50">TBD Created</span>
+          <span class="text-xs text-slate-400" id="tbdCount">(0)</span>
+        </div>
+        <div class="space-y-1" id="tbdList">
+          <div class="text-xs text-slate-500 italic">尚無 TBD</div>
+        </div>
+      </div>
+
+      <!-- Answers summary -->
+      <div class="mt-5 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <div class="flex items-center gap-2 mb-3">
+          <i data-lucide="database" class="w-4 h-4 text-blue-500"></i>
+          <span class="text-sm font-semibold text-slate-900 dark:text-slate-50">Collected Data</span>
+        </div>
+        <pre class="text-xs text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap" id="dataView">{}</pre>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// --- Q&A Flow State ---
+const ROLE_Q = {
+  id: 'role', question: '他是什麼角色？',
+  options: [
+    { label: '客戶', value: 'client' },
+    { label: '夥伴', value: 'partner' },
+    { label: 'SI', value: 'si' },
+    { label: '其他', value: 'other' },
+  ],
+  skipLabel: '稍後再說', tbdQuestion: '確認角色',
+};
+
+const CLIENT_QS = [
+  { id: 'industry', question: '什麼產業？',
+    options: [
+      { label: '食品業', value: 'food' }, { label: '石化業', value: 'petrochemical' },
+      { label: '半導體', value: 'semiconductor' }, { label: '製造業', value: 'manufacturing' },
+      { label: '其他', value: 'other' },
+    ],
+    skipLabel: '稍後再問', tbdQuestion: '確認產業別' },
+  { id: 'pain_points', question: '已知痛點？', multiSelect: true,
+    options: [
+      { label: '產線自動化', value: 'automation' }, { label: '品質檢測 (AOI)', value: 'aoi' },
+      { label: '能源管理', value: 'energy' }, { label: '安全監控', value: 'safety' },
+      { label: 'ERP/系統整合', value: 'erp' }, { label: 'IoT 資料收集', value: 'iot' },
+    ],
+    skipLabel: '稍後再問', tbdQuestion: '確認客戶痛點' },
+  { id: 'nda_status', question: 'NDA 狀態？',
+    options: [
+      { label: '尚未開始', value: 'pending' }, { label: '進行中', value: 'in_progress' },
+      { label: '已簽署', value: 'signed' }, { label: '不需要', value: 'not_required' },
+    ] },
+  { id: 'mou_status', question: 'MOU 狀態？',
+    options: [
+      { label: '尚未開始', value: 'pending' }, { label: '進行中', value: 'in_progress' },
+      { label: '已簽署', value: 'signed' }, { label: '不需要', value: 'not_required' },
+    ] },
+  { id: 'budget', question: '預估預算範圍？',
+    options: [
+      { label: '< 100K', value: '<100K' }, { label: '100K - 500K', value: '100-500K' },
+      { label: '500K - 1M', value: '500K-1M' }, { label: '1M+', value: '1M+' },
+      { label: '未知', value: 'unknown' },
+    ] },
+];
+
+const PARTNER_QS = [
+  { id: 'capabilities', question: '能力標籤？', multiSelect: true,
+    options: [
+      { label: 'IoT', value: 'iot' }, { label: '影像辨識', value: 'vision' },
+      { label: 'ERP', value: 'erp' }, { label: '自動控制', value: 'auto_ctrl' },
+      { label: '資安', value: 'security' }, { label: 'ML/AI', value: 'ml_ai' },
+    ],
+    skipLabel: '稍後再問', tbdQuestion: '確認夥伴能力' },
+  { id: 'industry_exp', question: '產業經驗？', multiSelect: true,
+    options: [
+      { label: '食品業', value: 'food' }, { label: '石化業', value: 'petrochemical' },
+      { label: '半導體', value: 'semiconductor' }, { label: '製造業', value: 'manufacturing' },
+    ],
+    skipLabel: '稍後再問', tbdQuestion: '確認產業經驗' },
+  { id: 'team_size', question: '團隊規模？',
+    options: [
+      { label: '1-10 人', value: '1-10' }, { label: '10-50 人', value: '10-50' },
+      { label: '50-200 人', value: '50-200' }, { label: '200+ 人', value: '200+' },
+    ] },
+];
+
+let state = {
+  questions: [ROLE_Q],
+  currentIndex: 0,
+  answers: {},
+  selected: [],
+  tbds: [],
+};
+
+function log(icon, color, text) {
+  const el = document.getElementById('eventLog');
+  if (el.querySelector('.italic')) el.innerHTML = '';
+  const time = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  el.innerHTML += `<div class="log-entry flex items-start gap-2 py-1.5">
+    <i data-lucide="${icon}" class="w-3 h-3 ${color} mt-0.5 flex-shrink-0"></i>
+    <div>
+      <span class="text-xs text-slate-700 dark:text-slate-300">${text}</span>
+      <span class="text-[10px] text-slate-500 ml-1">${time}</span>
+    </div>
+  </div>`;
+  el.scrollTop = el.scrollHeight;
+  lucide.createIcons();
+}
+
+function updateDataView() {
+  document.getElementById('dataView').textContent = JSON.stringify(state.answers, null, 2);
+}
+
+function updateTbdView() {
+  const el = document.getElementById('tbdList');
+  document.getElementById('tbdCount').textContent = `(${state.tbds.length})`;
+  if (state.tbds.length === 0) {
+    el.innerHTML = '<div class="text-xs text-slate-500 italic">尚無 TBD</div>';
+    return;
+  }
+  el.innerHTML = state.tbds.map(t =>
+    `<div class="flex items-center gap-2 py-1 log-entry">
+      <i data-lucide="circle-dot" class="w-3 h-3 text-amber-500 flex-shrink-0"></i>
+      <span class="text-xs text-slate-700 dark:text-slate-300">${t}</span>
+    </div>`
+  ).join('');
+  lucide.createIcons();
+}
+
+function renderQuestion() {
+  const q = state.questions[state.currentIndex];
+  if (!q) return;
+
+  const total = state.questions.length;
+  const pct = Math.round(((state.currentIndex + 1) / total) * 100);
+  document.getElementById('progressLabel').textContent = `問題 ${state.currentIndex + 1} / ${total}`;
+  document.getElementById('progressPct').textContent = `${pct}%`;
+  document.getElementById('progressBar').style.width = `${pct}%`;
+
+  // Show/hide raw preview only on first question
+  document.getElementById('rawPreview').style.display = state.currentIndex === 0 ? '' : 'none';
+
+  // Question
+  const area = document.getElementById('questionArea');
+  state.selected = [];
+
+  let html = `<h2 class="text-xl font-bold text-slate-900 dark:text-slate-50 mb-5 fade-in-up">${q.question}</h2>`;
+  html += `<div class="grid grid-cols-2 gap-2" id="optionsGrid">`;
+  q.options.forEach((opt, i) => {
+    html += `<button onclick="handleSelect('${opt.value}')"
+      data-value="${opt.value}"
+      class="btn-option min-h-[44px] px-4 py-3 text-sm font-medium rounded-lg border
+        bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700
+        text-slate-900 dark:text-slate-50 hover:border-blue-500 cursor-pointer
+        fade-in-up" style="animation-delay:${0.05 * (i + 1)}s">
+      ${opt.label}
+    </button>`;
+  });
+  html += `</div>`;
+
+  // Multi-select confirm button (hidden initially)
+  if (q.multiSelect) {
+    html += `<button id="multiConfirmBtn" onclick="handleMultiConfirm()"
+      class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer hidden">
+      確認 (0)
+    </button>`;
+  }
+
+  area.innerHTML = html;
+
+  // Skip
+  const skipArea = document.getElementById('skipArea');
+  if (q.skipLabel) {
+    skipArea.classList.remove('hidden');
+    document.getElementById('skipLabel').textContent = q.skipLabel;
+  } else {
+    skipArea.classList.add('hidden');
+  }
+
+  lucide.createIcons();
+}
+
+function handleSelect(value) {
+  const q = state.questions[state.currentIndex];
+  if (q.multiSelect) {
+    const idx = state.selected.indexOf(value);
+    if (idx >= 0) state.selected.splice(idx, 1);
+    else state.selected.push(value);
+
+    // Update visual
+    document.querySelectorAll('#optionsGrid .btn-option').forEach(btn => {
+      const v = btn.getAttribute('data-value');
+      if (state.selected.includes(v)) {
+        btn.classList.add('selected');
+        btn.innerHTML = `<i data-lucide="check" class="inline w-3.5 h-3.5 mr-1 -mt-0.5"></i>${q.options.find(o => o.value === v).label}`;
+      } else {
+        btn.classList.remove('selected');
+        btn.textContent = q.options.find(o => o.value === v).label;
+      }
+    });
+    lucide.createIcons();
+
+    // Show/hide confirm button
+    const confirmBtn = document.getElementById('multiConfirmBtn');
+    if (state.selected.length > 0) {
+      confirmBtn.classList.remove('hidden');
+      confirmBtn.textContent = `確認 (${state.selected.length})`;
+    } else {
+      confirmBtn.classList.add('hidden');
+    }
+
+    log('toggle-left', 'text-blue-400', `Toggle: ${q.options.find(o => o.value === value).label}`);
+  } else {
+    // Single select — advance immediately
+    const label = q.options.find(o => o.value === value).label;
+    log('check-circle', 'text-green-400', `${q.question} → ${label}`);
+    processAnswer(value);
+  }
+}
+
+function handleMultiConfirm() {
+  if (state.selected.length === 0) return;
+  const q = state.questions[state.currentIndex];
+  const labels = state.selected.map(v => q.options.find(o => o.value === v).label).join(', ');
+  log('check-circle', 'text-green-400', `${q.question} → [${labels}]`);
+  processAnswer([...state.selected]);
+}
+
+function processAnswer(answer) {
+  const q = state.questions[state.currentIndex];
+  state.answers[q.id] = answer;
+  updateDataView();
+
+  // Branch on role
+  if (q.id === 'role') {
+    const role = typeof answer === 'string' ? answer : answer[0];
+    if (role === 'client') {
+      state.questions = [ROLE_Q, ...CLIENT_QS];
+      log('git-branch', 'text-cyan-400', 'Branch → 客戶 (5 questions)');
+    } else if (role === 'partner') {
+      state.questions = [ROLE_Q, ...PARTNER_QS];
+      log('git-branch', 'text-cyan-400', 'Branch → 夥伴 (3 questions)');
+    } else {
+      log('git-branch', 'text-slate-400', `Branch → ${role} (no follow-up)`);
+      finishFlow();
+      return;
+    }
+  }
+
+  // Next or finish
+  if (state.currentIndex < state.questions.length - 1) {
+    state.currentIndex++;
+    renderQuestion();
+  } else {
+    finishFlow();
+  }
+}
+
+function handleSkip() {
+  const q = state.questions[state.currentIndex];
+  if (q.tbdQuestion) {
+    state.tbds.push(q.tbdQuestion);
+    updateTbdView();
+    log('circle-dot', 'text-amber-400', `Skip → TBD: "${q.tbdQuestion}"`);
+  } else {
+    log('skip-forward', 'text-slate-400', `Skipped: ${q.question}`);
+  }
+
+  if (q.id === 'role') {
+    finishFlow();
+    return;
+  }
+
+  if (state.currentIndex < state.questions.length - 1) {
+    state.currentIndex++;
+    renderQuestion();
+  } else {
+    finishFlow();
+  }
+}
+
+function finishFlow() {
+  log('check', 'text-green-500', 'Flow complete — saving...');
+
+  // Build saved summary
+  const role = state.answers.role;
+  let entity = '(未指定)';
+  let entityType = '';
+  if (role === 'client') { entity = '客戶'; entityType = 'Client'; }
+  else if (role === 'partner') { entity = '夥伴'; entityType = 'Partner'; }
+  else if (role === 'si') { entity = 'SI'; entityType = 'SI'; }
+
+  let summaryHtml = '';
+  if (entityType) {
+    summaryHtml += `<div class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 fade-in-up">
+      <p class="text-[11px] text-slate-400 mb-1">建立實體</p>
+      <p class="text-sm font-semibold text-slate-900 dark:text-slate-50">${entityType} created from Intel</p>
+    </div>`;
+  }
+  if (state.tbds.length > 0) {
+    summaryHtml += `<div class="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 fade-in-up" style="animation-delay:0.1s">
+      <p class="text-[11px] text-amber-400 mb-1">${state.tbds.length} TBD items created</p>
+      <div class="space-y-1">${state.tbds.map(t => `<p class="text-xs text-slate-500">&bull; ${t}</p>`).join('')}</div>
+    </div>`;
+  }
+
+  document.getElementById('savedSummary').innerHTML = summaryHtml;
+
+  setTimeout(() => {
+    log('database', 'text-blue-400', `Intel confirmed. ${entityType ? entityType + ' created.' : ''} ${state.tbds.length} TBDs.`);
+  }, 300);
+
+  // Show done screen
+  document.getElementById('screen-qa').classList.add('hidden');
+  document.getElementById('screen-done').classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function startQA() {
+  log('arrow-right', 'text-blue-400', 'Intel submitted → Start Q&A');
+  document.getElementById('rawPreviewText').textContent = document.getElementById('sampleInput').textContent.trim();
+  document.getElementById('screen-capture').classList.add('hidden');
+  document.getElementById('screen-qa').classList.remove('hidden');
+  renderQuestion();
+}
+
+function resetFlow() {
+  state = { questions: [ROLE_Q], currentIndex: 0, answers: {}, selected: [], tbds: [] };
+  document.getElementById('screen-capture').classList.remove('hidden');
+  document.getElementById('screen-qa').classList.add('hidden');
+  document.getElementById('screen-done').classList.add('hidden');
+  document.getElementById('eventLog').innerHTML = '<div class="text-xs text-slate-400 dark:text-slate-500 italic">等待互動...</div>';
+  updateDataView();
+  updateTbdView();
+  lucide.createIcons();
+}
+
+function toggleTheme() {
+  document.documentElement.classList.toggle('dark');
+  const isDark = document.documentElement.classList.contains('dark');
+  document.getElementById('themeBtn').innerHTML = isDark
+    ? '<i data-lucide="moon" class="inline w-3 h-3 mr-1"></i>Light'
+    : '<i data-lucide="sun" class="inline w-3 h-3 mr-1"></i>Dark';
+  lucide.createIcons();
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+});
+</script>
+</body>
+</html>

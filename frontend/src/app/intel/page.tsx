@@ -37,7 +37,7 @@ export default function IntelPage() {
             <p className="text-xs mt-1">點擊 ＋ 新增第一筆情報</p>
           </div>
         ) : (
-          <div className="space-y-3 max-w-2xl mx-auto">
+          <div className="space-y-3 max-w-2xl lg:max-w-4xl mx-auto">
             {intels.map((intel) => {
               const Icon = INPUT_ICONS[intel.input_type] || FileText;
               const isConfirmed = intel.status === "confirmed";

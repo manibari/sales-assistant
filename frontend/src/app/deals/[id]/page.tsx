@@ -164,7 +164,11 @@ export default function DealDetailPage() {
         </Link>
       </TopBar>
 
-      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl mx-auto w-full space-y-4">
+      <div className="flex-1 px-4 lg:px-6 py-4 overflow-auto max-w-2xl lg:max-w-6xl mx-auto w-full">
+        {/* Desktop: 2-column layout */}
+        <div className="lg:grid lg:grid-cols-5 lg:gap-6 space-y-4 lg:space-y-0">
+        {/* Left column (3/5) — header + MEDDIC */}
+        <div className="lg:col-span-3 space-y-4">
         {/* Header card */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
@@ -315,6 +319,9 @@ export default function DealDetailPage() {
           )}
         </div>
 
+        </div>
+        {/* Right column (2/5) — related data */}
+        <div className="lg:col-span-2 space-y-4">
         {/* Partners */}
         <Section
           title="搭配夥伴"
@@ -474,6 +481,8 @@ export default function DealDetailPage() {
             </span>
           </Link>
         )}
+        </div>
+        </div>
       </div>
 
       {/* File upload modal */}

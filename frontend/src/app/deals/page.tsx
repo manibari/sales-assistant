@@ -60,7 +60,7 @@ export default function DealsPage() {
         </button>
       </TopBar>
 
-      <div className="flex-1 px-4 py-4 overflow-auto">
+      <div className="flex-1 px-4 lg:px-6 py-4 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20 text-slate-400">
             載入中...
@@ -71,13 +71,13 @@ export default function DealsPage() {
             <p className="text-xs mt-1">從情報建立第一個商機</p>
           </div>
         ) : view === "urgency" ? (
-          <div className="space-y-3 max-w-2xl mx-auto">
+          <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 max-w-2xl lg:max-w-4xl mx-auto">
             {deals.map((deal) => (
               <DealCard key={deal.id} deal={deal} />
             ))}
           </div>
         ) : (
-          <div className="space-y-4 max-w-2xl mx-auto">
+          <div className="space-y-4 max-w-2xl lg:max-w-4xl mx-auto">
             {stageOrder.map((stage) => {
               const stageDeals = grouped[stage];
               if (!stageDeals || stageDeals.length === 0) return null;

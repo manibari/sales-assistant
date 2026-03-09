@@ -98,7 +98,7 @@ export default function CalendarPage() {
         </Link>
       </TopBar>
 
-      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl mx-auto w-full">
+      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl lg:max-w-4xl mx-auto w-full">
         {/* Month header */}
         <div className="flex items-center justify-between mb-4">
           <button onClick={prevMonth} className="p-2 cursor-pointer text-slate-400 hover:text-slate-200 transition-colors">

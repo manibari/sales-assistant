@@ -77,7 +77,7 @@ export default function ContactsPage() {
               <p className="text-sm">尚無客戶</p>
             </div>
           ) : (
-            <div className="space-y-3 max-w-2xl mx-auto">
+            <div className="space-y-3 max-w-2xl lg:max-w-4xl mx-auto">
               {clients.map((c) => (
                 <div
                   key={c.id}
@@ -105,7 +105,7 @@ export default function ContactsPage() {
             <p className="text-sm">尚無夥伴</p>
           </div>
         ) : (
-          <div className="space-y-3 max-w-2xl mx-auto">
+          <div className="space-y-3 max-w-2xl lg:max-w-4xl mx-auto">
             {partners.map((p) => (
               <div
                 key={p.id}

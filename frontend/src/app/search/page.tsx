@@ -67,7 +67,7 @@ export default function SearchPage() {
         </Link>
       </TopBar>
 
-      <div className="px-4 pt-4 max-w-2xl mx-auto w-full">
+      <div className="px-4 pt-4 max-w-2xl lg:max-w-4xl mx-auto w-full">
         {/* Search input */}
         <div className="relative">
           <SearchIcon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -106,7 +106,7 @@ export default function SearchPage() {
         )}
       </div>
 
-      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl mx-auto w-full">
+      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl lg:max-w-4xl mx-auto w-full">
         {loading && (
           <div className="flex items-center justify-center py-10">
             <Loader2 size={20} className="animate-spin text-blue-500" />

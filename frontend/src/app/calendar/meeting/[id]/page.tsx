@@ -81,7 +81,7 @@ export default function MeetingPrepPage() {
         </Link>
       </TopBar>
 
-      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl mx-auto w-full space-y-4">
+      <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl lg:max-w-4xl mx-auto w-full space-y-4">
         {/* Deal header */}
         {deal && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">

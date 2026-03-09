@@ -175,6 +175,14 @@ export interface MeddicProgress {
 
 // --- API ---
 
+export interface SearchResults {
+  deals: { id: number; name: string; stage: string; status: string; client_name: string }[];
+  clients: { id: number; name: string; industry: string | null; status: string }[];
+  partners: { id: number; name: string; trust_level: string }[];
+  contacts: { id: number; name: string; title: string | null; org_type: string | null; org_id: number | null }[];
+  intel: { id: number; raw_input: string; status: string; created_at: string }[];
+}
+
 export const nxApi = {
   clients: {
     list: (status?: string) => fetchAPI<NxClient[]>(`/clients/${status ? `?status=${status}` : ""}`),
@@ -266,4 +274,5 @@ export const nxApi = {
     getEntityTags: (entityType: string, entityId: number) =>
       fetchAPI<NxTag[]>(`/tags/entity/${entityType}/${entityId}`),
   },
+  search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
 };

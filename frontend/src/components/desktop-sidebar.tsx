@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  LayoutDashboard,
   TrendingUp,
   Calendar,
   Plus,
   Zap,
   BookUser,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 
@@ -18,11 +20,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { label: "控制台", href: "/dashboard", icon: LayoutDashboard },
   { label: "商機 Pipeline", href: "/deals", icon: TrendingUp },
   { label: "行事曆", href: "/calendar", icon: Calendar },
   { label: "新增情報", href: "/capture", icon: Plus },
   { label: "情報 Feed", href: "/intel", icon: Zap },
   { label: "通訊錄", href: "/contacts", icon: BookUser },
+  { label: "搜尋", href: "/search", icon: Search },
 ];
 
 export function DesktopSidebar() {

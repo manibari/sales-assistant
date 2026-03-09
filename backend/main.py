@@ -21,6 +21,7 @@ from backend.routers.nexus import (
     documents as nx_documents,
     tags as nx_tags,
     tbd as nx_tbd,
+    search as nx_search,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
@@ -48,6 +49,7 @@ app.include_router(nx_calendar.router, prefix="/api/nx/calendar", tags=["Calenda
 app.include_router(nx_documents.router, prefix="/api/nx/documents", tags=["Documents"])
 app.include_router(nx_tags.router, prefix="/api/nx/tags", tags=["Tags"])
 app.include_router(nx_tbd.router, prefix="/api/nx/tbd", tags=["TBD"])
+app.include_router(nx_search.router, prefix="/api/nx/search", tags=["Search"])
 
 
 @app.on_event("startup")

@@ -128,13 +128,16 @@ def rows_to_dicts(cur):
 
 
 def init_db():
-    """Execute schema_sqlite.sql to create all tables."""
-    schema_path = os.path.join(os.path.dirname(__file__), "schema_sqlite.sql")
-    with open(schema_path, "r") as f:
-        sql = f.read()
+    """Execute both legacy and Nexus schema files to create all tables."""
+    db_dir = os.path.dirname(__file__)
+    schema_files = ["schema_sqlite.sql", "schema_nexus.sql"]
     conn = sqlite3.connect(_get_db_path())
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(sql)
+    for schema_file in schema_files:
+        schema_path = os.path.join(db_dir, schema_file)
+        if os.path.exists(schema_path):
+            with open(schema_path, "r") as f:
+                conn.executescript(f.read())
     conn.commit()
     conn.close()
     logger.info("Database initialized at %s", _get_db_path())

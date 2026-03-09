@@ -11,8 +11,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.connection import init_db
 from backend.routers import crm, projects, network
+from backend.routers.nexus import (
+    clients as nx_clients,
+    partners as nx_partners,
+    contacts as nx_contacts,
+    intel as nx_intel,
+    deals as nx_deals,
+    calendar as nx_calendar,
+    documents as nx_documents,
+    tags as nx_tags,
+    tbd as nx_tbd,
+)
 
-app = FastAPI(title="Project Nexus API", version="0.1.0")
+app = FastAPI(title="Project Nexus API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,9 +33,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(crm.router, prefix="/api/crm", tags=["CRM"])
-app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
-app.include_router(network.router, prefix="/api/network", tags=["Network"])
+# Legacy SPMS routers
+app.include_router(crm.router, prefix="/api/crm", tags=["CRM (Legacy)"])
+app.include_router(projects.router, prefix="/api/projects", tags=["Projects (Legacy)"])
+app.include_router(network.router, prefix="/api/network", tags=["Network (Legacy)"])
+
+# Nexus Engine 1 routers
+app.include_router(nx_clients.router, prefix="/api/nx/clients", tags=["Clients"])
+app.include_router(nx_partners.router, prefix="/api/nx/partners", tags=["Partners"])
+app.include_router(nx_contacts.router, prefix="/api/nx/contacts", tags=["Contacts"])
+app.include_router(nx_intel.router, prefix="/api/nx/intel", tags=["Intel"])
+app.include_router(nx_deals.router, prefix="/api/nx/deals", tags=["Deals"])
+app.include_router(nx_calendar.router, prefix="/api/nx/calendar", tags=["Calendar"])
+app.include_router(nx_documents.router, prefix="/api/nx/documents", tags=["Documents"])
+app.include_router(nx_tags.router, prefix="/api/nx/tags", tags=["Tags"])
+app.include_router(nx_tbd.router, prefix="/api/nx/tbd", tags=["TBD"])
 
 
 @app.on_event("startup")

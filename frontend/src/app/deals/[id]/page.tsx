@@ -18,6 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { nxApi, type NxDeal, type MeddicProgress } from "@/lib/nexus-api";
+import { FileUploadModal } from "@/components/file-upload-modal";
 import Link from "next/link";
 
 const STAGE_ORDER = ["L0", "L1", "L2", "L3", "L4"];
@@ -61,6 +62,7 @@ export default function DealDetailPage() {
   const [closeReason, setCloseReason] = useState("");
   const [closeNotes, setCloseNotes] = useState("");
   const [advancing, setAdvancing] = useState(false);
+  const [showFileUpload, setShowFileUpload] = useState(false);
 
   const loadDeal = useCallback(() => {
     nxApi.deals
@@ -399,35 +401,66 @@ export default function DealDetailPage() {
         </Section>
 
         {/* Files */}
-        <Section
-          title="文件"
-          icon={<FileCheck size={16} className="text-blue-500" />}
-          count={deal.files?.length}
-        >
-          {deal.files && deal.files.length > 0 ? (
-            deal.files.map((f) => (
-              <div
-                key={f.id}
-                className="flex items-center justify-between py-2"
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <FileCheck size={16} className="text-blue-500" />
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                文件
+              </span>
+              <span className="text-xs text-slate-400">
+                ({deal.files?.length || 0})
+              </span>
+            </div>
+            {!isClosed && (
+              <button
+                onClick={() => setShowFileUpload(true)}
+                className="text-xs text-blue-500 cursor-pointer"
               >
-                <span className="text-sm text-slate-700 dark:text-slate-300">
-                  {f.file_name}
-                </span>
-                <span
-                  className={`text-[11px] px-2 py-0.5 rounded-full ${
-                    f.parse_status === "parsed"
-                      ? "bg-green-500/10 text-green-400"
-                      : "bg-slate-700 text-slate-400"
-                  }`}
+                + 新增
+              </button>
+            )}
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {deal.files && deal.files.length > 0 ? (
+              deal.files.map((f) => (
+                <div
+                  key={f.id}
+                  className="flex items-center justify-between py-2"
                 >
-                  {f.parse_status === "parsed" ? "已解析" : f.parse_status}
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="text-xs text-slate-400">尚無文件</p>
-          )}
-        </Section>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate block">
+                      {f.file_name}
+                    </span>
+                    {f.source_url && (
+                      <span className="text-[11px] text-slate-400 truncate block">
+                        {f.source_url.slice(0, 40)}...
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 ml-2">
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400">
+                      {f.file_type === "proposal" ? "簡報" : f.file_type === "contract" ? "合約" : "附件"}
+                    </span>
+                    <span
+                      className={`text-[11px] px-2 py-0.5 rounded-full ${
+                        f.parse_status === "parsed"
+                          ? "bg-green-500/10 text-green-400"
+                          : f.parse_status === "pending"
+                            ? "bg-amber-500/10 text-amber-400"
+                            : "bg-slate-700 text-slate-400"
+                      }`}
+                    >
+                      {f.parse_status === "parsed" ? "已解析" : f.parse_status === "pending" ? "待解析" : f.parse_status}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 py-2">尚無文件</p>
+            )}
+          </div>
+        </div>
 
         {/* Next action */}
         {!isClosed && (
@@ -442,6 +475,15 @@ export default function DealDetailPage() {
           </Link>
         )}
       </div>
+
+      {/* File upload modal */}
+      {showFileUpload && (
+        <FileUploadModal
+          dealId={dealId}
+          onClose={() => setShowFileUpload(false)}
+          onUploaded={loadDeal}
+        />
+      )}
 
       {/* Close modal */}
       {showCloseModal && (

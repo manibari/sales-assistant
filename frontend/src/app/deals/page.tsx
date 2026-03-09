@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxDeal } from "@/lib/nexus-api";
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import Link from "next/link";
 
 const STAGE_LABELS: Record<string, string> = {
   L0: "L0 潛在",
@@ -45,6 +46,12 @@ export default function DealsPage() {
   return (
     <div className="flex flex-col h-full">
       <TopBar title="商機 Pipeline">
+        <Link
+          href="/deals/new"
+          className="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors"
+        >
+          <Plus size={20} />
+        </Link>
         <button
           onClick={() => setView(view === "urgency" ? "stage" : "urgency")}
           className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
@@ -121,8 +128,9 @@ function DealCard({ deal }: { deal: NxDeal }) {
       : "border-l-green-500";
 
   return (
-    <div
-      className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 active:bg-slate-50 dark:active:bg-slate-800 border-l-4 ${borderColor}`}
+    <Link
+      href={`/deals/${deal.id}`}
+      className={`block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 active:bg-slate-50 dark:active:bg-slate-800 border-l-4 ${borderColor}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
@@ -149,6 +157,6 @@ function DealCard({ deal }: { deal: NxDeal }) {
         {deal.budget_range && <span>預算: {deal.budget_range}</span>}
         {deal.timeline && <span>時程: {deal.timeline}</span>}
       </div>
-    </div>
+    </Link>
   );
 }

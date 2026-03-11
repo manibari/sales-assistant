@@ -4,6 +4,11 @@ import json
 import logging
 import re
 
+from opencc import OpenCC
+
+_cc_t2s = OpenCC("t2s")  # Traditional → Simplified
+_cc_s2t = OpenCC("s2t")  # Simplified → Traditional
+
 from database.connection import get_connection, rows_to_dicts
 from services.nexus.clients import create_client, find_client_by_name, update_client
 from services.nexus.contacts import create_contact, find_contact, update_contact
@@ -188,7 +193,12 @@ def _materialize_client(intel_id: int, parsed: dict, result: dict) -> int | None
         return None
 
     normalized = _normalize_company_name(company_name)
+    # Try original, then simplified, then traditional variants
     candidates = find_client_by_name(normalized)
+    if not candidates:
+        candidates = find_client_by_name(_cc_t2s.convert(normalized))
+    if not candidates:
+        candidates = find_client_by_name(_cc_s2t.convert(normalized))
 
     if candidates:
         client = candidates[0]
@@ -215,6 +225,10 @@ def _materialize_partner(intel_id: int, parsed: dict, result: dict) -> int | Non
 
     normalized = _normalize_company_name(partner_name)
     candidates = find_partner_by_name(normalized)
+    if not candidates:
+        candidates = find_partner_by_name(_cc_t2s.convert(normalized))
+    if not candidates:
+        candidates = find_partner_by_name(_cc_s2t.convert(normalized))
 
     if candidates:
         partner = candidates[0]
@@ -239,6 +253,10 @@ def _materialize_contacts(
         return
 
     candidates = find_contact(name=contact_name, email=contact_email)
+    if not candidates and contact_name:
+        candidates = find_contact(name=_cc_t2s.convert(contact_name), email=contact_email)
+    if not candidates and contact_name:
+        candidates = find_contact(name=_cc_s2t.convert(contact_name), email=contact_email)
 
     if candidates:
         contact = candidates[0]

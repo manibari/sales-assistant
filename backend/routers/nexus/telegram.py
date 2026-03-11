@@ -586,6 +586,12 @@ async def _handle_done(chat_id: int) -> None:
 
     intel_id = conv["intel_id"]
     parsed = conv["parsed"]
+
+    # Re-merge card_base to ensure OCR fields are never lost
+    for k, v in conv.get("card_base", {}).items():
+        if k not in parsed:
+            parsed[k] = v
+
     parsed_json = json.dumps(parsed, ensure_ascii=False) if parsed else None
 
     await asyncio.to_thread(confirm_intel, intel_id, parsed_json)
@@ -821,6 +827,7 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
             parsed = cards[0]
             raw = "📇 名片辨識\n" + _format_card_raw(parsed)
             await asyncio.to_thread(update_intel, intel_id, raw_input=raw)
+            logger.info("Card parse result for intel #%d: %s", intel_id, json.dumps(parsed, ensure_ascii=False))
 
     elif text:
         parsed = await _auto_parse(text) or {}
@@ -839,9 +846,13 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
     is_card = bool(parsed.get("contact_name") and not parsed.get("role"))
 
     # Start conversation
+    # Save card-parsed fields separately so they can never be lost by followup AI
+    card_base = dict(parsed) if is_card else {}
+
     _conversations[chat_id] = {
         "intel_id": intel_id,
         "parsed": parsed,
+        "card_base": card_base,  # immutable card OCR fields
         "raw_history": [raw] if text else [],
         "pending_industry_confirm": bool(industry_prompt),
         "pending_role_confirm": is_card,
@@ -956,6 +967,14 @@ async def _handle_followup(chat_id: int, text: str) -> None:
     if new_fields:
         for k, v in new_fields.items():
             conv["parsed"][k] = v
+
+    # Re-merge card_base fields (never lose OCR-extracted data)
+    card_base = conv.get("card_base", {})
+    for k, v in card_base.items():
+        if k not in conv["parsed"]:
+            conv["parsed"][k] = v
+
+    if new_fields or card_base:
         # Update DB
         await asyncio.to_thread(
             update_intel, intel_id,

@@ -127,6 +127,12 @@ def materialize_intel(intel_id: int) -> dict:
                 parsed[key] = val
                 logger.info("Auto-matched %s = %s from raw_input", key, val)
 
+    # Remap company_name → partner_name when role is partner
+    role = parsed.get("role")
+    if role == "partner" and parsed.get("company_name") and not parsed.get("partner_name"):
+        parsed["partner_name"] = parsed["company_name"]
+        logger.info("Remapped company_name → partner_name for role=partner")
+
     result: dict = {
         "intel_id": intel_id,
         "client": None,
@@ -174,6 +180,9 @@ def materialize_intel(intel_id: int) -> dict:
 
 def _materialize_client(intel_id: int, parsed: dict, result: dict) -> int | None:
     """Match or create client from company_name. Returns client_id or None."""
+    # Skip client creation when the primary entity is a partner
+    if parsed.get("role") == "partner":
+        return None
     company_name = parsed.get("company_name")
     if not company_name:
         return None

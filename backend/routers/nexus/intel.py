@@ -5,7 +5,11 @@ from pydantic import BaseModel
 
 from services.nexus.intel import (
     create_intel, get_intel, get_all_intel, confirm_intel, update_intel, delete_intel,
+    get_intel_entities, get_entity_intel,
 )
+from services.nexus.documents import get_files_by_intel
+from services.nexus.intel import get_intel_linked_deals
+from services.nexus.materialize import materialize_intel
 
 router = APIRouter()
 
@@ -33,11 +37,19 @@ def list_intel(status: str | None = None, limit: int = 50):
     return get_all_intel(status, limit)
 
 
+@router.get("/by-entity/{entity_type}/{entity_id}")
+def intel_by_entity(entity_type: str, entity_id: int):
+    """Get all intel linked to a specific entity (client, partner, contact, deal)."""
+    return get_entity_intel(entity_type, entity_id)
+
+
 @router.get("/{intel_id}")
 def read_intel(intel_id: int):
     intel = get_intel(intel_id)
     if not intel:
         raise HTTPException(404, "Intel not found")
+    intel["files"] = get_files_by_intel(intel_id)
+    intel["linked_deals"] = get_intel_linked_deals(intel_id)
     return intel
 
 
@@ -61,6 +73,24 @@ def patch_intel(intel_id: int, body: IntelUpdate):
     if not result:
         raise HTTPException(404, "Intel not found")
     return result
+
+
+@router.post("/{intel_id}/materialize")
+def materialize(intel_id: int):
+    """Manually trigger materialization (useful for re-processing old intel)."""
+    intel = get_intel(intel_id)
+    if not intel:
+        raise HTTPException(404, "Intel not found")
+    return materialize_intel(intel_id)
+
+
+@router.get("/{intel_id}/entities")
+def entities(intel_id: int):
+    """Get all entities linked to this intel."""
+    intel = get_intel(intel_id)
+    if not intel:
+        raise HTTPException(404, "Intel not found")
+    return get_intel_entities(intel_id)
 
 
 @router.delete("/{intel_id}", status_code=204)

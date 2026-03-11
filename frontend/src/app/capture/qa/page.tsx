@@ -3,8 +3,9 @@
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
-import { Check, ChevronRight, Loader2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { nxApi, type NxIntel } from "@/lib/nexus-api";
+import { INDUSTRIES, BUDGET_PRESETS } from "@/lib/options";
 
 // --- Q&A Flow Definition ---
 
@@ -13,34 +14,31 @@ interface QaQuestion {
   question: string;
   options: { label: string; value: string }[];
   multiSelect?: boolean;
+  allowCustom?: boolean; // show "+ 自訂" for single-select too
   skipLabel?: string;
   tbdQuestion?: string; // TBD text if skipped
 }
 
 const ROLE_QUESTION: QaQuestion = {
   id: "role",
-  question: "他是什麼角色？",
+  question: "這是什麼類型的情報？",
   options: [
     { label: "客戶", value: "client" },
     { label: "夥伴", value: "partner" },
+    { label: "政府補貼", value: "subsidy" },
     { label: "SI", value: "si" },
     { label: "其他", value: "other" },
   ],
   skipLabel: "稍後再說",
-  tbdQuestion: "確認角色",
+  tbdQuestion: "確認分類",
 };
 
 const CLIENT_QUESTIONS: QaQuestion[] = [
   {
     id: "industry",
     question: "什麼產業？",
-    options: [
-      { label: "食品業", value: "food" },
-      { label: "石化業", value: "petrochemical" },
-      { label: "半導體", value: "semiconductor" },
-      { label: "製造業", value: "manufacturing" },
-      { label: "其他", value: "other" },
-    ],
+    options: INDUSTRIES,
+    allowCustom: true,
     skipLabel: "稍後再問",
     tbdQuestion: "確認產業別",
   },
@@ -82,13 +80,9 @@ const CLIENT_QUESTIONS: QaQuestion[] = [
   {
     id: "budget",
     question: "預估預算範圍？",
-    options: [
-      { label: "< 100K", value: "<100K" },
-      { label: "100K - 500K", value: "100-500K" },
-      { label: "500K - 1M", value: "500K-1M" },
-      { label: "1M+", value: "1M+" },
-      { label: "未知", value: "unknown" },
-    ],
+    options: BUDGET_PRESETS.map((p) => ({ label: p.label, value: String(p.amount) })),
+    skipLabel: "稍後再問",
+    tbdQuestion: "確認預算範圍",
   },
 ];
 
@@ -117,6 +111,7 @@ const PARTNER_QUESTIONS: QaQuestion[] = [
       { label: "石化業", value: "petrochemical" },
       { label: "半導體", value: "semiconductor" },
       { label: "製造業", value: "manufacturing" },
+      { label: "系統整合", value: "system_integration" },
     ],
     skipLabel: "稍後再問",
     tbdQuestion: "確認產業經驗",
@@ -133,6 +128,33 @@ const PARTNER_QUESTIONS: QaQuestion[] = [
   },
 ];
 
+const SUBSIDY_QUESTIONS: QaQuestion[] = [
+  {
+    id: "subsidy_partner",
+    question: "預計合作夥伴？",
+    options: [
+      { label: "已有夥伴", value: "has_partner" },
+      { label: "尋找中", value: "searching" },
+      { label: "不需要", value: "not_required" },
+      { label: "未定", value: "undecided" },
+    ],
+    skipLabel: "稍後再問",
+    tbdQuestion: "確認補貼合作夥伴",
+  },
+  {
+    id: "subsidy_deadline",
+    question: "補助截止日期？",
+    options: [
+      { label: "一個月內", value: "within_1m" },
+      { label: "一到三個月", value: "1-3m" },
+      { label: "三個月以上", value: "3m+" },
+      { label: "未知", value: "unknown" },
+    ],
+    skipLabel: "稍後再問",
+    tbdQuestion: "確認補助截止日期",
+  },
+];
+
 // --- Component ---
 
 function QaFlow() {
@@ -145,6 +167,9 @@ function QaFlow() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [selected, setSelected] = useState<string[]>([]);
+  const [customInput, setCustomInput] = useState("");
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [extraOptions, setExtraOptions] = useState<Record<string, { label: string; value: string }[]>>({});
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -169,19 +194,36 @@ function QaFlow() {
     }
   };
 
+  const resetInputState = () => {
+    setSelected([]);
+    setCustomInput("");
+    setShowCustomInput(false);
+  };
+
   const processAnswer = useCallback(
     (answer: string | string[]) => {
       if (!currentQ) return;
       const newAnswers = { ...answers, [currentQ.id]: answer };
       setAnswers(newAnswers);
 
-      // If role question, determine branch
+      // If role question, determine branch and advance
       if (currentQ.id === "role") {
         const role = typeof answer === "string" ? answer : answer[0];
         if (role === "client") {
           setQuestions([ROLE_QUESTION, ...CLIENT_QUESTIONS]);
+          setCurrentIndex(1);
+          resetInputState();
+          return;
         } else if (role === "partner") {
           setQuestions([ROLE_QUESTION, ...PARTNER_QUESTIONS]);
+          setCurrentIndex(1);
+          resetInputState();
+          return;
+        } else if (role === "subsidy") {
+          setQuestions([ROLE_QUESTION, ...SUBSIDY_QUESTIONS]);
+          setCurrentIndex(1);
+          resetInputState();
+          return;
         } else {
           // SI / other — done after role
           finishFlow(newAnswers);
@@ -192,7 +234,7 @@ function QaFlow() {
       // Move to next question or finish
       if (currentIndex < questions.length - 1) {
         setCurrentIndex(currentIndex + 1);
-        setSelected([]);
+        resetInputState();
       } else {
         finishFlow(newAnswers);
       }
@@ -203,6 +245,22 @@ function QaFlow() {
   const handleMultiConfirm = () => {
     if (selected.length > 0) {
       processAnswer(selected);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (currentIndex > 0) {
+      const prevQ = questions[currentIndex - 1];
+      const prevAnswer = answers[prevQ.id];
+      // Restore previous selection state for multiSelect
+      if (prevQ.multiSelect && Array.isArray(prevAnswer)) {
+        setSelected(prevAnswer);
+      } else {
+        setSelected([]);
+      }
+      setCurrentIndex(currentIndex - 1);
+      setCustomInput("");
+      setShowCustomInput(false);
     }
   };
 
@@ -230,7 +288,7 @@ function QaFlow() {
 
     if (currentIndex < questions.length - 1) {
       setCurrentIndex(currentIndex + 1);
-      setSelected([]);
+      resetInputState();
     } else {
       finishFlow(answers);
     }
@@ -242,24 +300,13 @@ function QaFlow() {
       // Confirm intel with parsed answers
       await nxApi.intel.confirm(intelId, JSON.stringify(finalAnswers));
 
-      // Create client/partner if role was answered
-      const role = finalAnswers.role;
-      if (role === "client" && intel) {
-        const client = await nxApi.clients.create({
-          name: `Intel #${intelId}`,
-          industry: finalAnswers.industry as string,
-          budget_range: finalAnswers.budget as string,
-        });
-
-        // Update NDA/MOU if answered
-        // (simplified — in full version would update document records)
-        console.log("Client created:", client.id);
-      } else if (role === "partner" && intel) {
-        const partner = await nxApi.partners.create({
-          name: `Intel #${intelId}`,
-          team_size: finalAnswers.team_size as string,
-        });
-        console.log("Partner created:", partner.id);
+      // Auto-materialize entities from parsed intel
+      const matResult = await nxApi.intel.materialize(intelId);
+      if (matResult.client) {
+        console.log(`Client ${matResult.client.action}:`, matResult.client.id, matResult.client.name);
+      }
+      for (const c of matResult.contacts) {
+        console.log(`Contact ${c.action}:`, c.id, c.name);
       }
 
       setDone(true);
@@ -360,7 +407,7 @@ function QaFlow() {
 
             {/* Options grid */}
             <div className="grid grid-cols-2 gap-2">
-              {currentQ.options.map((opt) => {
+              {[...currentQ.options, ...(extraOptions[currentQ.id] || [])].map((opt) => {
                 const isSelected = currentQ.multiSelect
                   ? selected.includes(opt.value)
                   : answers[currentQ.id] === opt.value;
@@ -382,6 +429,87 @@ function QaFlow() {
                   </button>
                 );
               })}
+
+              {/* Add custom option tile */}
+              {(currentQ.multiSelect || currentQ.allowCustom) && !showCustomInput && (
+                <button
+                  onClick={() => setShowCustomInput(true)}
+                  className="min-h-[44px] px-4 py-3 text-sm font-medium rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-blue-500 hover:text-blue-500 transition-colors duration-200 cursor-pointer"
+                >
+                  + 自訂
+                </button>
+              )}
+
+              {/* Inline input tile */}
+              {(currentQ.multiSelect || currentQ.allowCustom) && showCustomInput && (
+                <div className="col-span-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={customInput}
+                    onChange={(e) => setCustomInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && customInput.trim()) {
+                        const val = customInput.trim();
+                        const allOpts = [...currentQ.options, ...(extraOptions[currentQ.id] || [])];
+                        if (!allOpts.some((o) => o.value === val || o.label === val)) {
+                          setExtraOptions((prev) => ({
+                            ...prev,
+                            [currentQ.id]: [...(prev[currentQ.id] || []), { label: val, value: val }],
+                          }));
+                        }
+                        if (currentQ.multiSelect) {
+                          setSelected((prev) => prev.includes(val) ? prev : [...prev, val]);
+                          setCustomInput("");
+                          setShowCustomInput(false);
+                        } else {
+                          setCustomInput("");
+                          setShowCustomInput(false);
+                          processAnswer(val);
+                        }
+                      }
+                      if (e.key === "Escape") {
+                        setCustomInput("");
+                        setShowCustomInput(false);
+                      }
+                    }}
+                    placeholder={`輸入自訂${currentQ.question.replace("？", "")}...`}
+                    className="flex-1 bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded-lg px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (!customInput.trim()) return;
+                      const val = customInput.trim();
+                      const allOpts = [...currentQ.options, ...(extraOptions[currentQ.id] || [])];
+                      if (!allOpts.some((o) => o.value === val || o.label === val)) {
+                        setExtraOptions((prev) => ({
+                          ...prev,
+                          [currentQ.id]: [...(prev[currentQ.id] || []), { label: val, value: val }],
+                        }));
+                      }
+                      if (currentQ.multiSelect) {
+                        setSelected((prev) => prev.includes(val) ? prev : [...prev, val]);
+                        setCustomInput("");
+                        setShowCustomInput(false);
+                      } else {
+                        setCustomInput("");
+                        setShowCustomInput(false);
+                        processAnswer(val);
+                      }
+                    }}
+                    disabled={!customInput.trim()}
+                    className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] cursor-pointer disabled:opacity-40 disabled:cursor-default transition-colors"
+                  >
+                    加入
+                  </button>
+                  <button
+                    onClick={() => { setCustomInput(""); setShowCustomInput(false); }}
+                    className="px-3 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-500 text-sm rounded-lg min-h-[44px] cursor-pointer transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Multi-select confirm button */}
@@ -396,9 +524,20 @@ function QaFlow() {
           </div>
         )}
 
-        {/* Skip button */}
-        {currentQ?.skipLabel && (
-          <div className="mt-4 flex justify-end">
+        {/* Navigation: back + skip */}
+        <div className="mt-4 flex items-center justify-between">
+          {currentIndex > 0 ? (
+            <button
+              onClick={handleGoBack}
+              className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-sm py-2 flex items-center gap-1 cursor-pointer transition-colors duration-200"
+            >
+              <ChevronLeft size={16} strokeWidth={1.5} />
+              上一步
+            </button>
+          ) : (
+            <div />
+          )}
+          {currentQ?.skipLabel && (
             <button
               onClick={handleSkip}
               className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-sm py-2 flex items-center gap-1 cursor-pointer transition-colors duration-200"
@@ -406,8 +545,8 @@ function QaFlow() {
               {currentQ.skipLabel}
               <ChevronRight size={16} strokeWidth={1.5} />
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Saving overlay */}
         {saving && (

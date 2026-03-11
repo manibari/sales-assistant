@@ -36,6 +36,7 @@ export interface NxClient {
   name: string;
   industry: string | null;
   budget_range: string | null;
+  deal_budget_total: number | null;
   status: string;
   notes: string | null;
   created_at: string;
@@ -61,10 +62,13 @@ export interface NxContact {
   title: string | null;
   phone: string | null;
   email: string | null;
+  line_id: string | null;
   org_type: string | null;
   org_id: number | null;
   role: string | null;
   notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface NxIntel {
@@ -75,6 +79,9 @@ export interface NxIntel {
   status: string;
   source_contact_id: number | null;
   created_at: string;
+  file_count?: number;
+  files?: NxFile[];
+  linked_deals?: { id: number; name: string; stage: string; status: string; client_name: string }[];
 }
 
 export interface NxDeal {
@@ -85,11 +92,16 @@ export interface NxDeal {
   client_industry?: string;
   stage: string;
   budget_range: string | null;
+  budget_amount: number | null;
+  budget_year: number | null;
   timeline: string | null;
   meddic_json: string | null;
+  close_reason: string | null;
+  close_notes: string | null;
   status: string;
   idle_days?: number;
   last_activity_at: string;
+  created_at?: string;
   partners?: NxDealPartner[];
   intel?: NxIntel[];
   tbds?: NxTbdItem[];
@@ -141,6 +153,7 @@ export interface NxMeeting {
   client_name?: string;
   title: string;
   meeting_date: string;
+  duration_minutes: number;
   participants_json: string | null;
   status: string;
 }
@@ -157,13 +170,42 @@ export interface NxReminder {
 
 export interface NxFile {
   id: number;
-  deal_id: number;
+  deal_id: number | null;
+  intel_id: number | null;
   file_type: string;
   file_name: string;
   file_path: string;
+  file_size: number | null;
   source_url: string | null;
   parsed_json: string | null;
   parse_status: string;
+}
+
+export interface NxSubsidy {
+  id: number;
+  name: string;
+  source: string | null;
+  agency: string | null;
+  program_type: string;
+  eligibility: string | null;
+  funding_amount: string | null;
+  scope: string | null;
+  required_docs: string | null;
+  deadline: string | null;
+  deadline_date: string | null;
+  reference_url: string | null;
+  stage: string;
+  client_id: number | null;
+  client_name?: string;
+  partner_id: number | null;
+  partner_name?: string;
+  notes: string | null;
+  status: string;
+  days_left?: number;
+  created_at: string;
+  updated_at: string;
+  deals?: { deal_id: number; deal_name: string; deal_stage: string; deal_status: string; client_name: string }[];
+  intel?: NxIntel[];
 }
 
 export interface MeddicProgress {
@@ -171,6 +213,27 @@ export interface MeddicProgress {
   total: number;
   missing: string[];
   details?: Record<string, string | null>;
+}
+
+export interface MaterializeResult {
+  intel_id: number;
+  client: { id: number; name: string; action: "created" | "matched" } | null;
+  partner: { id: number; name: string; action: "created" | "matched" } | null;
+  contacts: { id: number; name: string; action: "created" | "matched" }[];
+  subsidy: { id: number; name: string; action: "created" | "matched" } | null;
+  tags_applied: string[];
+  fields_indexed: number;
+  error?: string;
+}
+
+export interface IntelEntity {
+  id: number;
+  intel_id: number;
+  entity_type: string;
+  entity_id: number;
+  relation: string;
+  entity_name: string | null;
+  created_at: string;
 }
 
 // --- API ---
@@ -181,9 +244,34 @@ export interface SearchResults {
   partners: { id: number; name: string; trust_level: string }[];
   contacts: { id: number; name: string; title: string | null; org_type: string | null; org_id: number | null }[];
   intel: { id: number; raw_input: string; status: string; created_at: string }[];
+  subsidies: { id: number; name: string; agency: string | null; program_type: string; stage: string; deadline: string | null; status: string }[];
 }
 
 export const nxApi = {
+  subsidies: {
+    list: (view?: string, clientId?: number) => {
+      const params = new URLSearchParams();
+      if (view) params.set("view", view);
+      if (clientId) params.set("client_id", String(clientId));
+      const qs = params.toString();
+      return fetchAPI<NxSubsidy[]>(`/subsidies/${qs ? `?${qs}` : ""}`);
+    },
+    expiring: (days?: number) =>
+      fetchAPI<NxSubsidy[]>(`/subsidies/expiring${days ? `?within_days=${days}` : ""}`),
+    get: (id: number) => fetchAPI<NxSubsidy>(`/subsidies/${id}`),
+    create: (data: Partial<NxSubsidy> & { name: string }) =>
+      postAPI<NxSubsidy>("/subsidies/", data),
+    update: (id: number, data: Partial<NxSubsidy>) =>
+      patchAPI<NxSubsidy>(`/subsidies/${id}`, data),
+    advance: (id: number, stage: string) =>
+      postAPI<NxSubsidy>(`/subsidies/${id}/advance?stage=${stage}`, {}),
+    close: (id: number, notes?: string) =>
+      postAPI<NxSubsidy>(`/subsidies/${id}/close`, { notes }),
+    linkDeal: (subsidyId: number, dealId: number) =>
+      postAPI<unknown>(`/subsidies/${subsidyId}/deals`, { deal_id: dealId }),
+    unlinkDeal: (subsidyId: number, dealId: number) =>
+      deleteAPI(`/subsidies/${subsidyId}/deals/${dealId}`),
+  },
   clients: {
     list: (status?: string) => fetchAPI<NxClient[]>(`/clients/${status ? `?status=${status}` : ""}`),
     get: (id: number) => fetchAPI<NxClient>(`/clients/${id}`),
@@ -191,6 +279,7 @@ export const nxApi = {
       postAPI<NxClient>("/clients/", data),
     update: (id: number, data: Partial<NxClient>) =>
       patchAPI<NxClient>(`/clients/${id}`, data),
+    delete: (id: number) => deleteAPI(`/clients/${id}`),
   },
   partners: {
     list: (trustLevel?: string) => fetchAPI<NxPartner[]>(`/partners/${trustLevel ? `?trust_level=${trustLevel}` : ""}`),
@@ -199,6 +288,7 @@ export const nxApi = {
       postAPI<NxPartner>("/partners/", data),
     update: (id: number, data: Partial<NxPartner>) =>
       patchAPI<NxPartner>(`/partners/${id}`, data),
+    delete: (id: number) => deleteAPI(`/partners/${id}`),
   },
   contacts: {
     list: (orgType?: string, orgId?: number) => {
@@ -211,6 +301,8 @@ export const nxApi = {
     get: (id: number) => fetchAPI<NxContact>(`/contacts/${id}`),
     create: (data: Partial<NxContact> & { name: string }) =>
       postAPI<NxContact>("/contacts/", data),
+    update: (id: number, data: Partial<NxContact>) =>
+      patchAPI<NxContact>(`/contacts/${id}`, data),
   },
   intel: {
     list: (status?: string, limit?: number) => {
@@ -225,12 +317,21 @@ export const nxApi = {
       postAPI<NxIntel>("/intel/", data),
     confirm: (id: number, parsed_json?: string) =>
       postAPI<NxIntel>(`/intel/${id}/confirm`, { parsed_json }),
+    materialize: (id: number) =>
+      postAPI<MaterializeResult>(`/intel/${id}/materialize`, {}),
+    getEntities: (id: number) =>
+      fetchAPI<IntelEntity[]>(`/intel/${id}/entities`),
+    byEntity: (entityType: string, entityId: number) =>
+      fetchAPI<NxIntel[]>(`/intel/by-entity/${entityType}/${entityId}`),
+    delete: (id: number) => deleteAPI(`/intel/${id}`),
   },
   deals: {
     list: (view?: string) => fetchAPI<NxDeal[]>(`/deals/?view=${view || "urgency"}`),
+    listByClient: (clientId: number) => fetchAPI<NxDeal[]>(`/deals/?client_id=${clientId}`),
+    listByPartner: (partnerId: number) => fetchAPI<NxDeal[]>(`/deals/?partner_id=${partnerId}`),
     needsPush: (days?: number) => fetchAPI<NxDeal[]>(`/deals/needs-push${days ? `?threshold_days=${days}` : ""}`),
     get: (id: number) => fetchAPI<NxDeal>(`/deals/${id}`),
-    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string }) =>
+    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string; budget_amount?: number; budget_year?: number }) =>
       postAPI<NxDeal>("/deals/", data),
     update: (id: number, data: Partial<NxDeal>) =>
       patchAPI<NxDeal>(`/deals/${id}`, data),
@@ -240,14 +341,22 @@ export const nxApi = {
       postAPI<NxDeal>(`/deals/${id}/close`, { reason, notes }),
     addPartner: (dealId: number, partnerId: number, role?: string) =>
       postAPI<NxDealPartner>(`/deals/${dealId}/partners`, { partner_id: partnerId, role }),
+    removePartner: (dealId: number, partnerId: number) =>
+      deleteAPI(`/deals/${dealId}/partners/${partnerId}`),
     linkIntel: (dealId: number, intelId: number) =>
       postAPI<unknown>(`/deals/${dealId}/intel`, { intel_id: intelId }),
+    unlinkIntel: (dealId: number, intelId: number) =>
+      deleteAPI(`/deals/${dealId}/intel/${intelId}`),
   },
   calendar: {
+    getMeeting: (id: number) => fetchAPI<NxMeeting>(`/calendar/meetings/${id}`),
+    meetingsByDeal: (dealId: number) => fetchAPI<NxMeeting[]>(`/calendar/meetings?deal_id=${dealId}`),
     meetingsByDate: (date: string) => fetchAPI<NxMeeting[]>(`/calendar/meetings?date=${date}`),
     meetingsByMonth: (year: number, month: number) =>
       fetchAPI<NxMeeting[]>(`/calendar/meetings/month/${year}/${month}`),
-    createMeeting: (data: { deal_id: number; title: string; meeting_date: string; participants_json?: string }) =>
+    meetingsByRange: (start: string, end: string) =>
+      fetchAPI<NxMeeting[]>(`/calendar/meetings/range?start=${start}&end=${end}`),
+    createMeeting: (data: { deal_id: number; title: string; meeting_date: string; duration_minutes?: number; participants_json?: string }) =>
       postAPI<NxMeeting>("/calendar/meetings", data),
     remindersByDate: (date: string) => fetchAPI<NxReminder[]>(`/calendar/reminders?date=${date}`),
     remindersByMonth: (year: number, month: number) =>
@@ -274,5 +383,21 @@ export const nxApi = {
     getEntityTags: (entityType: string, entityId: number) =>
       fetchAPI<NxTag[]>(`/tags/entity/${entityType}/${entityId}`),
   },
+  files: {
+    update: (fileId: number, data: { file_name?: string; file_type?: string }) =>
+      patchAPI<NxFile>(`/documents/files/${fileId}`, data),
+  },
+  documents: {
+    listAll: () => fetchAPI<(NxDocument & { client_name?: string })[]>("/documents/nda-mou"),
+    listByClient: (clientId: number) => fetchAPI<NxDocument[]>(`/documents/nda-mou?client_id=${clientId}`),
+    expiring: (withinDays?: number) =>
+      fetchAPI<(NxDocument & { client_name?: string })[]>(`/documents/nda-mou/expiring?within_days=${withinDays || 30}`),
+    update: (docId: number, data: Partial<NxDocument>) =>
+      patchAPI<NxDocument>(`/documents/nda-mou/${docId}`, data),
+  },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
+  searchIntelFields: (key: string, value: string) =>
+    fetchAPI<{ id: number; raw_input: string; status: string; created_at: string; field_key: string; field_value: string }[]>(
+      `/search/intel-fields?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`
+    ),
 };

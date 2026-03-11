@@ -21,6 +21,26 @@ import {
 } from "@/lib/nexus-api";
 import Link from "next/link";
 
+const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+
+const STATUS_STYLES: Record<string, { label: string; cls: string }> = {
+  scheduled: { label: "已排定", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  completed: { label: "已完成", cls: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300" },
+  cancelled: { label: "已取消", cls: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400" },
+};
+
+function formatMeetingTime(isoDate: string, durationMin: number) {
+  const d = new Date(isoDate);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dateStr = `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())}（${WEEKDAYS[d.getDay()]}）`;
+  const startH = pad(d.getHours());
+  const startM = pad(d.getMinutes());
+  const end = new Date(d.getTime() + durationMin * 60000);
+  const endH = pad(end.getHours());
+  const endM = pad(end.getMinutes());
+  return { dateStr, timeRange: `${startH}:${startM} — ${endH}:${endM}`, duration: `${durationMin} 分鐘` };
+}
+
 export default function MeetingPrepPage() {
   const params = useParams();
   const router = useRouter();
@@ -33,20 +53,13 @@ export default function MeetingPrepPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const m = await nxApi.calendar.meetingsByDate("").catch(() => null);
-      // Fetch meeting directly — we need to get deal info
-      // Since we don't have a single meeting endpoint exposed via calendar,
-      // we load the deal and find meeting info
-      const allDeals = await nxApi.deals.list();
-      // Load meeting from each deal's meetings
-      for (const d of allDeals) {
-        const fullDeal = await nxApi.deals.get(d.id);
-        setDeal(fullDeal);
-        setTbds(fullDeal.tbds || []);
-        break; // For now, show first deal's prep
-      }
+      const m = await nxApi.calendar.getMeeting(meetingId);
+      setMeeting(m);
+      const fullDeal = await nxApi.deals.get(m.deal_id);
+      setDeal(fullDeal);
+      setTbds(fullDeal.tbds || []);
     } catch (err) {
-      console.error("Failed to load:", err);
+      console.error("Failed to load meeting:", err);
     } finally {
       setLoading(false);
     }
@@ -82,6 +95,24 @@ export default function MeetingPrepPage() {
       </TopBar>
 
       <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl lg:max-w-4xl mx-auto w-full space-y-4">
+        {/* Meeting info */}
+        {meeting && (() => {
+          const { dateStr, timeRange, duration } = formatMeetingTime(meeting.meeting_date, meeting.duration_minutes || 60);
+          const status = STATUS_STYLES[meeting.status] || STATUS_STYLES.scheduled;
+          return (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+              <div className="flex items-start justify-between mb-2">
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">{meeting.title}</h2>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.cls}`}>{status.label}</span>
+              </div>
+              <div className="space-y-1 text-sm text-slate-600 dark:text-slate-400">
+                <p>{dateStr}</p>
+                <p>{timeRange}（{duration}）</p>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Deal header */}
         {deal && (
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">

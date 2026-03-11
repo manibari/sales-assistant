@@ -32,12 +32,19 @@ def get_all_intel(status: str | None = None, limit: int = 50) -> list[dict]:
         with conn.cursor() as cur:
             if status:
                 cur.execute(
-                    "SELECT * FROM nx_intel WHERE status = %s ORDER BY created_at DESC LIMIT %s",
+                    """SELECT i.*,
+                              (SELECT COUNT(*) FROM nx_file f WHERE f.intel_id = i.id) AS file_count
+                       FROM nx_intel i
+                       WHERE i.status = %s
+                       ORDER BY i.created_at DESC LIMIT %s""",
                     (status, limit),
                 )
             else:
                 cur.execute(
-                    "SELECT * FROM nx_intel ORDER BY created_at DESC LIMIT %s",
+                    """SELECT i.*,
+                              (SELECT COUNT(*) FROM nx_file f WHERE f.intel_id = i.id) AS file_count
+                       FROM nx_intel i
+                       ORDER BY i.created_at DESC LIMIT %s""",
                     (limit,),
                 )
             return rows_to_dicts(cur)
@@ -79,8 +86,117 @@ def update_intel(intel_id: int, **fields) -> dict | None:
             return row_to_dict(cur)
 
 
+def get_intel_linked_deals(intel_id: int) -> list[dict]:
+    """Get deals linked to this intel via nx_deal_intel."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT d.id, d.name, d.stage, d.status, c.name AS client_name
+                   FROM nx_deal_intel di
+                   JOIN nx_deal d ON di.deal_id = d.id
+                   JOIN nx_client c ON d.client_id = c.id
+                   WHERE di.intel_id = %s""",
+                (intel_id,),
+            )
+            return rows_to_dicts(cur)
+
+
 def delete_intel(intel_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_intel WHERE id = %s", (intel_id,))
             return cur._cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Intel ↔ Entity linking (nx_intel_entity)
+# ---------------------------------------------------------------------------
+
+def link_intel_entity(
+    intel_id: int, entity_type: str, entity_id: int, relation: str = "mentioned"
+) -> dict | None:
+    """Link an intel to an entity. INSERT OR IGNORE for idempotency."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT OR IGNORE INTO nx_intel_entity (intel_id, entity_type, entity_id, relation)
+                   VALUES (%s, %s, %s, %s)""",
+                (intel_id, entity_type, entity_id, relation),
+            )
+            # Return the row (may already exist)
+            cur.execute(
+                """SELECT * FROM nx_intel_entity
+                   WHERE intel_id = %s AND entity_type = %s AND entity_id = %s""",
+                (intel_id, entity_type, entity_id),
+            )
+            return row_to_dict(cur)
+
+
+def get_intel_entities(intel_id: int) -> list[dict]:
+    """Get all entities linked to an intel."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT ie.*,
+                          CASE ie.entity_type
+                            WHEN 'client' THEN (SELECT name FROM nx_client WHERE id = ie.entity_id)
+                            WHEN 'partner' THEN (SELECT name FROM nx_partner WHERE id = ie.entity_id)
+                            WHEN 'contact' THEN (SELECT name FROM nx_contact WHERE id = ie.entity_id)
+                            WHEN 'deal' THEN (SELECT name FROM nx_deal WHERE id = ie.entity_id)
+                          END AS entity_name
+                   FROM nx_intel_entity ie
+                   WHERE ie.intel_id = %s
+                   ORDER BY ie.entity_type, ie.entity_id""",
+                (intel_id,),
+            )
+            return rows_to_dicts(cur)
+
+
+def get_entity_intel(entity_type: str, entity_id: int) -> list[dict]:
+    """Get all intel linked to a specific entity."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT i.*, ie.relation
+                   FROM nx_intel_entity ie
+                   JOIN nx_intel i ON ie.intel_id = i.id
+                   WHERE ie.entity_type = %s AND ie.entity_id = %s
+                   ORDER BY i.created_at DESC""",
+                (entity_type, entity_id),
+            )
+            return rows_to_dicts(cur)
+
+
+# ---------------------------------------------------------------------------
+# Intel field index (nx_intel_field)
+# ---------------------------------------------------------------------------
+
+def materialize_intel_fields(intel_id: int, parsed: dict) -> int:
+    """Flatten parsed_json into nx_intel_field rows. Returns count of fields indexed.
+
+    Idempotent: deletes existing rows for this intel_id then re-inserts.
+    Array values are split into separate rows.
+    """
+    count = 0
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM nx_intel_field WHERE intel_id = %s", (intel_id,))
+            for key, value in parsed.items():
+                if value is None:
+                    continue
+                if isinstance(value, list):
+                    for item in value:
+                        cur.execute(
+                            """INSERT OR IGNORE INTO nx_intel_field (intel_id, field_key, field_value)
+                               VALUES (%s, %s, %s)""",
+                            (intel_id, key, str(item)),
+                        )
+                        count += 1
+                else:
+                    cur.execute(
+                        """INSERT OR IGNORE INTO nx_intel_field (intel_id, field_key, field_value)
+                           VALUES (%s, %s, %s)""",
+                        (intel_id, key, str(value)),
+                    )
+                    count += 1
+    return count

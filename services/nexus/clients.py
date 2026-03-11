@@ -1,5 +1,7 @@
 """Nexus client service — CRUD for client organizations."""
 
+import json
+
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
@@ -37,8 +39,28 @@ def _auto_create_documents(client_id: int) -> None:
 def get_client(client_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM nx_client WHERE id = %s", (client_id,))
-            return row_to_dict(cur)
+            cur.execute(
+                """SELECT c.*,
+                          (SELECT SUM(d.budget_amount)
+                           FROM nx_deal d
+                           WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
+                   FROM nx_client c WHERE c.id = %s""",
+                (client_id,),
+            )
+            client = row_to_dict(cur)
+            if not client:
+                return None
+            # Add per-year breakdown
+            cur.execute(
+                """SELECT d.budget_year AS year, SUM(d.budget_amount) AS total
+                   FROM nx_deal d
+                   WHERE d.client_id = %s AND d.status = 'active' AND d.budget_amount IS NOT NULL
+                   GROUP BY d.budget_year
+                   ORDER BY d.budget_year""",
+                (client_id,),
+            )
+            client["deal_budgets_by_year"] = rows_to_dicts(cur)
+            return client
 
 
 def get_all_clients(status: str | None = None) -> list[dict]:
@@ -46,18 +68,28 @@ def get_all_clients(status: str | None = None) -> list[dict]:
         with conn.cursor() as cur:
             if status:
                 cur.execute(
-                    "SELECT * FROM nx_client WHERE status = %s ORDER BY updated_at DESC",
+                    """SELECT c.*,
+                              (SELECT SUM(d.budget_amount)
+                               FROM nx_deal d
+                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
+                       FROM nx_client c WHERE c.status = %s ORDER BY c.updated_at DESC""",
                     (status,),
                 )
             else:
-                cur.execute("SELECT * FROM nx_client ORDER BY updated_at DESC")
+                cur.execute(
+                    """SELECT c.*,
+                              (SELECT SUM(d.budget_amount)
+                               FROM nx_deal d
+                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
+                       FROM nx_client c ORDER BY c.updated_at DESC"""
+                )
             return rows_to_dicts(cur)
 
 
 def update_client(client_id: int, **fields) -> dict | None:
     if not fields:
         return get_client(client_id)
-    allowed = {"name", "industry", "budget_range", "status", "notes"}
+    allowed = {"name", "industry", "budget_range", "status", "notes", "aliases"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_client(client_id)
@@ -70,6 +102,27 @@ def update_client(client_id: int, **fields) -> dict | None:
                 values,
             )
             return row_to_dict(cur)
+
+
+def find_client_by_name(name: str) -> list[dict]:
+    """Fuzzy match client by name or aliases. Returns candidate list sorted by match quality."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            q = f"%{name}%"
+            cur.execute(
+                """SELECT id, name, industry, status, aliases
+                   FROM nx_client
+                   WHERE name LIKE %s OR aliases LIKE %s
+                   ORDER BY
+                     CASE
+                       WHEN LOWER(name) = LOWER(%s) THEN 0
+                       WHEN LOWER(name) LIKE LOWER(%s) THEN 1
+                       ELSE 2
+                     END,
+                     updated_at DESC""",
+                (q, q, name, q),
+            )
+            return rows_to_dicts(cur)
 
 
 def delete_client(client_id: int) -> bool:

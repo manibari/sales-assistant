@@ -5,6 +5,19 @@ from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 # --- NDA/MOU Document Tracking ---
 
+def get_all_documents() -> list[dict]:
+    """Get all NDA/MOU documents with client names."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT d.*, c.name AS client_name
+                   FROM nx_document d
+                   JOIN nx_client c ON d.client_id = c.id
+                   ORDER BY d.expiry_date ASC NULLS LAST"""
+            )
+            return rows_to_dicts(cur)
+
+
 def get_documents_by_client(client_id: int) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -61,20 +74,21 @@ def get_expiring_documents(within_days: int = 30) -> list[dict]:
 # --- File Uploads ---
 
 def create_file(
-    deal_id: int,
-    file_type: str,
-    file_name: str,
-    file_path: str,
+    deal_id: int | None = None,
+    file_type: str = "attachment",
+    file_name: str = "",
+    file_path: str = "",
     file_size: int | None = None,
     source_url: str | None = None,
+    intel_id: int | None = None,
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_file (deal_id, file_type, file_name, file_path, file_size, source_url)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_file (deal_id, intel_id, file_type, file_name, file_path, file_size, source_url)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, file_type, file_name, file_path, file_size, source_url),
+                (deal_id, intel_id, file_type, file_name, file_path, file_size, source_url),
             )
             return row_to_dict(cur)
 
@@ -87,6 +101,34 @@ def get_files_by_deal(deal_id: int) -> list[dict]:
                 (deal_id,),
             )
             return rows_to_dicts(cur)
+
+
+def get_files_by_intel(intel_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT * FROM nx_file WHERE intel_id = %s ORDER BY created_at DESC",
+                (intel_id,),
+            )
+            return rows_to_dicts(cur)
+
+
+def update_file(file_id: int, **fields) -> dict | None:
+    if not fields:
+        return get_file(file_id)
+    allowed = {"file_name", "file_type"}
+    filtered = {k: v for k, v in fields.items() if k in allowed}
+    if not filtered:
+        return get_file(file_id)
+    set_clause = ", ".join(f"{k} = %s" for k in filtered)
+    values = list(filtered.values()) + [file_id]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE nx_file SET {set_clause} WHERE id = %s RETURNING *",
+                values,
+            )
+            return row_to_dict(cur)
 
 
 def update_file_parse(file_id: int, parsed_json: str, parse_status: str = "parsed") -> dict | None:

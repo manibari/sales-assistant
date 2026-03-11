@@ -9,13 +9,14 @@ import {
   Handshake,
   User,
   Zap,
+  Landmark,
   Loader2,
   ChevronLeft,
 } from "lucide-react";
 import { nxApi, type SearchResults } from "@/lib/nexus-api";
 import Link from "next/link";
 
-type TabKey = "all" | "deals" | "clients" | "partners" | "contacts" | "intel";
+type TabKey = "all" | "deals" | "clients" | "partners" | "contacts" | "intel" | "subsidies";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "all", label: "全部" },
@@ -24,6 +25,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "partners", label: "夥伴" },
   { key: "contacts", label: "人物" },
   { key: "intel", label: "情報" },
+  { key: "subsidies", label: "補助案" },
 ];
 
 export default function SearchPage() {
@@ -53,7 +55,7 @@ export default function SearchPage() {
   };
 
   const totalCount = results
-    ? results.deals.length + results.clients.length + results.partners.length + results.contacts.length + results.intel.length
+    ? results.deals.length + results.clients.length + results.partners.length + results.contacts.length + results.intel.length + (results.subsidies?.length || 0)
     : 0;
 
   return (
@@ -189,6 +191,20 @@ export default function SearchPage() {
                       {i.status} · {new Date(i.created_at).toLocaleDateString("zh-TW")}
                     </p>
                   </div>
+                ))}
+              </ResultSection>
+            )}
+
+            {/* Subsidies */}
+            {(tab === "all" || tab === "subsidies") && (results.subsidies?.length || 0) > 0 && (
+              <ResultSection title="補助案" icon={Landmark} count={results.subsidies.length}>
+                {results.subsidies.map((s) => (
+                  <Link key={s.id} href={`/subsidies/${s.id}`} className="block py-2 cursor-pointer group">
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-50 group-hover:text-blue-500 transition-colors">
+                      {s.name}
+                    </p>
+                    <p className="text-xs text-slate-400">{s.agency || "—"} · {s.stage}{s.deadline ? ` · 截止 ${s.deadline}` : ""}</p>
+                  </Link>
                 ))}
               </ResultSection>
             )}

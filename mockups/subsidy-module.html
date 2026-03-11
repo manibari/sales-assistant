@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup — Subsidy Module</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .view-fade { animation: fadeIn 0.15s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .no-select { user-select: none; -webkit-user-select: none; }
+  </style>
+</head>
+<body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans">
+
+  <div class="flex h-screen">
+
+    <!-- Sidebar -->
+    <aside class="hidden lg:flex flex-col w-56 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+      <div class="h-14 flex items-center px-5 border-b border-slate-200 dark:border-slate-800">
+        <span class="text-lg font-bold text-slate-900 dark:text-slate-50 tracking-tight">Project Nexus</span>
+      </div>
+      <nav class="flex-1 py-3 px-3 space-y-0.5 overflow-auto custom-scroll">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i><span>控制台</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="trending-up" class="w-5 h-5"></i><span>商機 Pipeline</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="calendar" class="w-5 h-5"></i><span>行事曆</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="plus" class="w-5 h-5"></i><span>新增情報</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="zap" class="w-5 h-5"></i><span>情報 Feed</span>
+        </a>
+        <a href="#" onclick="navigate('list'); return false;" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-blue-500/10 text-blue-500 dark:text-blue-400 font-medium transition-colors">
+          <i data-lucide="landmark" class="w-5 h-5"></i><span>補助案</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="book-user" class="w-5 h-5"></i><span>通訊錄</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="file-check" class="w-5 h-5"></i><span>文件追蹤</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <i data-lucide="search" class="w-5 h-5"></i><span>搜尋</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- ==================== SCREEN 1: LIST ==================== -->
+      <div id="screen-list" class="flex flex-col h-full">
+        <!-- TopBar -->
+        <div class="h-14 flex items-center justify-between px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+          <h2 class="text-base font-semibold">補助案</h2>
+          <div class="flex items-center gap-2">
+            <button onclick="navigate('new')" class="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors">
+              <i data-lucide="plus" class="w-5 h-5"></i>
+            </button>
+            <button onclick="toggleListView()" id="view-toggle-btn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+              階段
+            </button>
+          </div>
+        </div>
+
+        <!-- List Content -->
+        <div class="flex-1 overflow-auto custom-scroll p-4 md:p-6">
+          <!-- Stage View -->
+          <div id="list-stage-view" class="space-y-4 view-fade"></div>
+          <!-- Deadline View -->
+          <div id="list-deadline-view" class="space-y-3 view-fade hidden"></div>
+        </div>
+      </div>
+
+      <!-- ==================== SCREEN 2: DETAIL ==================== -->
+      <div id="screen-detail" class="flex flex-col h-full hidden">
+        <!-- TopBar -->
+        <div class="h-14 flex items-center gap-3 px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+          <button onclick="navigate('list')" class="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer transition-colors">
+            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+          </button>
+          <h2 class="text-base font-semibold truncate" id="detail-title">補助案詳情</h2>
+        </div>
+
+        <!-- Detail Content -->
+        <div class="flex-1 overflow-auto custom-scroll p-4 md:p-6">
+          <div class="max-w-6xl mx-auto">
+            <!-- Pipeline Bar -->
+            <div class="mb-6" id="detail-pipeline"></div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <!-- Left Column (3/5) -->
+              <div class="lg:col-span-3 space-y-4" id="detail-left"></div>
+              <!-- Right Column (2/5) -->
+              <div class="lg:col-span-2 space-y-4" id="detail-right"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== SCREEN 3: NEW ==================== -->
+      <div id="screen-new" class="flex flex-col h-full hidden">
+        <!-- TopBar -->
+        <div class="h-14 flex items-center gap-3 px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+          <button onclick="navigate('list')" class="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 cursor-pointer transition-colors">
+            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+          </button>
+          <h2 class="text-base font-semibold">新增補助案</h2>
+        </div>
+
+        <!-- New Form Content -->
+        <div class="flex-1 overflow-auto custom-scroll p-4 md:p-6">
+          <div class="max-w-2xl mx-auto space-y-6">
+            <!-- Name -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">補助案名稱 <span class="text-red-400">*</span></label>
+              <input type="text" placeholder="例：113年度 SBIR 創新研發計畫" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors" />
+            </div>
+
+            <!-- Program Type (select grid) -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">計畫類型</label>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="type-grid">
+                <button onclick="selectType(this, 'sbir')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">SBIR</button>
+                <button onclick="selectType(this, 'siir')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">SIIR</button>
+                <button onclick="selectType(this, 'citd')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">CITD</button>
+                <button onclick="selectType(this, 'local')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">地方型</button>
+                <button onclick="selectType(this, 'ditl')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">DITL</button>
+                <button onclick="selectType(this, 'other')" class="type-btn px-3 py-2.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-blue-500 transition-colors cursor-pointer min-h-[44px]">其他</button>
+              </div>
+            </div>
+
+            <!-- Agency -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">主辦機關</label>
+              <input type="text" placeholder="例：經濟部中小企業處" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors" />
+            </div>
+
+            <!-- Deadline + Funding Amount -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-400 mb-1.5">截止日期</label>
+                <input type="date" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none transition-colors" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-400 mb-1.5">補助金額</label>
+                <input type="text" placeholder="例：50-100萬" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors" />
+              </div>
+            </div>
+
+            <!-- Eligibility -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">申請資格</label>
+              <textarea rows="2" placeholder="申請資格條件說明..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors resize-none"></textarea>
+            </div>
+
+            <!-- Scope -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">補助範圍</label>
+              <textarea rows="2" placeholder="補助涵蓋項目..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors resize-none"></textarea>
+            </div>
+
+            <!-- Required Docs -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">必備文件</label>
+              <textarea rows="2" placeholder="例：營業計畫書、財務報表..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors resize-none"></textarea>
+            </div>
+
+            <!-- Reference URL -->
+            <div>
+              <label class="block text-sm font-medium text-slate-400 mb-1.5">參考連結</label>
+              <input type="url" placeholder="https://..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:border-blue-500 focus:outline-none transition-colors" />
+            </div>
+
+            <!-- Client / Partner -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-400 mb-1.5">關聯客戶</label>
+                <select class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none transition-colors min-h-[44px]">
+                  <option value="">-- 選擇客戶 --</option>
+                  <option>台灣精密機械</option>
+                  <option>南科聯合科技</option>
+                  <option>永信智能系統</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-400 mb-1.5">關聯夥伴</label>
+                <select class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none transition-colors min-h-[44px]">
+                  <option value="">-- 選擇夥伴 --</option>
+                  <option>創研顧問</option>
+                  <option>大同大學產學合作處</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="pt-2">
+              <button onclick="alert('已建立補助案（模擬）'); navigate('list');" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-lg px-4 py-3 text-sm transition-colors cursor-pointer min-h-[44px]">
+                建立補助案
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+<script>
+// ===== DATA =====
+const STAGES = [
+  { key: 'draft', label: '草稿', color: 'bg-slate-400', text: 'text-slate-400', badge: 'bg-slate-400/10 text-slate-400' },
+  { key: 'evaluating', label: '評估中', color: 'bg-blue-400', text: 'text-blue-400', badge: 'bg-blue-400/10 text-blue-400' },
+  { key: 'applying', label: '申請中', color: 'bg-cyan-400', text: 'text-cyan-400', badge: 'bg-cyan-400/10 text-cyan-400' },
+  { key: 'under_review', label: '審查中', color: 'bg-amber-400', text: 'text-amber-400', badge: 'bg-amber-400/10 text-amber-400' },
+  { key: 'approved', label: '核定', color: 'bg-green-500', text: 'text-green-500', badge: 'bg-green-500/10 text-green-500' },
+  { key: 'rejected', label: '未通過', color: 'bg-red-500', text: 'text-red-500', badge: 'bg-red-500/10 text-red-500' },
+  { key: 'executing', label: '執行中', color: 'bg-purple-500', text: 'text-purple-500', badge: 'bg-purple-500/10 text-purple-500' },
+  { key: 'completed', label: '結案', color: 'bg-slate-500', text: 'text-slate-500', badge: 'bg-slate-500/10 text-slate-500' },
+];
+
+const TYPE_LABELS = { sbir: 'SBIR', siir: 'SIIR', citd: 'CITD', local: '地方型', ditl: 'DITL', other: '其他' };
+const TYPE_BADGES = { sbir: 'bg-blue-500/10 text-blue-400', siir: 'bg-purple-500/10 text-purple-400', citd: 'bg-cyan-500/10 text-cyan-400', local: 'bg-amber-500/10 text-amber-400', ditl: 'bg-green-500/10 text-green-400', other: 'bg-slate-500/10 text-slate-400' };
+
+const subsidies = [
+  {
+    id: 1,
+    name: '113年度 SBIR 創新研發計畫',
+    agency: '經濟部中小企業處',
+    program_type: 'sbir',
+    stage: 'applying',
+    deadline: '2026-04-15',
+    funding_amount: '50-100萬',
+    source: '政府公告',
+    eligibility: '依法登記之中小企業，實收資本額不超過8,000萬元',
+    scope: '研發費用、人事費、設備費、材料費',
+    required_docs: '營業計畫書、公司登記證明、財務報表（最近3年）、研發計畫書',
+    reference_url: 'https://www.sbir.org.tw',
+    notes: '第二梯次申請，需注意計畫書格式改版',
+    client: '台灣精密機械',
+    partner: '創研顧問',
+    deals: [{ name: '精密機械 IoT 升級案', stage: 'L2', amount: '280萬' }],
+    intels: [{ title: 'SBIR 113年度簡章公告', date: '2026-02-20' }],
+    files: [{ name: '計畫書草稿v2.docx', size: '2.4 MB' }, { name: '財務報表.pdf', size: '1.1 MB' }],
+  },
+  {
+    id: 2,
+    name: '台南市智慧製造補助',
+    agency: '台南市經發局',
+    program_type: 'local',
+    stage: 'evaluating',
+    deadline: '2026-05-30',
+    funding_amount: '最高200萬',
+    source: '地方政府',
+    eligibility: '設籍台南市之製造業者',
+    scope: '智慧化設備、系統導入、顧問輔導費',
+    required_docs: '申請表、公司登記、工廠登記、導入計畫書',
+    reference_url: 'https://www.tainan.gov.tw',
+    notes: '與南科案合併評估效益',
+    client: '南科聯合科技',
+    partner: null,
+    deals: [{ name: '南科產線自動化', stage: 'L1', amount: '150萬' }],
+    intels: [{ title: '台南市113年度補助公告', date: '2026-03-01' }, { title: '智慧製造趨勢報告', date: '2026-02-15' }],
+    files: [],
+  },
+  {
+    id: 3,
+    name: 'SIIR 服務業創新',
+    agency: '經濟部商業司',
+    program_type: 'siir',
+    stage: 'draft',
+    deadline: null,
+    funding_amount: '100萬',
+    source: '政府公告',
+    eligibility: '依法登記之服務業者',
+    scope: '服務創新研發、商業模式驗證',
+    required_docs: '計畫書、公司登記、營運實績證明',
+    reference_url: 'https://www.siir.org.tw',
+    notes: '待確認113年度是否開放申請',
+    client: null,
+    partner: null,
+    deals: [],
+    intels: [],
+    files: [{ name: 'SIIR簡章.pdf', size: '890 KB' }],
+  },
+];
+
+// ===== STATE =====
+let currentScreen = 'list';
+let listView = 'stage'; // 'stage' | 'deadline'
+let detailId = null;
+let detailStage = null;
+
+// ===== NAVIGATION =====
+function navigate(screen, id) {
+  document.getElementById('screen-list').classList.add('hidden');
+  document.getElementById('screen-detail').classList.add('hidden');
+  document.getElementById('screen-new').classList.add('hidden');
+
+  currentScreen = screen;
+  if (screen === 'list') {
+    document.getElementById('screen-list').classList.remove('hidden');
+    renderList();
+  } else if (screen === 'detail') {
+    detailId = id;
+    const s = subsidies.find(x => x.id === id);
+    detailStage = s ? s.stage : 'draft';
+    document.getElementById('screen-detail').classList.remove('hidden');
+    renderDetail(id);
+  } else if (screen === 'new') {
+    document.getElementById('screen-new').classList.remove('hidden');
+    resetTypeGrid();
+  }
+  lucide.createIcons();
+}
+
+// ===== LIST VIEW TOGGLE =====
+function toggleListView() {
+  listView = listView === 'stage' ? 'deadline' : 'stage';
+  document.getElementById('view-toggle-btn').textContent = listView === 'stage' ? '階段' : '截止日';
+  renderList();
+}
+
+// ===== URGENCY =====
+function getUrgency(deadline) {
+  if (!deadline) return { level: 'none', border: 'border-l-slate-600', label: '未設定', labelClass: 'text-slate-500' };
+  const diff = Math.ceil((new Date(deadline) - new Date()) / 86400000);
+  if (diff < 0) return { level: 'overdue', border: 'border-l-red-500', label: '已逾期', labelClass: 'text-red-400' };
+  if (diff < 30) return { level: 'urgent', border: 'border-l-red-500', label: `剩 ${diff} 天`, labelClass: 'text-red-400' };
+  if (diff < 60) return { level: 'warning', border: 'border-l-amber-400', label: `剩 ${diff} 天`, labelClass: 'text-amber-400' };
+  return { level: 'ok', border: 'border-l-green-500', label: `剩 ${diff} 天`, labelClass: 'text-green-400' };
+}
+
+// ===== RENDER CARD =====
+function renderCard(s) {
+  const stageInfo = STAGES.find(st => st.key === s.stage);
+  const urgency = getUrgency(s.deadline);
+  const typeBadge = TYPE_BADGES[s.program_type] || TYPE_BADGES.other;
+  const typeLabel = TYPE_LABELS[s.program_type] || s.program_type;
+  return `
+    <div onclick="navigate('detail', ${s.id})" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 cursor-pointer hover:border-slate-500 dark:hover:border-slate-500 transition-colors border-l-4 ${urgency.border}">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <h3 class="text-sm font-medium text-slate-900 dark:text-slate-100 leading-tight">${s.name}</h3>
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${stageInfo.badge}">${stageInfo.label}</span>
+      </div>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">${s.agency}</p>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="px-2 py-0.5 rounded-full text-[11px] font-medium ${typeBadge}">${typeLabel}</span>
+        ${s.deadline ? `<span class="text-xs ${urgency.labelClass}">${urgency.label} (${s.deadline})</span>` : '<span class="text-xs text-slate-500">截止日未定</span>'}
+        ${s.funding_amount ? `<span class="text-xs text-slate-400 ml-auto">${s.funding_amount}</span>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ===== RENDER LIST =====
+function renderList() {
+  const stageView = document.getElementById('list-stage-view');
+  const deadlineView = document.getElementById('list-deadline-view');
+
+  if (listView === 'stage') {
+    stageView.classList.remove('hidden');
+    deadlineView.classList.add('hidden');
+
+    let html = '';
+    for (const stage of STAGES) {
+      const items = subsidies.filter(s => s.stage === stage.key);
+      html += `
+        <div class="view-fade">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-2 h-2 rounded-full ${stage.color}"></div>
+            <span class="text-xs font-medium ${stage.text}">${stage.label}</span>
+            <span class="text-xs text-slate-500">${items.length}</span>
+          </div>
+          ${items.length > 0 ? `<div class="space-y-2">${items.map(renderCard).join('')}</div>` : '<p class="text-xs text-slate-600 pl-4 pb-1">--</p>'}
+        </div>
+      `;
+    }
+    stageView.innerHTML = html;
+  } else {
+    stageView.classList.add('hidden');
+    deadlineView.classList.remove('hidden');
+
+    const sorted = [...subsidies].sort((a, b) => {
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return new Date(a.deadline) - new Date(b.deadline);
+    });
+
+    deadlineView.innerHTML = `<div class="space-y-2 view-fade">${sorted.map(renderCard).join('')}</div>`;
+  }
+  lucide.createIcons();
+}
+
+// ===== RENDER DETAIL =====
+function renderDetail(id) {
+  const s = subsidies.find(x => x.id === id);
+  if (!s) return;
+
+  document.getElementById('detail-title').textContent = s.name;
+
+  // Pipeline bar
+  const pipelineHtml = `
+    <div class="flex gap-1">
+      ${STAGES.map(st => {
+        const isActive = st.key === detailStage;
+        const stIdx = STAGES.findIndex(x => x.key === st.key);
+        const curIdx = STAGES.findIndex(x => x.key === detailStage);
+        const isPast = stIdx < curIdx;
+        return `
+          <button onclick="setDetailStage('${st.key}')" class="flex-1 py-2 rounded-lg text-[11px] font-medium transition-all cursor-pointer min-h-[44px] flex items-center justify-center ${
+            isActive ? st.color + ' text-white' :
+            isPast ? st.color + '/30 ' + st.text :
+            'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }">${st.label}</button>
+        `;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('detail-pipeline').innerHTML = pipelineHtml;
+
+  // Left column - editable fields
+  const fields = [
+    { label: '名稱', key: 'name', value: s.name },
+    { label: '來源', key: 'source', value: s.source },
+    { label: '主辦機關', key: 'agency', value: s.agency },
+    { label: '計畫類型', key: 'program_type', value: TYPE_LABELS[s.program_type] || s.program_type, type: 'select' },
+    { label: '截止日期', key: 'deadline', value: s.deadline || '未設定', type: 'date' },
+    { label: '補助金額', key: 'funding_amount', value: s.funding_amount },
+    { label: '申請資格', key: 'eligibility', value: s.eligibility, multiline: true },
+    { label: '補助範圍', key: 'scope', value: s.scope, multiline: true },
+    { label: '必備文件', key: 'required_docs', value: s.required_docs, multiline: true },
+    { label: '參考連結', key: 'reference_url', value: s.reference_url, link: true },
+    { label: '備註', key: 'notes', value: s.notes, multiline: true },
+  ];
+
+  let leftHtml = `<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 space-y-4">`;
+  for (const f of fields) {
+    const displayVal = f.value || '--';
+    leftHtml += `
+      <div class="group">
+        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">${f.label}</label>
+        <div class="flex items-start gap-2">
+          ${f.multiline
+            ? `<p class="text-sm text-slate-900 dark:text-slate-100 leading-relaxed flex-1">${displayVal}</p>`
+            : f.link && f.value
+              ? `<a href="${f.value}" target="_blank" class="text-sm text-blue-400 hover:text-blue-300 break-all flex-1">${displayVal}</a>`
+              : `<span class="text-sm text-slate-900 dark:text-slate-100 flex-1">${displayVal}</span>`
+          }
+          <button class="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-blue-400 transition-all cursor-pointer shrink-0">
+            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  leftHtml += `</div>`;
+  document.getElementById('detail-left').innerHTML = leftHtml;
+
+  // Right column
+  let rightHtml = '';
+
+  // Client / Partner
+  rightHtml += `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+      <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">關聯組織</h4>
+      <div class="space-y-3">
+        <div>
+          <label class="text-[11px] text-slate-500 mb-1 block">客戶</label>
+          <select class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none transition-colors">
+            <option value="">${s.client || '-- 選擇客戶 --'}</option>
+            <option>台灣精密機械</option>
+            <option>南科聯合科技</option>
+            <option>永信智能系統</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[11px] text-slate-500 mb-1 block">夥伴</label>
+          <select class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:outline-none transition-colors">
+            <option value="">${s.partner || '-- 選擇夥伴 --'}</option>
+            <option>創研顧問</option>
+            <option>大同大學產學合作處</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Linked Deals
+  rightHtml += `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">關聯商機</h4>
+        <button class="p-1 text-blue-500 hover:bg-blue-500/10 rounded cursor-pointer"><i data-lucide="plus" class="w-4 h-4"></i></button>
+      </div>
+      ${s.deals.length > 0 ? s.deals.map(d => `
+        <div class="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg mb-2 last:mb-0">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-slate-900 dark:text-slate-100">${d.name}</span>
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-400/10 text-blue-400">${d.stage}</span>
+          </div>
+          <span class="text-xs text-slate-500 mt-1 block">${d.amount}</span>
+        </div>
+      `).join('') : '<p class="text-xs text-slate-500">尚無關聯商機</p>'}
+    </div>
+  `;
+
+  // Related Intel
+  rightHtml += `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">相關情報</h4>
+        <button class="p-1 text-blue-500 hover:bg-blue-500/10 rounded cursor-pointer"><i data-lucide="plus" class="w-4 h-4"></i></button>
+      </div>
+      ${s.intels.length > 0 ? s.intels.map(i => `
+        <div class="flex items-center gap-2 py-2 border-b border-slate-200 dark:border-slate-700 last:border-0">
+          <i data-lucide="zap" class="w-4 h-4 text-amber-400 shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm text-slate-900 dark:text-slate-100 truncate block">${i.title}</span>
+            <span class="text-[11px] text-slate-500">${i.date}</span>
+          </div>
+        </div>
+      `).join('') : '<p class="text-xs text-slate-500">尚無相關情報</p>'}
+    </div>
+  `;
+
+  // Files
+  rightHtml += `
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+      <div class="flex items-center justify-between mb-3">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">檔案</h4>
+        <button class="p-1 text-blue-500 hover:bg-blue-500/10 rounded cursor-pointer"><i data-lucide="upload" class="w-4 h-4"></i></button>
+      </div>
+      ${s.files.length > 0 ? s.files.map(f => `
+        <div class="flex items-center gap-2 py-2 border-b border-slate-200 dark:border-slate-700 last:border-0">
+          <i data-lucide="file-text" class="w-4 h-4 text-slate-400 shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <span class="text-sm text-slate-900 dark:text-slate-100 truncate block">${f.name}</span>
+            <span class="text-[11px] text-slate-500">${f.size}</span>
+          </div>
+          <button class="p-1 text-slate-400 hover:text-blue-400 cursor-pointer"><i data-lucide="download" class="w-4 h-4"></i></button>
+        </div>
+      `).join('') : '<p class="text-xs text-slate-500">尚無檔案</p>'}
+    </div>
+  `;
+
+  document.getElementById('detail-right').innerHTML = rightHtml;
+  lucide.createIcons();
+}
+
+function setDetailStage(stageKey) {
+  detailStage = stageKey;
+  if (detailId) renderDetail(detailId);
+}
+
+// ===== NEW FORM HELPERS =====
+let selectedType = null;
+function selectType(el, type) {
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.remove('border-blue-500', 'bg-blue-500/10', 'text-blue-400');
+    b.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-300');
+  });
+  el.classList.remove('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-300');
+  el.classList.add('border-blue-500', 'bg-blue-500/10', 'text-blue-400');
+  selectedType = type;
+}
+
+function resetTypeGrid() {
+  selectedType = null;
+  document.querySelectorAll('.type-btn').forEach(b => {
+    b.classList.remove('border-blue-500', 'bg-blue-500/10', 'text-blue-400');
+    b.classList.add('border-slate-200', 'dark:border-slate-700', 'text-slate-600', 'dark:text-slate-300');
+  });
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', () => {
+  navigate('list');
+});
+</script>
+
+</body>
+</html>

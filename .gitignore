@@ -12,3 +12,9 @@ database/*.db
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+
+# Test screenshots
+tests/screenshots/
+
+# Uploaded files
+uploads/

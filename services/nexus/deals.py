@@ -13,15 +13,17 @@ def create_deal(
     client_id: int,
     budget_range: str | None = None,
     timeline: str | None = None,
+    budget_amount: float | None = None,
+    budget_year: int | None = None,
 ) -> dict:
     meddic_init = json.dumps({k: None for k in MEDDIC_KEYS})
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json)
-                   VALUES (%s, %s, %s, %s, %s)
+                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (name, client_id, budget_range, timeline, meddic_init),
+                (name, client_id, budget_range, timeline, meddic_init, budget_amount, budget_year),
             )
             return row_to_dict(cur)
 
@@ -88,7 +90,7 @@ def get_deals_needing_push(threshold_days: int = 14) -> list[dict]:
 def update_deal(deal_id: int, **fields) -> dict | None:
     if not fields:
         return get_deal(deal_id)
-    allowed = {"name", "budget_range", "timeline", "meddic_json", "close_reason", "close_notes", "status", "stage"}
+    allowed = {"name", "budget_range", "timeline", "meddic_json", "close_reason", "close_notes", "status", "stage", "budget_amount", "budget_year", "created_at"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_deal(deal_id)
@@ -126,6 +128,55 @@ def close_deal(deal_id: int, reason: str, notes: str | None = None) -> dict | No
                 (reason, notes, deal_id),
             )
             return row_to_dict(cur)
+
+
+def get_deals_by_client(client_id: int) -> list[dict]:
+    """Get all deals for a specific client, with partners attached."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT d.*, c.name AS client_name, c.industry AS client_industry
+                   FROM nx_deal d
+                   JOIN nx_client c ON d.client_id = c.id
+                   WHERE d.client_id = %s
+                   ORDER BY d.last_activity_at DESC""",
+                (client_id,),
+            )
+            deals = rows_to_dicts(cur)
+            if not deals:
+                return deals
+            deal_ids = [d["id"] for d in deals]
+            placeholders = ",".join("?" * len(deal_ids))
+            cur.execute(
+                f"""SELECT dp.deal_id, p.name AS partner_name, dp.role
+                    FROM nx_deal_partner dp
+                    JOIN nx_partner p ON dp.partner_id = p.id
+                    WHERE dp.deal_id IN ({placeholders})""",
+                deal_ids,
+            )
+            partner_rows = rows_to_dicts(cur)
+            partner_map: dict[int, list] = {}
+            for row in partner_rows:
+                partner_map.setdefault(row["deal_id"], []).append(row)
+            for d in deals:
+                d["partners"] = partner_map.get(d["id"], [])
+            return deals
+
+
+def get_deals_by_partner(partner_id: int) -> list[dict]:
+    """Get all deals linked to a specific partner."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT d.*, c.name AS client_name, c.industry AS client_industry
+                   FROM nx_deal d
+                   JOIN nx_client c ON d.client_id = c.id
+                   JOIN nx_deal_partner dp ON dp.deal_id = d.id
+                   WHERE dp.partner_id = %s
+                   ORDER BY d.last_activity_at DESC""",
+                (partner_id,),
+            )
+            return rows_to_dicts(cur)
 
 
 def touch_deal(deal_id: int) -> None:

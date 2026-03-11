@@ -18,6 +18,7 @@ class ContactCreate(BaseModel):
     title: str | None = None
     phone: str | None = None
     email: str | None = None
+    line_id: str | None = None
     role: str | None = None
     notes: str | None = None
 
@@ -27,6 +28,7 @@ class ContactUpdate(BaseModel):
     title: str | None = None
     phone: str | None = None
     email: str | None = None
+    line_id: str | None = None
     org_type: str | None = None
     org_id: int | None = None
     role: str | None = None

@@ -1,19 +1,40 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { nxApi, type NxDeal } from "@/lib/nexus-api";
 import Link from "next/link";
 
+const DURATION_OPTIONS = [
+  { value: 30, label: "30 分鐘" },
+  { value: 45, label: "45 分鐘" },
+  { value: 60, label: "60 分鐘" },
+  { value: 90, label: "90 分鐘" },
+  { value: 120, label: "120 分鐘" },
+];
+
 export default function NewMeetingPage() {
+  return (
+    <Suspense>
+      <NewMeetingForm />
+    </Suspense>
+  );
+}
+
+function NewMeetingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [deals, setDeals] = useState<NxDeal[]>([]);
   const [dealId, setDealId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("14:00");
+  const [date, setDate] = useState(searchParams.get("date") || "");
+  const [time, setTime] = useState(searchParams.get("time") || "14:00");
+  const [duration, setDuration] = useState(() => {
+    const d = searchParams.get("duration");
+    return d ? Number(d) : 60;
+  });
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -29,6 +50,7 @@ export default function NewMeetingPage() {
         deal_id: dealId,
         title: title.trim(),
         meeting_date: `${date}T${time}:00`,
+        duration_minutes: duration,
       });
       router.push("/calendar");
     } catch (err) {
@@ -36,6 +58,8 @@ export default function NewMeetingPage() {
       setSaving(false);
     }
   };
+
+  const inputClass = "w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none";
 
   return (
     <div className="flex flex-col h-full">
@@ -56,7 +80,7 @@ export default function NewMeetingPage() {
           <select
             value={dealId ?? ""}
             onChange={(e) => setDealId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className={inputClass}
           >
             <option value="">選擇商機...</option>
             {deals.map((d) => (
@@ -74,11 +98,11 @@ export default function NewMeetingPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="例：A 食品 — AOI 需求訪談"
-            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+            className={`${inputClass} placeholder:text-slate-400`}
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
               日期 *
@@ -87,7 +111,7 @@ export default function NewMeetingPage() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className={inputClass}
             />
           </div>
           <div>
@@ -98,8 +122,22 @@ export default function NewMeetingPage() {
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              className={inputClass}
             />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
+              時長
+            </label>
+            <select
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className={inputClass}
+            >
+              {DURATION_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -111,7 +149,7 @@ export default function NewMeetingPage() {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="備註..."
-            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none h-20"
+            className={`${inputClass} placeholder:text-slate-400 resize-none h-20`}
           />
         </div>
 

@@ -9,7 +9,9 @@ import {
   Plus,
   Zap,
   BookUser,
+  FileCheck,
   Search,
+  Landmark,
   type LucideIcon,
 } from "lucide-react";
 
@@ -25,7 +27,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "行事曆", href: "/calendar", icon: Calendar },
   { label: "新增情報", href: "/capture", icon: Plus },
   { label: "情報 Feed", href: "/intel", icon: Zap },
-  { label: "通訊錄", href: "/contacts", icon: BookUser },
+  { label: "補助案", href: "/subsidies", icon: Landmark },
+  { label: "關係網", href: "/contacts", icon: BookUser },
+  { label: "文件追蹤", href: "/documents", icon: FileCheck },
   { label: "搜尋", href: "/search", icon: Search },
 ];
 

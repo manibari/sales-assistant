@@ -15,7 +15,7 @@ const NAV_ITEMS = [
   { label: "行事曆", href: "/calendar", icon: Calendar },
   { label: "", href: "/capture", icon: Plus, isFab: true },
   { label: "情報", href: "/intel", icon: Zap },
-  { label: "通訊錄", href: "/contacts", icon: BookUser },
+  { label: "關係網", href: "/contacts", icon: BookUser },
 ];
 
 export function BottomNav() {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxIntel } from "@/lib/nexus-api";
-import { FileText, Camera, Mic } from "lucide-react";
+import { FileText, Camera, Mic, ChevronRight, Paperclip, Trash2 } from "lucide-react";
 
 const INPUT_ICONS: Record<string, typeof FileText> = {
   text: FileText,
@@ -22,6 +23,19 @@ export default function IntelPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("確定要刪除這筆情報？")) return;
+    try {
+      await nxApi.intel.delete(id);
+      setIntels((prev) => prev.filter((i) => i.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("刪除失敗");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -42,9 +56,10 @@ export default function IntelPage() {
               const Icon = INPUT_ICONS[intel.input_type] || FileText;
               const isConfirmed = intel.status === "confirmed";
               return (
-                <div
+                <Link
                   key={intel.id}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600"
+                  href={`/intel/${intel.id}`}
+                  className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600"
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -64,13 +79,27 @@ export default function IntelPage() {
                         >
                           {isConfirmed ? "已確認" : "草稿"}
                         </span>
+                        {intel.file_count && intel.file_count > 0 ? (
+                          <span className="text-[11px] text-slate-400 flex items-center gap-0.5">
+                            <Paperclip size={10} />
+                            {intel.file_count}
+                          </span>
+                        ) : null}
                         <span className="text-[11px] text-slate-400 dark:text-slate-500">
                           {new Date(intel.created_at).toLocaleDateString("zh-TW")}
                         </span>
                       </div>
                     </div>
+                    <button
+                      onClick={(e) => handleDelete(e, intel.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors flex-shrink-0 mt-1"
+                      title="刪除情報"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    <ChevronRight size={16} className="text-slate-400 flex-shrink-0 mt-2" />
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

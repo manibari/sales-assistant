@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup — Calendar Multi-View</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Scrollbar styling */
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    /* Prevent text selection during drag */
+    .no-select { user-select: none; -webkit-user-select: none; }
+    /* Smooth transition for view switch */
+    .view-fade { animation: fadeIn 0.15s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans">
+
+  <!-- ==================== DESKTOP LAYOUT ==================== -->
+  <div class="flex h-screen">
+
+    <!-- Sidebar (mimics existing desktop-sidebar) -->
+    <aside class="hidden lg:flex flex-col w-56 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+      <div class="h-14 flex items-center px-5 border-b border-slate-200 dark:border-slate-800">
+        <span class="text-lg font-bold text-slate-900 dark:text-slate-50">Nexus</span>
+      </div>
+      <nav class="flex-1 py-3 px-3 space-y-0.5">
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>控制台</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
+          <span>商機 Pipeline</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm bg-blue-500/10 text-blue-500 font-medium">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span>行事曆</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <span>新增情報</span>
+        </a>
+        <a href="#" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <span>通訊錄</span>
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-w-0">
+
+      <!-- TopBar -->
+      <header class="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-50">行事曆</h1>
+        <div class="flex items-center gap-2">
+          <button onclick="openCreateModal()" class="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors" title="新增會議">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button onclick="toggleTheme()" class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+            <svg id="theme-icon-sun" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            <svg id="theme-icon-moon" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- View Toggle + Navigation -->
+      <div class="px-4 pt-3 pb-2 bg-white dark:bg-slate-950 shrink-0">
+        <!-- View Toggle Pills -->
+        <div class="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1 max-w-xs">
+          <button onclick="switchView('month')" data-view-btn="month" class="flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer text-slate-500 dark:text-slate-400">月</button>
+          <button onclick="switchView('week')" data-view-btn="week" class="flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 shadow-sm">週</button>
+          <button onclick="switchView('3day')" data-view-btn="3day" class="flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer text-slate-500 dark:text-slate-400">3天</button>
+        </div>
+
+        <!-- Navigation Header -->
+        <div class="flex items-center justify-between mt-3">
+          <button onclick="navigatePrev()" class="p-2 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <h2 id="nav-title" class="text-base font-semibold text-slate-900 dark:text-slate-50">3/10 (二) — 3/16 (一)</h2>
+          <button onclick="navigateNext()" class="p-2 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ==================== MONTH VIEW ==================== -->
+      <div id="view-month" class="flex-1 overflow-auto px-4 pb-4 hidden">
+        <div class="max-w-2xl lg:max-w-4xl mx-auto w-full view-fade">
+          <!-- Weekday headers -->
+          <div class="grid grid-cols-7 gap-1 mb-1">
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">日</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">一</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">二</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">三</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">四</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">五</div>
+            <div class="text-center text-[11px] font-medium text-slate-400 dark:text-slate-500 py-1">六</div>
+          </div>
+          <!-- Calendar grid -->
+          <div class="grid grid-cols-7 gap-1" id="month-grid"></div>
+
+          <!-- Day detail (appears on click) -->
+          <div id="month-day-detail" class="mt-4 space-y-3 hidden view-fade"></div>
+        </div>
+      </div>
+
+      <!-- ==================== WEEK VIEW ==================== -->
+      <div id="view-week" class="flex-1 overflow-hidden flex flex-col">
+        <div class="max-w-full lg:max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0 view-fade">
+          <!-- Day headers -->
+          <div class="grid shrink-0 border-b border-slate-200 dark:border-slate-800" id="week-day-headers" style="grid-template-columns: 48px repeat(7, 1fr);"></div>
+          <!-- Time grid -->
+          <div class="flex-1 overflow-auto custom-scroll" id="week-scroll-container">
+            <div class="relative no-select" id="week-time-grid" style="grid-template-columns: 48px repeat(7, 1fr);"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== 3-DAY VIEW ==================== -->
+      <div id="view-3day" class="flex-1 overflow-hidden flex flex-col hidden">
+        <div class="max-w-full lg:max-w-4xl mx-auto w-full flex-1 flex flex-col min-h-0 view-fade">
+          <!-- Day headers -->
+          <div class="grid shrink-0 border-b border-slate-200 dark:border-slate-800" id="threeday-day-headers" style="grid-template-columns: 48px repeat(3, 1fr);"></div>
+          <!-- Time grid -->
+          <div class="flex-1 overflow-auto custom-scroll" id="threeday-scroll-container">
+            <div class="relative no-select" id="threeday-time-grid" style="grid-template-columns: 48px repeat(3, 1fr);"></div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==================== CREATE MODAL ==================== -->
+  <div id="create-modal" class="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50 hidden" onclick="if(event.target===this)closeCreateModal()">
+    <div class="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4 view-fade">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-slate-50">新增會議</h3>
+        <button onclick="closeCreateModal()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">關聯商機 *</label>
+        <select class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+          <option value="">選擇商機...</option>
+          <option>A 食品 — AOI 產線升級</option>
+          <option>B 科技 — MES 系統導入</option>
+          <option>C 電子 — 廠務自動化</option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">會議名稱 *</label>
+        <input type="text" id="modal-title" placeholder="例：A 食品 — AOI 需求訪談" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">日期 *</label>
+          <input type="date" id="modal-date" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-3 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">時間</label>
+          <input type="time" id="modal-time" value="14:00" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-3 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5 block">時長</label>
+          <select id="modal-duration" class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-3 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none">
+            <option value="30">30 分鐘</option>
+            <option value="45">45 分鐘</option>
+            <option value="60" selected>60 分鐘</option>
+            <option value="90">90 分鐘</option>
+            <option value="120">120 分鐘</option>
+          </select>
+        </div>
+      </div>
+      <button onclick="closeCreateModal()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-3 rounded-lg text-sm min-h-[44px] active:scale-[0.98] transition-all cursor-pointer">
+        排定會議
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== DRAG TOOLTIP ==================== -->
+  <div id="drag-tooltip" class="fixed pointer-events-none z-40 hidden">
+    <div class="bg-blue-500 text-white text-xs font-medium px-2 py-1 rounded shadow-lg whitespace-nowrap"></div>
+  </div>
+
+  <script>
+    // ==================== STATE ====================
+    let currentView = 'week';
+    let viewAnchor = new Date(2026, 2, 10); // March 10, 2026 (Tuesday)
+
+    const WEEKDAYS_SHORT = ['日', '一', '二', '三', '四', '五', '六'];
+    const WEEKDAYS_FULL = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+    const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+    const HOUR_START = 8;
+    const HOUR_END = 21;
+    const HOUR_HEIGHT = 60; // px per hour
+    const TOTAL_HEIGHT = (HOUR_END - HOUR_START) * HOUR_HEIGHT;
+
+    // Sample meetings data
+    const MEETINGS = [
+      { id: 1, title: 'A 食品 — AOI 需求訪談',    deal: 'A 食品 AOI 產線升級', date: '2026-03-10', time: '10:00', duration: 60,  color: 'blue' },
+      { id: 2, title: 'B 科技 — MES 架構討論',     deal: 'B 科技 MES 系統導入', date: '2026-03-10', time: '14:00', duration: 90,  color: 'violet' },
+      { id: 3, title: 'C 電子 — 現場勘查',          deal: 'C 電子 廠務自動化',   date: '2026-03-11', time: '09:30', duration: 120, color: 'emerald' },
+      { id: 4, title: 'A 食品 — 報價審核',          deal: 'A 食品 AOI 產線升級', date: '2026-03-12', time: '11:00', duration: 60,  color: 'blue' },
+      { id: 5, title: '內部週會',                    deal: '',                    date: '2026-03-13', time: '09:00', duration: 60,  color: 'amber' },
+      { id: 6, title: 'B 科技 — POC 進度',          deal: 'B 科技 MES 系統導入', date: '2026-03-14', time: '15:00', duration: 45,  color: 'violet' },
+      { id: 7, title: 'C 電子 — 決策者會面',        deal: 'C 電子 廠務自動化',   date: '2026-03-16', time: '13:00', duration: 90,  color: 'emerald' },
+    ];
+
+    const COLOR_MAP = {
+      blue:    { bg: 'bg-blue-500/20 dark:bg-blue-500/15',    border: 'border-blue-500',    text: 'text-blue-700 dark:text-blue-300',    dot: 'bg-blue-500' },
+      violet:  { bg: 'bg-violet-500/20 dark:bg-violet-500/15', border: 'border-violet-500',  text: 'text-violet-700 dark:text-violet-300', dot: 'bg-violet-500' },
+      emerald: { bg: 'bg-emerald-500/20 dark:bg-emerald-500/15', border: 'border-emerald-500', text: 'text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500' },
+      amber:   { bg: 'bg-amber-500/20 dark:bg-amber-500/15',  border: 'border-amber-500',   text: 'text-amber-700 dark:text-amber-300',  dot: 'bg-amber-500' },
+    };
+
+    // ==================== THEME ====================
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+
+    // ==================== VIEW SWITCHING ====================
+    function switchView(view) {
+      currentView = view;
+      // Update pills
+      document.querySelectorAll('[data-view-btn]').forEach(btn => {
+        if (btn.dataset.viewBtn === view) {
+          btn.className = 'flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 shadow-sm';
+        } else {
+          btn.className = 'flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors cursor-pointer text-slate-500 dark:text-slate-400';
+        }
+      });
+      // Show/hide views
+      document.getElementById('view-month').classList.toggle('hidden', view !== 'month');
+      document.getElementById('view-week').classList.toggle('hidden', view !== 'week');
+      document.getElementById('view-3day').classList.toggle('hidden', view !== '3day');
+      render();
+    }
+
+    // ==================== NAVIGATION ====================
+    function navigatePrev() {
+      if (currentView === 'month') {
+        viewAnchor = new Date(viewAnchor.getFullYear(), viewAnchor.getMonth() - 1, 1);
+      } else if (currentView === 'week') {
+        viewAnchor.setDate(viewAnchor.getDate() - 7);
+      } else {
+        viewAnchor.setDate(viewAnchor.getDate() - 3);
+      }
+      render();
+    }
+
+    function navigateNext() {
+      if (currentView === 'month') {
+        viewAnchor = new Date(viewAnchor.getFullYear(), viewAnchor.getMonth() + 1, 1);
+      } else if (currentView === 'week') {
+        viewAnchor.setDate(viewAnchor.getDate() + 7);
+      } else {
+        viewAnchor.setDate(viewAnchor.getDate() + 3);
+      }
+      render();
+    }
+
+    function updateNavTitle() {
+      const el = document.getElementById('nav-title');
+      if (currentView === 'month') {
+        el.textContent = `${viewAnchor.getFullYear()} ${MONTHS[viewAnchor.getMonth()]}`;
+      } else {
+        const days = getDays();
+        const s = days[0], e = days[days.length - 1];
+        const fmt = d => `${d.getMonth()+1}/${d.getDate()} (${WEEKDAYS_SHORT[d.getDay()]})`;
+        el.textContent = `${fmt(s)} — ${fmt(e)}`;
+      }
+    }
+
+    // ==================== HELPERS ====================
+    function getDays() {
+      if (currentView === 'week') {
+        const anchor = new Date(viewAnchor);
+        const dayOfWeek = anchor.getDay();
+        const start = new Date(anchor);
+        start.setDate(anchor.getDate() - dayOfWeek); // Sunday
+        return Array.from({ length: 7 }, (_, i) => {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          return d;
+        });
+      } else { // 3day
+        return Array.from({ length: 3 }, (_, i) => {
+          const d = new Date(viewAnchor);
+          d.setDate(viewAnchor.getDate() + i);
+          return d;
+        });
+      }
+    }
+
+    function dateStr(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    function isToday(d) {
+      return dateStr(d) === '2026-03-10'; // Mock today
+    }
+
+    function timeToY(timeStr) {
+      const [h, m] = timeStr.split(':').map(Number);
+      return ((h - HOUR_START) + m / 60) * HOUR_HEIGHT;
+    }
+
+    function yToTime(y) {
+      const totalMin = Math.round((y / HOUR_HEIGHT) * 60) + HOUR_START * 60;
+      const snapped = Math.round(totalMin / 15) * 15;
+      const h = Math.floor(snapped / 60);
+      const m = snapped % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    // ==================== RENDER ====================
+    function render() {
+      updateNavTitle();
+      if (currentView === 'month') renderMonth();
+      else if (currentView === 'week') renderTimeGrid('week', 7);
+      else renderTimeGrid('3day', 3);
+    }
+
+    // --- MONTH VIEW ---
+    function renderMonth() {
+      const grid = document.getElementById('month-grid');
+      grid.innerHTML = '';
+      const y = viewAnchor.getFullYear(), m = viewAnchor.getMonth();
+      const daysInMonth = new Date(y, m + 1, 0).getDate();
+      const firstDay = new Date(y, m, 1).getDay();
+
+      // Empty cells
+      for (let i = 0; i < firstDay; i++) {
+        grid.innerHTML += '<div></div>';
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const hasEvent = MEETINGS.some(mt => mt.date === ds);
+        const today = ds === '2026-03-10';
+
+        const cell = document.createElement('button');
+        cell.className = `aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-colors cursor-pointer relative ${
+          today ? 'bg-blue-500/10 text-blue-500 font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+        }`;
+        cell.textContent = day;
+        cell.onclick = () => showMonthDayDetail(ds);
+
+        if (hasEvent) {
+          const dot = document.createElement('div');
+          dot.className = 'absolute bottom-1 w-1 h-1 rounded-full bg-blue-500';
+          cell.appendChild(dot);
+        }
+
+        grid.appendChild(cell);
+      }
+    }
+
+    function showMonthDayDetail(ds) {
+      const detail = document.getElementById('month-day-detail');
+      const dayMeetings = MEETINGS.filter(m => m.date === ds);
+
+      if (dayMeetings.length === 0) {
+        detail.innerHTML = `<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">${ds}</h3><p class="text-xs text-slate-400 py-4 text-center">無事項</p>`;
+      } else {
+        detail.innerHTML = `<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">${ds}</h3>` +
+          dayMeetings.map(m => {
+            const c = COLOR_MAP[m.color];
+            return `<div class="flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 cursor-pointer hover:border-slate-300 dark:hover:border-slate-600 transition-colors">
+              <div class="w-1 h-10 rounded-full ${c.dot} shrink-0"></div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">${m.title}</p>
+                <p class="text-xs text-slate-400 mt-0.5">${m.deal || '內部會議'} · ${m.time} · ${m.duration}min</p>
+              </div>
+            </div>`;
+          }).join('');
+      }
+      detail.classList.remove('hidden');
+    }
+
+    // --- TIME GRID (WEEK / 3-DAY) ---
+    function renderTimeGrid(prefix, numDays) {
+      const days = getDays();
+      const headersEl = document.getElementById(`${prefix}-day-headers`);
+      const gridEl = document.getElementById(`${prefix}-time-grid`);
+
+      // Set grid template
+      headersEl.style.gridTemplateColumns = `48px repeat(${numDays}, 1fr)`;
+      gridEl.style.gridTemplateColumns = `48px repeat(${numDays}, 1fr)`;
+
+      // === Day headers ===
+      headersEl.innerHTML = '<div></div>' + days.map(d => {
+        const today = isToday(d);
+        return `<div class="text-center py-2 ${today ? '' : ''}">
+          <div class="text-[11px] ${today ? 'text-blue-500' : 'text-slate-400 dark:text-slate-500'}">${WEEKDAYS_FULL[d.getDay()]}</div>
+          <div class="${today
+            ? 'w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center mx-auto text-sm font-bold'
+            : 'text-lg font-semibold text-slate-900 dark:text-slate-50'
+          }">${d.getDate()}</div>
+        </div>`;
+      }).join('');
+
+      // === Time grid ===
+      let html = '<div class="grid" style="grid-template-columns: 48px repeat(' + numDays + ', 1fr); height: ' + TOTAL_HEIGHT + 'px;">';
+
+      // Hour labels column
+      html += '<div class="relative border-r border-slate-200 dark:border-slate-800">';
+      for (let h = HOUR_START; h < HOUR_END; h++) {
+        const top = (h - HOUR_START) * HOUR_HEIGHT;
+        html += `<div class="absolute right-2 text-[11px] text-slate-400 dark:text-slate-500" style="top: ${top - 7}px;">${String(h).padStart(2, '0')}:00</div>`;
+      }
+      html += '</div>';
+
+      // Day columns
+      days.forEach((d, dayIdx) => {
+        const ds = dateStr(d);
+        const today = isToday(d);
+        html += `<div class="relative border-r border-slate-100 dark:border-slate-800/50 ${today ? 'bg-blue-500/[0.03]' : ''}" data-day-col="${dayIdx}" data-date="${ds}">`;
+
+        // Hour grid lines
+        for (let h = HOUR_START; h < HOUR_END; h++) {
+          const top = (h - HOUR_START) * HOUR_HEIGHT;
+          html += `<div class="absolute inset-x-0 border-t border-slate-100 dark:border-slate-800/60" style="top: ${top}px;"></div>`;
+          // Half-hour line
+          html += `<div class="absolute inset-x-0 border-t border-slate-100/50 dark:border-slate-800/30" style="top: ${top + HOUR_HEIGHT / 2}px;"></div>`;
+        }
+
+        // Current time indicator (on today)
+        if (today) {
+          const nowY = timeToY('10:30'); // Mock: 10:30 AM
+          html += `<div class="absolute inset-x-0 z-20 flex items-center" style="top: ${nowY}px;">
+            <div class="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1 shrink-0"></div>
+            <div class="flex-1 h-[2px] bg-red-500"></div>
+          </div>`;
+        }
+
+        // Meeting blocks
+        const dayMeetings = MEETINGS.filter(m => m.date === ds);
+        dayMeetings.forEach(m => {
+          const top = timeToY(m.time);
+          const height = Math.max((m.duration / 60) * HOUR_HEIGHT, 20);
+          const c = COLOR_MAP[m.color];
+          const endMin = parseInt(m.time.split(':')[0]) * 60 + parseInt(m.time.split(':')[1]) + m.duration;
+          const endH = Math.floor(endMin / 60);
+          const endM = endMin % 60;
+          const endTime = `${String(endH).padStart(2,'0')}:${String(endM).padStart(2,'0')}`;
+
+          html += `<div class="absolute inset-x-1 z-10 ${c.bg} border-l-[3px] ${c.border} rounded-r-md px-2 py-1 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity" style="top: ${top}px; height: ${height}px;">
+            <p class="text-[11px] font-semibold ${c.text} truncate leading-tight">${m.title}</p>
+            ${height > 30 ? `<p class="text-[10px] text-slate-400 mt-0.5">${m.time} — ${endTime}</p>` : ''}
+          </div>`;
+        });
+
+        html += '</div>';
+      });
+
+      html += '</div>';
+      gridEl.innerHTML = html;
+
+      // Scroll to 8:00 area
+      const scrollContainer = document.getElementById(`${prefix}-scroll-container`);
+      scrollContainer.scrollTop = 0;
+
+      // Setup drag events
+      setupDrag(prefix, numDays);
+    }
+
+    // ==================== DRAG TO CREATE ====================
+    let dragState = null;
+
+    function setupDrag(prefix, numDays) {
+      const gridEl = document.getElementById(`${prefix}-time-grid`);
+      const gridInner = gridEl.querySelector('.grid');
+      if (!gridInner) return;
+
+      const dayCols = gridInner.querySelectorAll('[data-day-col]');
+
+      dayCols.forEach(col => {
+        col.addEventListener('mousedown', (e) => {
+          if (e.target.closest('[class*="border-l-"]')) return; // Click on existing meeting
+          const rect = col.getBoundingClientRect();
+          const scrollContainer = document.getElementById(`${prefix}-scroll-container`);
+          const y = e.clientY - rect.top + scrollContainer.scrollTop;
+          dragState = {
+            prefix,
+            dayIdx: parseInt(col.dataset.dayCol),
+            date: col.dataset.date,
+            startY: y,
+            currentY: y,
+            col,
+            rect,
+          };
+          e.preventDefault();
+        });
+
+        // Touch support
+        col.addEventListener('touchstart', (e) => {
+          if (e.target.closest('[class*="border-l-"]')) return;
+          const touch = e.touches[0];
+          const rect = col.getBoundingClientRect();
+          const scrollContainer = document.getElementById(`${prefix}-scroll-container`);
+          const y = touch.clientY - rect.top + scrollContainer.scrollTop;
+          dragState = {
+            prefix,
+            dayIdx: parseInt(col.dataset.dayCol),
+            date: col.dataset.date,
+            startY: y,
+            currentY: y,
+            col,
+            rect,
+          };
+        }, { passive: true });
+      });
+
+      document.addEventListener('mousemove', handleDragMove);
+      document.addEventListener('mouseup', handleDragEnd);
+      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+      document.addEventListener('touchend', handleDragEnd);
+    }
+
+    function handleDragMove(e) {
+      if (!dragState) return;
+      const scrollContainer = document.getElementById(`${dragState.prefix}-scroll-container`);
+      const y = e.clientY - dragState.rect.top + scrollContainer.scrollTop;
+      dragState.currentY = y;
+      renderDragPreview();
+    }
+
+    function handleTouchMove(e) {
+      if (!dragState) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      const scrollContainer = document.getElementById(`${dragState.prefix}-scroll-container`);
+      const y = touch.clientY - dragState.rect.top + scrollContainer.scrollTop;
+      dragState.currentY = y;
+      renderDragPreview();
+    }
+
+    function renderDragPreview() {
+      if (!dragState) return;
+      const minY = Math.min(dragState.startY, dragState.currentY);
+      const maxY = Math.max(dragState.startY, dragState.currentY);
+
+      if (maxY - minY < 10) {
+        removeDragPreview();
+        return;
+      }
+
+      const startTime = yToTime(minY);
+      const endTime = yToTime(maxY);
+
+      // Create or update preview element
+      let preview = dragState.col.querySelector('.drag-preview');
+      if (!preview) {
+        preview = document.createElement('div');
+        preview.className = 'drag-preview absolute inset-x-1 z-30 bg-blue-500/25 border-2 border-blue-500/60 border-dashed rounded-md flex items-center justify-center';
+        dragState.col.appendChild(preview);
+      }
+      preview.style.top = `${minY}px`;
+      preview.style.height = `${maxY - minY}px`;
+      preview.innerHTML = `<span class="text-xs font-semibold text-blue-400">${startTime} — ${endTime}</span>`;
+
+      // Tooltip near cursor
+      const tooltip = document.getElementById('drag-tooltip');
+      tooltip.classList.remove('hidden');
+      const tooltipInner = tooltip.querySelector('div');
+      tooltipInner.textContent = `${startTime} — ${endTime}`;
+      // Position tooltip
+      const scrollContainer = document.getElementById(`${dragState.prefix}-scroll-container`);
+      const containerRect = scrollContainer.getBoundingClientRect();
+      tooltip.style.left = `${dragState.rect.right + 8}px`;
+      tooltip.style.top = `${dragState.rect.top + maxY - scrollContainer.scrollTop - 12}px`;
+    }
+
+    function removeDragPreview() {
+      if (!dragState) return;
+      const preview = dragState.col.querySelector('.drag-preview');
+      if (preview) preview.remove();
+      document.getElementById('drag-tooltip').classList.add('hidden');
+    }
+
+    function handleDragEnd() {
+      if (!dragState) return;
+      const minY = Math.min(dragState.startY, dragState.currentY);
+      const maxY = Math.max(dragState.startY, dragState.currentY);
+
+      removeDragPreview();
+
+      if (maxY - minY > 15) {
+        const startTime = yToTime(minY);
+        const endTime = yToTime(maxY);
+        const duration = Math.round((maxY - minY) / HOUR_HEIGHT * 60 / 15) * 15;
+
+        // Open create modal with pre-filled values
+        openCreateModal(dragState.date, startTime, Math.max(duration, 15));
+      }
+
+      dragState = null;
+    }
+
+    // ==================== CREATE MODAL ====================
+    function openCreateModal(date, time, duration) {
+      document.getElementById('create-modal').classList.remove('hidden');
+      if (date) document.getElementById('modal-date').value = date;
+      if (time) document.getElementById('modal-time').value = time;
+      if (duration) {
+        const sel = document.getElementById('modal-duration');
+        // Find closest option
+        const opts = [30, 45, 60, 90, 120];
+        const closest = opts.reduce((a, b) => Math.abs(b - duration) < Math.abs(a - duration) ? b : a);
+        sel.value = closest;
+      }
+    }
+
+    function closeCreateModal() {
+      document.getElementById('create-modal').classList.add('hidden');
+      document.getElementById('modal-title').value = '';
+    }
+
+    // ==================== INIT ====================
+    render();
+  </script>
+</body>
+</html>

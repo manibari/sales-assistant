@@ -10,16 +10,17 @@ def create_contact(
     title: str | None = None,
     phone: str | None = None,
     email: str | None = None,
+    line_id: str | None = None,
     role: str | None = None,
     notes: str | None = None,
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_contact (name, org_type, org_id, title, phone, email, role, notes)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_contact (name, org_type, org_id, title, phone, email, line_id, role, notes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (name, org_type, org_id, title, phone, email, role, notes),
+                (name, org_type, org_id, title, phone, email, line_id, role, notes),
             )
             return row_to_dict(cur)
 
@@ -51,7 +52,7 @@ def get_all_contacts() -> list[dict]:
 def update_contact(contact_id: int, **fields) -> dict | None:
     if not fields:
         return get_contact(contact_id)
-    allowed = {"name", "title", "phone", "email", "org_type", "org_id", "role", "notes"}
+    allowed = {"name", "title", "phone", "email", "line_id", "org_type", "org_id", "role", "notes"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_contact(contact_id)
@@ -64,6 +65,30 @@ def update_contact(contact_id: int, **fields) -> dict | None:
                 values,
             )
             return row_to_dict(cur)
+
+
+def find_contact(name: str | None = None, email: str | None = None) -> list[dict]:
+    """Find contacts by name (LIKE) or email (exact). Returns candidate list."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if email:
+                cur.execute(
+                    "SELECT * FROM nx_contact WHERE LOWER(email) = LOWER(%s)",
+                    (email,),
+                )
+                results = rows_to_dicts(cur)
+                if results:
+                    return results
+            if name:
+                q = f"%{name}%"
+                cur.execute(
+                    """SELECT * FROM nx_contact WHERE name LIKE %s
+                       ORDER BY CASE WHEN LOWER(name) = LOWER(%s) THEN 0 ELSE 1 END,
+                               updated_at DESC""",
+                    (q, name),
+                )
+                return rows_to_dicts(cur)
+            return []
 
 
 def delete_contact(contact_id: int) -> bool:

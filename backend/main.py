@@ -22,13 +22,20 @@ from backend.routers.nexus import (
     tags as nx_tags,
     tbd as nx_tbd,
     search as nx_search,
+    telegram as nx_telegram,
+    subsidies as nx_subsidies,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3333",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3333",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +57,8 @@ app.include_router(nx_documents.router, prefix="/api/nx/documents", tags=["Docum
 app.include_router(nx_tags.router, prefix="/api/nx/tags", tags=["Tags"])
 app.include_router(nx_tbd.router, prefix="/api/nx/tbd", tags=["TBD"])
 app.include_router(nx_search.router, prefix="/api/nx/search", tags=["Search"])
+app.include_router(nx_telegram.router, prefix="/api/nx/telegram", tags=["Telegram"])
+app.include_router(nx_subsidies.router, prefix="/api/nx/subsidies", tags=["Subsidies"])
 
 
 @app.on_event("startup")

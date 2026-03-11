@@ -9,6 +9,7 @@ def create_meeting(
     deal_id: int,
     title: str,
     meeting_date: str,
+    duration_minutes: int = 60,
     participants_json: str | None = None,
     location: str | None = None,
     notes: str | None = None,
@@ -16,10 +17,10 @@ def create_meeting(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_meeting (deal_id, title, meeting_date, participants_json, location, notes)
-                   VALUES (%s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_meeting (deal_id, title, meeting_date, duration_minutes, participants_json, location, notes)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, title, meeting_date, participants_json, location, notes),
+                (deal_id, title, meeting_date, duration_minutes, participants_json, location, notes),
             )
             return row_to_dict(cur)
 
@@ -71,6 +72,22 @@ def get_meetings_by_month(year: int, month: int) -> list[dict]:
             return rows_to_dicts(cur)
 
 
+def get_meetings_by_range(start_date: str, end_date: str) -> list[dict]:
+    """Get meetings within a date range (inclusive, YYYY-MM-DD)."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT m.*, d.name AS deal_name, c.name AS client_name
+                   FROM nx_meeting m
+                   JOIN nx_deal d ON m.deal_id = d.id
+                   JOIN nx_client c ON d.client_id = c.id
+                   WHERE date(m.meeting_date) BETWEEN %s AND %s
+                   ORDER BY m.meeting_date ASC""",
+                (start_date, end_date),
+            )
+            return rows_to_dicts(cur)
+
+
 def get_meetings_by_deal(deal_id: int) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -84,7 +101,7 @@ def get_meetings_by_deal(deal_id: int) -> list[dict]:
 def update_meeting(meeting_id: int, **fields) -> dict | None:
     if not fields:
         return get_meeting(meeting_id)
-    allowed = {"title", "meeting_date", "participants_json", "location", "notes", "status"}
+    allowed = {"title", "meeting_date", "duration_minutes", "participants_json", "location", "notes", "status"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_meeting(meeting_id)

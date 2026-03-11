@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 from services.nexus.deals import (
     create_deal, get_deal, get_all_deals, get_deals_by_urgency,
-    get_deals_needing_push, update_deal, advance_stage, close_deal,
+    get_deals_needing_push, get_deals_by_client, get_deals_by_partner,
+    update_deal, advance_stage, close_deal,
     get_meddic_progress, add_partner_to_deal, get_deal_partners,
     remove_partner_from_deal, link_intel_to_deal, get_deal_intel,
     unlink_intel_from_deal,
@@ -22,6 +23,8 @@ class DealCreate(BaseModel):
     client_id: int
     budget_range: str | None = None
     timeline: str | None = None
+    budget_amount: float | None = None
+    budget_year: int | None = None
 
 
 class DealUpdate(BaseModel):
@@ -29,6 +32,9 @@ class DealUpdate(BaseModel):
     budget_range: str | None = None
     timeline: str | None = None
     meddic_json: str | None = None
+    budget_amount: float | None = None
+    budget_year: int | None = None
+    created_at: str | None = None
 
 
 class DealClose(BaseModel):
@@ -46,7 +52,16 @@ class DealIntelLink(BaseModel):
 
 
 @router.get("/")
-def list_deals(status: str = "active", view: str = "urgency"):
+def list_deals(
+    status: str = "active",
+    view: str = "urgency",
+    client_id: int | None = None,
+    partner_id: int | None = None,
+):
+    if client_id:
+        return get_deals_by_client(client_id)
+    if partner_id:
+        return get_deals_by_partner(partner_id)
     if view == "urgency":
         return get_deals_by_urgency()
     return get_all_deals(status)

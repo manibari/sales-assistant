@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Link2, Upload, Loader2 } from "lucide-react";
+import { X, Link2, Upload, Loader2, FileCheck } from "lucide-react";
 import { nxApi } from "@/lib/nexus-api";
 
 interface FileUploadModalProps {
@@ -13,9 +13,11 @@ interface FileUploadModalProps {
 export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModalProps) {
   const [tab, setTab] = useState<"link" | "file">("link");
   const [url, setUrl] = useState("");
+  const [fileName, setFileName] = useState("");
   const [fileType, setFileType] = useState("proposal");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const FILE_TYPES = [
     { label: "簡報/方案", value: "proposal" },
@@ -28,19 +30,16 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
     setSaving(true);
     setError("");
     try {
-      // Extract filename from URL
-      const fileName = url.includes("drive.google.com")
-        ? "Google Drive 文件"
-        : url.split("/").pop() || "連結文件";
+      const resolvedName = fileName.trim()
+        || (url.includes("drive.google.com") ? "Google Drive 文件" : url.split("/").pop() || "連結文件");
       await nxApi.deals.update(dealId, {}); // touch deal
-      // Create file record
       const res = await fetch("/api/nx/documents/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           deal_id: dealId,
           file_type: fileType,
-          file_name: fileName,
+          file_name: resolvedName,
           file_path: `link://${url}`,
           source_url: url,
         }),
@@ -48,35 +47,40 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
       if (!res.ok) throw new Error("Failed to save");
       onUploaded();
       onClose();
-    } catch (err) {
+    } catch {
       setError("儲存失敗，請確認連結是否正確");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setSelectedFile(file);
+    if (!fileName.trim()) setFileName(file.name);
+  };
+
+  const handleFileUpload = async () => {
+    if (!selectedFile) return;
     setSaving(true);
     setError("");
     try {
-      // In production, this would upload to storage. For now, create metadata record.
-      const res = await fetch("/api/nx/documents/files", {
+      const renamedFile = fileName.trim()
+        ? new File([selectedFile], fileName.trim(), { type: selectedFile.type })
+        : selectedFile;
+      const formData = new FormData();
+      formData.append("file", renamedFile);
+      formData.append("deal_id", String(dealId));
+      formData.append("file_type", fileType);
+      const res = await fetch("/api/nx/documents/files/upload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          deal_id: dealId,
-          file_type: fileType,
-          file_name: file.name,
-          file_path: `/uploads/${file.name}`,
-          file_size: file.size,
-        }),
+        body: formData,
       });
-      if (!res.ok) throw new Error("Failed to save");
+      if (!res.ok) throw new Error("Failed to upload");
       onUploaded();
       onClose();
-    } catch (err) {
+    } catch {
       setError("上傳失敗");
     } finally {
       setSaving(false);
@@ -146,6 +150,20 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
           </button>
         </div>
 
+        {/* File name */}
+        <div>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">
+            文件名稱
+          </label>
+          <input
+            type="text"
+            value={fileName}
+            onChange={(e) => setFileName(e.target.value)}
+            placeholder={tab === "link" ? "留空則自動從連結擷取" : "留空則使用檔案原名"}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          />
+        </div>
+
         {/* Link input */}
         {tab === "link" && (
           <div>
@@ -165,21 +183,34 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
         {/* File picker */}
         {tab === "file" && (
           <div>
-            <label className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl cursor-pointer hover:border-blue-500 transition-colors">
-              <Upload size={24} className="text-slate-400" />
-              <span className="text-sm text-slate-400">
-                點擊選擇檔案
-              </span>
-              <span className="text-[11px] text-slate-500">
-                PDF, PPT, PPTX, DOCX
-              </span>
-              <input
-                type="file"
-                accept=".pdf,.ppt,.pptx,.docx,.doc"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </label>
+            {selectedFile ? (
+              <div className="flex items-center gap-2 p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <FileCheck size={16} className="text-green-500 flex-shrink-0" />
+                <span className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">{selectedFile.name}</span>
+                <button
+                  onClick={() => { setSelectedFile(null); setFileName(""); }}
+                  className="text-slate-400 hover:text-red-400 cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 p-8 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl cursor-pointer hover:border-blue-500 transition-colors">
+                <Upload size={24} className="text-slate-400" />
+                <span className="text-sm text-slate-400">
+                  點擊選擇檔案
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  PDF, PPT, PPTX, DOCX
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.ppt,.pptx,.docx,.doc"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
         )}
 
@@ -187,7 +218,7 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
           <p className="text-xs text-red-400">{error}</p>
         )}
 
-        {/* Submit for link */}
+        {/* Submit */}
         {tab === "link" && (
           <button
             onClick={handleLinkSubmit}
@@ -198,11 +229,14 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
           </button>
         )}
 
-        {saving && tab === "file" && (
-          <div className="flex items-center justify-center py-2">
-            <Loader2 size={20} className="animate-spin text-blue-500" />
-            <span className="text-sm text-slate-400 ml-2">上傳中...</span>
-          </div>
+        {tab === "file" && (
+          <button
+            onClick={handleFileUpload}
+            disabled={!selectedFile || saving}
+            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer"
+          >
+            {saving ? <Loader2 size={20} className="animate-spin mx-auto" /> : "上傳"}
+          </button>
         )}
       </div>
     </div>

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS nx_partner (
     name            TEXT NOT NULL,
     trust_level     TEXT NOT NULL DEFAULT 'unverified',  -- unverified, testing, verified, core_team, si_backed, demoted
     team_size       TEXT,          -- '1-10', '10-50', '50-200', '200+'
+    aliases         TEXT,          -- comma-separated alternate names
     notes           TEXT,
     created_at      TEXT DEFAULT (datetime('now')),
     updated_at      TEXT DEFAULT (datetime('now'))
@@ -31,6 +32,7 @@ CREATE TABLE IF NOT EXISTS nx_contact (
     title           TEXT,
     phone           TEXT,
     email           TEXT,
+    line_id         TEXT,
     org_type        TEXT,          -- 'client', 'partner', 'si', 'other'
     org_id          INTEGER,       -- FK to nx_client.id or nx_partner.id (polymorphic)
     role            TEXT,          -- free text: decision maker, champion, engineer, etc.
@@ -108,7 +110,9 @@ CREATE TABLE IF NOT EXISTS nx_deal (
     name            TEXT NOT NULL,
     client_id       INTEGER NOT NULL REFERENCES nx_client(id),
     stage           TEXT NOT NULL DEFAULT 'L0',  -- L0, L1, L2, L3, L4, closed
-    budget_range    TEXT,          -- '<100K', '100-500K', '500K-1M', '1M+', 'unknown'
+    budget_range    TEXT,          -- legacy text: '<100K', '100-500K', etc. (kept for backward compat)
+    budget_amount   REAL,          -- numeric budget in TWD (e.g. 300000 = 30萬)
+    budget_year     INTEGER DEFAULT 2026,  -- fiscal year for this budget
     timeline        TEXT,          -- 'this_quarter', 'next_quarter', 'half_year', 'one_year', 'undecided'
     meddic_json     TEXT,          -- JSON: {metrics, economic_buyer, decision_criteria, decision_process, identify_pain, champion}
     close_reason    TEXT,          -- only set when stage='closed'
@@ -146,6 +150,7 @@ CREATE TABLE IF NOT EXISTS nx_meeting (
     deal_id         INTEGER NOT NULL REFERENCES nx_deal(id),
     title           TEXT NOT NULL,
     meeting_date    TEXT NOT NULL,  -- ISO datetime
+    duration_minutes INTEGER NOT NULL DEFAULT 60,
     participants_json TEXT,        -- JSON array of contact IDs + names
     location        TEXT,
     notes           TEXT,
@@ -173,6 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_nx_reminder_due ON nx_reminder(due_date, resolved
 CREATE TABLE IF NOT EXISTS nx_file (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     deal_id         INTEGER REFERENCES nx_deal(id),
+    intel_id        INTEGER REFERENCES nx_intel(id),
     file_type       TEXT NOT NULL,  -- 'proposal', 'contract', 'attachment'
     file_name       TEXT NOT NULL,
     file_path       TEXT NOT NULL,
@@ -183,3 +189,58 @@ CREATE TABLE IF NOT EXISTS nx_file (
     created_at      TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_nx_file_deal ON nx_file(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_file_intel ON nx_file(intel_id);
+
+-- 15. Intel ↔ Entity M2M (auto-materialized links)
+CREATE TABLE IF NOT EXISTS nx_intel_entity (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    intel_id    INTEGER NOT NULL REFERENCES nx_intel(id) ON DELETE CASCADE,
+    entity_type TEXT NOT NULL,  -- 'client', 'partner', 'contact', 'deal'
+    entity_id   INTEGER NOT NULL,
+    relation    TEXT DEFAULT 'mentioned',  -- 'mentioned', 'created_from'
+    created_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE(intel_id, entity_type, entity_id)
+);
+
+-- 16. Intel parsed_json flattened index
+CREATE TABLE IF NOT EXISTS nx_intel_field (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    intel_id    INTEGER NOT NULL REFERENCES nx_intel(id) ON DELETE CASCADE,
+    field_key   TEXT NOT NULL,
+    field_value TEXT NOT NULL,
+    UNIQUE(intel_id, field_key, field_value)
+);
+CREATE INDEX IF NOT EXISTS idx_intel_field_kv ON nx_intel_field(field_key, field_value);
+
+-- 17. Subsidy tracking (government grants / subsidies)
+CREATE TABLE IF NOT EXISTS nx_subsidy (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL,                  -- 計畫名稱
+    source          TEXT,                           -- 來源管道
+    agency          TEXT,                           -- 主辦機關
+    program_type    TEXT NOT NULL DEFAULT 'other',  -- sbir, siir, local, other
+    eligibility     TEXT,                           -- 申請資格
+    funding_amount  TEXT,                           -- 補助額度 (text for ranges like "50-100萬")
+    scope           TEXT,                           -- 申請範疇
+    required_docs   TEXT,                           -- 申請文件
+    deadline        TEXT,                           -- 申請截止 (ISO date)
+    reference_url   TEXT,                           -- 資料來源 URL
+    stage           TEXT NOT NULL DEFAULT 'draft',  -- draft→evaluating→applying→under_review→approved/rejected→executing→completed
+    client_id       INTEGER REFERENCES nx_client(id),
+    partner_id      INTEGER REFERENCES nx_partner(id),
+    notes           TEXT,
+    status          TEXT NOT NULL DEFAULT 'active',
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_stage ON nx_subsidy(status, stage);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline ON nx_subsidy(deadline);
+
+-- 18. Subsidy × Deal (M2M)
+CREATE TABLE IF NOT EXISTS nx_subsidy_deal (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,
+    deal_id     INTEGER NOT NULL REFERENCES nx_deal(id) ON DELETE CASCADE,
+    created_at  TEXT DEFAULT (datetime('now')),
+    UNIQUE(subsidy_id, deal_id)
+);

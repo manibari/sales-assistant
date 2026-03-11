@@ -133,6 +133,8 @@ def init_db():
     schema_files = ["schema_sqlite.sql", "schema_nexus.sql"]
     conn = sqlite3.connect(_get_db_path())
     conn.execute("PRAGMA foreign_keys=ON")
+    # Run migrations first so new columns exist before schema indexes
+    _run_migrations(conn)
     for schema_file in schema_files:
         schema_path = os.path.join(db_dir, schema_file)
         if os.path.exists(schema_path):
@@ -141,3 +143,61 @@ def init_db():
     conn.commit()
     conn.close()
     logger.info("Database initialized at %s", _get_db_path())
+
+
+def _run_migrations(conn: sqlite3.Connection):
+    """Add columns missing from older schema versions."""
+    # Check if nx_file table exists (skip on fresh db — schema will create it)
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_file'")
+    if not cur.fetchone():
+        return
+    cur = conn.execute("PRAGMA table_info(nx_file)")
+    columns = {row[1] for row in cur.fetchall()}
+    if "intel_id" not in columns:
+        conn.execute("ALTER TABLE nx_file ADD COLUMN intel_id INTEGER REFERENCES nx_intel(id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_nx_file_intel ON nx_file(intel_id)")
+        logger.info("Migration: added intel_id to nx_file")
+
+    # Migration: duration_minutes on nx_meeting
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_meeting'")
+    if cur.fetchone():
+        cur = conn.execute("PRAGMA table_info(nx_meeting)")
+        meeting_columns = {row[1] for row in cur.fetchall()}
+        if "duration_minutes" not in meeting_columns:
+            conn.execute("ALTER TABLE nx_meeting ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60")
+            logger.info("Migration: added duration_minutes to nx_meeting")
+
+    # Migration: budget_amount + budget_year on nx_deal
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_deal'")
+    if not cur.fetchone():
+        return
+    cur = conn.execute("PRAGMA table_info(nx_deal)")
+    deal_columns = {row[1] for row in cur.fetchall()}
+    if "budget_amount" not in deal_columns:
+        conn.execute("ALTER TABLE nx_deal ADD COLUMN budget_amount REAL")
+        conn.execute("ALTER TABLE nx_deal ADD COLUMN budget_year INTEGER DEFAULT 2026")
+        # Backfill from budget_range
+        mapping = {
+            "<100K": 100000,
+            "100-500K": 300000,
+            "500K-1M": 750000,
+            "1M+": 1000000,
+        }
+        for text_val, amount in mapping.items():
+            conn.execute(
+                "UPDATE nx_deal SET budget_amount = ? WHERE budget_range = ?",
+                (amount, text_val),
+            )
+        conn.execute(
+            "UPDATE nx_deal SET budget_year = 2026 WHERE budget_year IS NULL"
+        )
+        logger.info("Migration: added budget_amount, budget_year to nx_deal + backfill")
+
+    # Migration: aliases on nx_client
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_client'")
+    if cur.fetchone():
+        cur = conn.execute("PRAGMA table_info(nx_client)")
+        client_columns = {row[1] for row in cur.fetchall()}
+        if "aliases" not in client_columns:
+            conn.execute("ALTER TABLE nx_client ADD COLUMN aliases TEXT")
+            logger.info("Migration: added aliases to nx_client")

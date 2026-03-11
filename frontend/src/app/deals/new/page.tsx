@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { nxApi, type NxClient } from "@/lib/nexus-api";
+import { BUDGET_PRESETS, formatBudget } from "@/lib/options";
 import Link from "next/link";
 
-const BUDGET_OPTIONS = ["<100K", "100-500K", "500K-1M", "1M+", "unknown"];
 const TIMELINE_OPTIONS = [
   { label: "本季", value: "this_quarter" },
   { label: "下季", value: "next_quarter" },
@@ -26,7 +26,8 @@ function NewDealForm() {
     prefilledClientId ? Number(prefilledClientId) : null
   );
   const [name, setName] = useState("");
-  const [budget, setBudget] = useState("");
+  const [budgetAmount, setBudgetAmount] = useState<number | null>(null);
+  const [customBudget, setCustomBudget] = useState("");
   const [timeline, setTimeline] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +42,8 @@ function NewDealForm() {
       const deal = await nxApi.deals.create({
         name: name.trim(),
         client_id: clientId,
-        budget_range: budget || undefined,
+        budget_amount: budgetAmount || undefined,
+        budget_year: new Date().getFullYear(),
         timeline: timeline || undefined,
       });
       router.push(`/deals/${deal.id}`);
@@ -99,23 +101,37 @@ function NewDealForm() {
         {/* Budget */}
         <div>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
-            預估預算
+            預估預算 {budgetAmount ? `(${formatBudget(budgetAmount)})` : ""}
           </label>
           <div className="grid grid-cols-3 gap-2">
-            {BUDGET_OPTIONS.map((opt) => (
+            {BUDGET_PRESETS.map((preset) => (
               <button
-                key={opt}
-                onClick={() => setBudget(budget === opt ? "" : opt)}
+                key={preset.amount}
+                onClick={() => {
+                  setBudgetAmount(budgetAmount === preset.amount ? null : preset.amount);
+                  setCustomBudget("");
+                }}
                 className={`min-h-[44px] px-3 py-2 text-sm font-medium rounded-lg border transition-colors cursor-pointer ${
-                  budget === opt
+                  budgetAmount === preset.amount
                     ? "border-blue-500 bg-blue-500/10 text-blue-500 dark:text-blue-400"
                     : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-50 hover:border-blue-500"
                 }`}
               >
-                {opt === "unknown" ? "未知" : opt}
+                {preset.label}
               </button>
             ))}
           </div>
+          <input
+            type="number"
+            value={customBudget}
+            onChange={(e) => {
+              setCustomBudget(e.target.value);
+              const n = parseFloat(e.target.value);
+              setBudgetAmount(isNaN(n) ? null : n);
+            }}
+            placeholder="或自訂金額 (元)"
+            className="mt-2 w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+          />
         </div>
 
         {/* Timeline */}

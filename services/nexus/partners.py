@@ -45,7 +45,7 @@ def get_all_partners(trust_level: str | None = None) -> list[dict]:
 def update_partner(partner_id: int, **fields) -> dict | None:
     if not fields:
         return get_partner(partner_id)
-    allowed = {"name", "trust_level", "team_size", "notes"}
+    allowed = {"name", "trust_level", "team_size", "notes", "aliases"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_partner(partner_id)
@@ -64,6 +64,23 @@ def update_trust_level(partner_id: int, new_level: str) -> dict | None:
     if new_level not in VALID_TRUST_LEVELS:
         raise ValueError(f"Invalid trust level: {new_level}. Must be one of {VALID_TRUST_LEVELS}")
     return update_partner(partner_id, trust_level=new_level)
+
+
+def find_partner_by_name(name: str) -> list[dict]:
+    """Fuzzy match partner by name or aliases. Returns candidate list."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            q = f"%{name}%"
+            cur.execute(
+                """SELECT id, name, trust_level, team_size, aliases
+                   FROM nx_partner
+                   WHERE name LIKE %s OR aliases LIKE %s
+                   ORDER BY
+                     CASE WHEN LOWER(name) = LOWER(%s) THEN 0 ELSE 1 END,
+                     updated_at DESC""",
+                (q, q, name),
+            )
+            return rows_to_dicts(cur)
 
 
 def delete_partner(partner_id: int) -> bool:

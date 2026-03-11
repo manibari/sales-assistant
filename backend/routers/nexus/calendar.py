@@ -5,8 +5,8 @@ from pydantic import BaseModel
 
 from services.nexus.calendar import (
     create_meeting, get_meeting, get_meetings_by_date, get_meetings_by_month,
-    get_meetings_by_deal, update_meeting, complete_meeting, delete_meeting,
-    create_reminder, get_reminders_by_date, get_reminders_by_month,
+    get_meetings_by_range, get_meetings_by_deal, update_meeting, complete_meeting,
+    delete_meeting, create_reminder, get_reminders_by_date, get_reminders_by_month,
     resolve_reminder, get_pending_reminders,
 )
 
@@ -17,6 +17,7 @@ class MeetingCreate(BaseModel):
     deal_id: int
     title: str
     meeting_date: str
+    duration_minutes: int = 60
     participants_json: str | None = None
     location: str | None = None
     notes: str | None = None
@@ -25,6 +26,7 @@ class MeetingCreate(BaseModel):
 class MeetingUpdate(BaseModel):
     title: str | None = None
     meeting_date: str | None = None
+    duration_minutes: int | None = None
     participants_json: str | None = None
     location: str | None = None
     notes: str | None = None
@@ -47,6 +49,11 @@ def list_meetings(date: str | None = None, deal_id: int | None = None):
     if deal_id:
         return get_meetings_by_deal(deal_id)
     return []
+
+
+@router.get("/meetings/range")
+def meetings_by_range(start: str, end: str):
+    return get_meetings_by_range(start, end)
 
 
 @router.get("/meetings/month/{year}/{month}")

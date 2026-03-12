@@ -8,6 +8,7 @@ from services.nexus.subsidies import (
     get_subsidies_by_client, update_subsidy, advance_stage,
     close_subsidy, link_deal, unlink_deal, get_subsidy_deals,
     get_subsidies_expiring_soon,
+    add_deadline, get_deadlines, update_deadline, delete_deadline,
 )
 from services.nexus.intel import get_entity_intel
 
@@ -51,6 +52,20 @@ class SubsidyClose(BaseModel):
     notes: str | None = None
 
 
+class DeadlineCreate(BaseModel):
+    label: str
+    deadline_date: str
+    notes: str | None = None
+    status: str = "open"
+
+
+class DeadlineUpdate(BaseModel):
+    label: str | None = None
+    deadline_date: str | None = None
+    notes: str | None = None
+    status: str | None = None
+
+
 class SubsidyDealLink(BaseModel):
     deal_id: int
 
@@ -78,6 +93,7 @@ def read_subsidy(subsidy_id: int):
         raise HTTPException(404, "Subsidy not found")
     sub["deals"] = get_subsidy_deals(subsidy_id)
     sub["intel"] = get_entity_intel("subsidy", subsidy_id)
+    sub["deadlines"] = get_deadlines(subsidy_id)
     return sub
 
 
@@ -123,3 +139,30 @@ def link_deal_to_subsidy(subsidy_id: int, body: SubsidyDealLink):
 def unlink_deal_from_subsidy(subsidy_id: int, deal_id: int):
     if not unlink_deal(subsidy_id, deal_id):
         raise HTTPException(404, "Deal not linked to this subsidy")
+
+
+# --- Deadline endpoints ---
+
+@router.get("/{subsidy_id}/deadlines")
+def list_deadlines(subsidy_id: int):
+    return get_deadlines(subsidy_id)
+
+
+@router.post("/{subsidy_id}/deadlines", status_code=201)
+def create_deadline(subsidy_id: int, body: DeadlineCreate):
+    return add_deadline(subsidy_id, body.label, body.deadline_date, body.notes, body.status)
+
+
+@router.patch("/{subsidy_id}/deadlines/{deadline_id}")
+def patch_deadline(subsidy_id: int, deadline_id: int, body: DeadlineUpdate):
+    fields = body.model_dump(exclude_none=True)
+    result = update_deadline(deadline_id, **fields)
+    if not result:
+        raise HTTPException(404, "Deadline not found")
+    return result
+
+
+@router.delete("/{subsidy_id}/deadlines/{deadline_id}", status_code=204)
+def remove_deadline(subsidy_id: int, deadline_id: int):
+    if not delete_deadline(deadline_id):
+        raise HTTPException(404, "Deadline not found")

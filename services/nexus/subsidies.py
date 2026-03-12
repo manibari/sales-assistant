@@ -180,6 +180,90 @@ def get_subsidy_deals(subsidy_id: int) -> list[dict]:
             return rows_to_dicts(cur)
 
 
+# ---------------------------------------------------------------------------
+# Subsidy deadlines (nx_subsidy_deadline)
+# ---------------------------------------------------------------------------
+
+ALLOWED_DEADLINE_FIELDS = {"label", "deadline_date", "notes", "status"}
+
+
+def _sync_deadline_date_with_cursor(subsidy_id: int, cur) -> None:
+    """Keep nx_subsidy.deadline_date in sync with nearest open deadline. Uses existing cursor."""
+    cur.execute(
+        """SELECT deadline_date FROM nx_subsidy_deadline
+           WHERE subsidy_id = %s AND status = 'open'
+           ORDER BY deadline_date ASC LIMIT 1""",
+        (subsidy_id,),
+    )
+    row = cur.fetchone()
+    nearest = row[0] if row else None
+    cur.execute(
+        "UPDATE nx_subsidy SET deadline_date = %s, updated_at = datetime('now') WHERE id = %s",
+        (nearest, subsidy_id),
+    )
+
+
+def add_deadline(
+    subsidy_id: int, label: str, deadline_date: str,
+    notes: str | None = None, status: str = "open",
+) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO nx_subsidy_deadline (subsidy_id, label, deadline_date, notes, status)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING *""",
+                (subsidy_id, label, deadline_date, notes, status),
+            )
+            result = row_to_dict(cur)
+            _sync_deadline_date_with_cursor(subsidy_id, cur)
+            return result
+
+
+def get_deadlines(subsidy_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT *,
+                          CAST(julianday(deadline_date) - julianday('now') AS INTEGER) AS days_left
+                   FROM nx_subsidy_deadline
+                   WHERE subsidy_id = %s
+                   ORDER BY deadline_date ASC""",
+                (subsidy_id,),
+            )
+            return rows_to_dicts(cur)
+
+
+def update_deadline(deadline_id: int, **fields) -> dict | None:
+    filtered = {k: v for k, v in fields.items() if k in ALLOWED_DEADLINE_FIELDS}
+    if not filtered:
+        return None
+    set_clause = ", ".join(f"{k} = %s" for k in filtered)
+    values = list(filtered.values()) + [deadline_id]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE nx_subsidy_deadline SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                values,
+            )
+            result = row_to_dict(cur)
+            if result:
+                _sync_deadline_date_with_cursor(result["subsidy_id"], cur)
+            return result
+
+
+def delete_deadline(deadline_id: int) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT subsidy_id FROM nx_subsidy_deadline WHERE id = %s", (deadline_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            subsidy_id = row[0]
+            cur.execute("DELETE FROM nx_subsidy_deadline WHERE id = %s", (deadline_id,))
+            _sync_deadline_date_with_cursor(subsidy_id, cur)
+            return True
+
+
 def get_subsidies_expiring_soon(within_days: int = 30) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:

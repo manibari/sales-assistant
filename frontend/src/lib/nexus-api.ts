@@ -206,6 +206,19 @@ export interface NxSubsidy {
   updated_at: string;
   deals?: { deal_id: number; deal_name: string; deal_stage: string; deal_status: string; client_name: string }[];
   intel?: NxIntel[];
+  deadlines?: NxSubsidyDeadline[];
+}
+
+export interface NxSubsidyDeadline {
+  id: number;
+  subsidy_id: number;
+  label: string;
+  deadline_date: string;
+  notes: string | null;
+  status: string;
+  days_left?: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MeddicProgress {
@@ -271,6 +284,14 @@ export const nxApi = {
       postAPI<unknown>(`/subsidies/${subsidyId}/deals`, { deal_id: dealId }),
     unlinkDeal: (subsidyId: number, dealId: number) =>
       deleteAPI(`/subsidies/${subsidyId}/deals/${dealId}`),
+    getDeadlines: (subsidyId: number) =>
+      fetchAPI<NxSubsidyDeadline[]>(`/subsidies/${subsidyId}/deadlines`),
+    addDeadline: (subsidyId: number, data: { label: string; deadline_date: string; notes?: string }) =>
+      postAPI<NxSubsidyDeadline>(`/subsidies/${subsidyId}/deadlines`, data),
+    updateDeadline: (subsidyId: number, deadlineId: number, data: Partial<NxSubsidyDeadline>) =>
+      patchAPI<NxSubsidyDeadline>(`/subsidies/${subsidyId}/deadlines/${deadlineId}`, data),
+    deleteDeadline: (subsidyId: number, deadlineId: number) =>
+      deleteAPI(`/subsidies/${subsidyId}/deadlines/${deadlineId}`),
   },
   clients: {
     list: (status?: string) => fetchAPI<NxClient[]>(`/clients/${status ? `?status=${status}` : ""}`),

@@ -12,8 +12,11 @@ import {
   ExternalLink,
   Zap,
   TrendingUp,
+  CalendarClock,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import { nxApi, type NxSubsidy, type NxClient, type NxPartner, type NxDeal } from "@/lib/nexus-api";
+import { nxApi, type NxSubsidy, type NxSubsidyDeadline, type NxClient, type NxPartner, type NxDeal } from "@/lib/nexus-api";
 import Link from "next/link";
 
 const STAGE_ORDER = [
@@ -320,6 +323,9 @@ export default function SubsidyDetailPage() {
 
           {/* Right column 2/5 */}
           <div className="lg:col-span-2 space-y-4 mt-6 lg:mt-0">
+            {/* Deadlines */}
+            <DeadlinesCard subsidyId={id} deadlines={subsidy.deadlines || []} onReload={load} />
+
             {/* Linked deals */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
               <div className="flex items-center justify-between mb-3">
@@ -468,6 +474,126 @@ function EditableField({
           <Pencil size={14} />
         </button>
       </div>
+    </div>
+  );
+}
+
+function DeadlinesCard({
+  subsidyId,
+  deadlines,
+  onReload,
+}: {
+  subsidyId: number;
+  deadlines: NxSubsidyDeadline[];
+  onReload: () => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newDate, setNewDate] = useState("");
+  const [newNotes, setNewNotes] = useState("");
+
+  const handleAdd = async () => {
+    if (!newLabel || !newDate) return;
+    await nxApi.subsidies.addDeadline(subsidyId, { label: newLabel, deadline_date: newDate, notes: newNotes || undefined });
+    setShowAdd(false);
+    setNewLabel("");
+    setNewDate("");
+    setNewNotes("");
+    onReload();
+  };
+
+  const handleDelete = async (dlId: number) => {
+    await nxApi.subsidies.deleteDeadline(subsidyId, dlId);
+    onReload();
+  };
+
+  const handleToggle = async (dl: NxSubsidyDeadline) => {
+    await nxApi.subsidies.updateDeadline(subsidyId, dl.id, { status: dl.status === "open" ? "closed" : "open" });
+    onReload();
+  };
+
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+          <CalendarClock size={16} /> 申請梯次
+        </h3>
+        <button onClick={() => setShowAdd(!showAdd)} className="text-xs text-blue-500 hover:underline cursor-pointer flex items-center gap-1">
+          <Plus size={12} /> 新增
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="mb-3 p-3 border border-blue-500/30 rounded-lg space-y-2 bg-blue-500/5">
+          <input
+            placeholder="梯次名稱（如：第一梯）"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:outline-none"
+          />
+          <input
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.target.value)}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:outline-none"
+          />
+          <input
+            placeholder="備註（選填）"
+            value={newNotes}
+            onChange={(e) => setNewNotes(e.target.value)}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:outline-none"
+          />
+          <div className="flex gap-2">
+            <button onClick={handleAdd} className="px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 cursor-pointer">確認</button>
+            <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-slate-400 text-xs hover:text-slate-600 cursor-pointer">取消</button>
+          </div>
+        </div>
+      )}
+
+      {deadlines.length === 0 ? (
+        <p className="text-xs text-slate-400">尚無梯次資料</p>
+      ) : (
+        <div className="space-y-2">
+          {deadlines.map((dl) => {
+            const isClosed = dl.status === "closed";
+            const daysLeft = dl.days_left ?? null;
+            return (
+              <div key={dl.id} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg ${isClosed ? "bg-slate-100 dark:bg-slate-800/50" : "bg-slate-50 dark:bg-slate-800"}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleToggle(dl)} className={`text-sm font-medium cursor-pointer ${isClosed ? "line-through text-slate-400" : "text-slate-900 dark:text-slate-50"}`}>
+                      {dl.label}
+                    </button>
+                    {!isClosed && daysLeft != null && daysLeft >= 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        daysLeft <= 14 ? "bg-red-500 text-white" :
+                        daysLeft <= 30 ? "bg-red-500/15 text-red-500" :
+                        daysLeft <= 60 ? "bg-amber-500/15 text-amber-500" :
+                        "bg-green-500/10 text-green-500"
+                      }`}>
+                        {daysLeft === 0 ? "今天" : `${daysLeft}天`}
+                      </span>
+                    )}
+                    {!isClosed && daysLeft != null && daysLeft < 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/10 text-slate-400">已截止</span>
+                    )}
+                    {isClosed && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-500/10 text-slate-400">已關閉</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">
+                    {dl.deadline_date}
+                    {dl.notes && <span className="ml-2">{dl.notes}</span>}
+                  </div>
+                </div>
+                <button onClick={() => handleDelete(dl.id)} className="text-slate-300 hover:text-red-400 cursor-pointer flex-shrink-0">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

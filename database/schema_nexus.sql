@@ -236,7 +236,21 @@ CREATE TABLE IF NOT EXISTS nx_subsidy (
 CREATE INDEX IF NOT EXISTS idx_nx_subsidy_stage ON nx_subsidy(status, stage);
 CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline ON nx_subsidy(deadline);
 
--- 18. Subsidy × Deal (M2M)
+-- 18b. Subsidy deadlines (multiple batches per subsidy)
+CREATE TABLE IF NOT EXISTS nx_subsidy_deadline (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,
+    label       TEXT NOT NULL,           -- e.g. "第一梯", "第二梯"
+    deadline_date TEXT NOT NULL,         -- ISO date (YYYY-MM-DD)
+    notes       TEXT,
+    status      TEXT NOT NULL DEFAULT 'open',  -- open, closed
+    created_at  TEXT DEFAULT (datetime('now')),
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_subsidy ON nx_subsidy_deadline(subsidy_id);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_date ON nx_subsidy_deadline(deadline_date, status);
+
+-- 19. Subsidy × Deal (M2M)
 CREATE TABLE IF NOT EXISTS nx_subsidy_deal (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,

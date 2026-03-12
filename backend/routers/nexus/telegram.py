@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from services.ai_provider import check_ai_available, generate_ai_response, generate_ai_vision_response
 from services.nexus.documents import create_file
 from services.nexus.intel import confirm_intel, create_intel, update_intel
+from services.nexus.deals import get_deals_by_client, link_intel_to_deal
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -562,7 +563,7 @@ async def _auto_create_deal(
     intel_id: int, client_id: int, client_name: str, parsed: dict
 ) -> dict | None:
     """Auto-create a deal from parsed intel. Returns deal dict or None."""
-    from services.nexus.deals import create_deal, link_intel_to_deal
+    from services.nexus.deals import create_deal
 
     pains = parsed.get("pain_points", [])
     pain_labels = [_PAIN_LABELS.get(p, p) for p in pains[:2]] if pains else []
@@ -648,13 +649,30 @@ async def _handle_done(chat_id: int) -> None:
     if mat_result.get("fields_indexed", 0) > 0:
         lines.append(f"📊 已索引 {mat_result['fields_indexed']} 個欄位")
 
-    # Auto-create deal based on deal_potential
-    if mat_result.get("client") and parsed.get("role") == "client":
-        client_info = mat_result["client"]
+    # Auto-link to existing deals + deal creation logic
+    client_info = mat_result.get("client")
+    partner_info = mat_result.get("partner")
+    role = parsed.get("role")
+
+    # Find and auto-link existing deals for matched client or partner
+    existing_deals = []
+    if client_info:
+        existing_deals = await asyncio.to_thread(get_deals_by_client, client_info["id"])
+    if existing_deals:
+        for d in existing_deals:
+            try:
+                await asyncio.to_thread(link_intel_to_deal, d["id"], intel_id)
+            except Exception:
+                pass  # may already be linked
+        deal_names = "、".join(f"「{d['name']}」" for d in existing_deals[:3])
+        suffix = f"等 {len(existing_deals)} 筆" if len(existing_deals) > 3 else ""
+        lines.append(f"🔗 已自動關聯商機：{deal_names}{suffix}")
+
+    # Deal creation based on deal_potential (client role only)
+    if role == "client" and client_info:
         dp = parsed.get("deal_potential", "")
 
         if dp in ("high", "medium"):
-            # Auto-create deal
             deal_result = await _auto_create_deal(
                 intel_id=intel_id,
                 client_id=client_info["id"],
@@ -662,13 +680,11 @@ async def _handle_done(chat_id: int) -> None:
                 parsed=parsed,
             )
             if deal_result:
-                lines.append("")
                 lines.append(
                     f"💼 已自動建立商機「{deal_result['name']}」(#{deal_result['id']})"
                 )
                 lines.append(f"   階段：L0 | 開案潛力：{'高' if dp == 'high' else '中'}")
         elif dp == "low":
-            # Ask user
             _pending_deal[chat_id] = {
                 "intel_id": intel_id,
                 "client_id": client_info["id"],
@@ -676,23 +692,25 @@ async def _handle_done(chat_id: int) -> None:
                 "parsed": parsed,
             }
             lines.append("")
-            lines.append(f"💼 開案潛力偏低，仍要為「{client_info['name']}」建立商機嗎？")
+            lines.append(f"💼 開案潛力偏低，仍要為「{client_info['name']}」建立新商機嗎？")
             lines.append("回覆「是」建立，或傳新訊息開始下一筆情報")
-        else:
-            # No deal_potential or "none" — still ask for client role
-            if dp != "none":
-                _pending_deal[chat_id] = {
-                    "intel_id": intel_id,
-                    "client_id": client_info["id"],
-                    "client_name": client_info["name"],
-                    "parsed": parsed,
-                }
+        elif dp != "none":
+            _pending_deal[chat_id] = {
+                "intel_id": intel_id,
+                "client_id": client_info["id"],
+                "client_name": client_info["name"],
+                "parsed": parsed,
+            }
+            if not existing_deals:
                 lines.append("")
                 lines.append(f"💼 要為「{client_info['name']}」建立商機嗎？")
                 lines.append("回覆「是」建立，或傳新訊息開始下一筆情報")
             else:
                 lines.append("")
-                lines.append("傳新訊息可開始下一筆情報")
+                lines.append("💼 要另外建立新商機嗎？回覆「是」建立，或傳新訊息開始下一筆")
+        else:
+            lines.append("")
+            lines.append("傳新訊息可開始下一筆情報")
     else:
         lines.append("")
         lines.append("傳新訊息可開始下一筆情報")

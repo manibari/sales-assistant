@@ -137,9 +137,11 @@ export function DealGantt({ dealId, dealCreatedAt, currentStage, intel, onDealUp
 
   // Intel rows
   (intel || []).forEach((i) => {
-    const iStart = toDay(new Date(i.created_at));
+    const dateStr = (i as unknown as Record<string, string>).intel_created_at || i.created_at;
+    const iStart = toDay(new Date(dateStr));
+    const intelId = (i as unknown as Record<string, number>).intel_id ?? i.id;
     rows.push({
-      id: `i-${i.id}`,
+      id: `i-${intelId}`,
       label: i.raw_input.slice(0, 20) + (i.raw_input.length > 20 ? "…" : ""),
       start: iStart,
       end: iStart,

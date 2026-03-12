@@ -653,8 +653,8 @@ export default function DealDetailPage() {
           } : undefined}
         >
           {deal.intel && deal.intel.length > 0 ? (
-            deal.intel.map((i: { id: number; raw_input: string; intel_created_at?: string }) => (
-              <div key={i.id} className="flex items-start justify-between py-2 gap-2">
+            deal.intel.map((i: { id: number; intel_id?: number; raw_input: string; intel_created_at?: string }) => (
+              <div key={i.intel_id ?? i.id} className="flex items-start justify-between py-2 gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
                     {i.raw_input}
@@ -670,7 +670,7 @@ export default function DealDetailPage() {
                     onClick={async () => {
                       if (!confirm("確定取消關聯此情報？")) return;
                       try {
-                        await nxApi.deals.unlinkIntel(dealId, i.id);
+                        await nxApi.deals.unlinkIntel(dealId, i.intel_id ?? i.id);
                         loadDeal();
                       } catch (err) { console.error(err); }
                     }}
@@ -933,7 +933,7 @@ export default function DealDetailPage() {
                 <p className="text-sm text-slate-400 py-4 text-center">載入中...</p>
               ) : (
                 allIntels
-                  .filter((i) => !(deal?.intel || []).some((di: { id: number }) => di.id === i.id || di.id === (i as unknown as { intel_id?: number }).intel_id))
+                  .filter((i) => !(deal?.intel || []).some((di: { id: number; intel_id?: number }) => (di.intel_id ?? di.id) === i.id))
                   .map((i) => (
                     <button
                       key={i.id}

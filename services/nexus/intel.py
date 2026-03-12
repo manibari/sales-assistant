@@ -3,6 +3,19 @@
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
+def _table_has_column(cur, table_name: str, column_name: str) -> bool:
+    """Return True when the SQLite table exists and contains the column."""
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = %s",
+        (table_name,),
+    )
+    if cur.fetchone() is None:
+        return False
+
+    cur.execute(f"PRAGMA table_info({table_name})")
+    return any(row[1] == column_name for row in cur.fetchall())
+
+
 def create_intel(
     raw_input: str,
     input_type: str = "text",
@@ -104,11 +117,20 @@ def get_intel_linked_deals(intel_id: int) -> list[dict]:
 def delete_intel(intel_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Clean up references first (CASCADE may not work on older tables)
-            cur.execute("DELETE FROM nx_deal_intel WHERE intel_id = %s", (intel_id,))
-            cur.execute("DELETE FROM nx_intel_entity WHERE intel_id = %s", (intel_id,))
-            cur.execute("DELETE FROM nx_intel_field WHERE intel_id = %s", (intel_id,))
-            cur.execute("DELETE FROM nx_document WHERE intel_id = %s", (intel_id,))
+            # Clean up references first so older local DBs do not trip over
+            # missing tables/columns while we migrate schema forward.
+            cleanup_targets = [
+                ("nx_deal_intel", "intel_id"),
+                ("nx_intel_entity", "intel_id"),
+                ("nx_intel_field", "intel_id"),
+                ("nx_file", "intel_id"),
+            ]
+            for table_name, column_name in cleanup_targets:
+                if _table_has_column(cur, table_name, column_name):
+                    cur.execute(
+                        f"DELETE FROM {table_name} WHERE {column_name} = %s",
+                        (intel_id,),
+                    )
             cur.execute("DELETE FROM nx_intel WHERE id = %s", (intel_id,))
             return cur._cur.rowcount > 0
 

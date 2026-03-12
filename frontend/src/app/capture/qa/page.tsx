@@ -11,7 +11,7 @@ import {
   User,
   Bot,
 } from "lucide-react";
-import { nxApi, type NxIntel } from "@/lib/nexus-api";
+import { nxApi, type NxIntel, type MaterializeResult } from "@/lib/nexus-api";
 
 interface ChatMsg {
   role: "user" | "ai" | "system";
@@ -31,7 +31,7 @@ function ChatFlow() {
   const [initializing, setInitializing] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
-  const [matResult, setMatResult] = useState<Record<string, unknown> | null>(null);
+  const [matResult, setMatResult] = useState<MaterializeResult | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,9 +126,9 @@ function ChatFlow() {
   }
 
   if (done) {
-    const client = (matResult as Record<string, Record<string, string>> | null)?.client;
-    const partner = (matResult as Record<string, Record<string, string>> | null)?.partner;
-    const contacts = ((matResult as Record<string, unknown[]> | null)?.contacts || []) as { name: string; action: string }[];
+    const client = matResult?.client;
+    const partner = matResult?.partner;
+    const contacts = matResult?.contacts || [];
     return (
       <div className="flex flex-col h-full">
         <TopBar title="完成" />

@@ -104,6 +104,11 @@ def get_intel_linked_deals(intel_id: int) -> list[dict]:
 def delete_intel(intel_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Clean up references first (CASCADE may not work on older tables)
+            cur.execute("DELETE FROM nx_deal_intel WHERE intel_id = %s", (intel_id,))
+            cur.execute("DELETE FROM nx_intel_entity WHERE intel_id = %s", (intel_id,))
+            cur.execute("DELETE FROM nx_intel_field WHERE intel_id = %s", (intel_id,))
+            cur.execute("DELETE FROM nx_document WHERE intel_id = %s", (intel_id,))
             cur.execute("DELETE FROM nx_intel WHERE id = %s", (intel_id,))
             return cur._cur.rowcount > 0
 

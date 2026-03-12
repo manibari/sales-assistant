@@ -1,8 +1,12 @@
 """Nexus intel router."""
 
-from fastapi import APIRouter, HTTPException
+import json
+import logging
+
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from services.ai_provider import check_ai_available, generate_ai_response
 from services.nexus.intel import (
     create_intel, get_intel, get_all_intel, confirm_intel, update_intel, delete_intel,
     get_intel_entities, get_entity_intel,
@@ -11,7 +15,11 @@ from services.nexus.documents import get_files_by_intel
 from services.nexus.intel import get_intel_linked_deals
 from services.nexus.materialize import materialize_intel
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Reuse prompts from telegram module
+from backend.routers.nexus.telegram import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT
 
 
 class IntelCreate(BaseModel):
@@ -30,6 +38,11 @@ class IntelUpdate(BaseModel):
 
 class IntelConfirm(BaseModel):
     parsed_json: str | None = None
+
+
+class ChatMessage(BaseModel):
+    message: str
+    current_parsed: dict | None = None
 
 
 @router.get("/")
@@ -93,7 +106,94 @@ def entities(intel_id: int):
     return get_intel_entities(intel_id)
 
 
+@router.post("/{intel_id}/parse")
+def initial_parse(intel_id: int):
+    """Run AI initial parse on raw_input, return parsed JSON + AI greeting."""
+    intel = get_intel(intel_id)
+    if not intel:
+        raise HTTPException(404, "Intel not found")
+
+    if not check_ai_available():
+        raise HTTPException(503, "AI service not available")
+
+    raw = intel["raw_input"]
+    ai_raw = generate_ai_response(INTEL_PARSE_PROMPT, raw)
+
+    parsed = {}
+    try:
+        cleaned = ai_raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
+        parsed = json.loads(cleaned)
+    except (json.JSONDecodeError, IndexError):
+        logger.warning("Initial parse failed for intel #%d: %s", intel_id, ai_raw[:200])
+
+    # Save parsed to intel
+    update_intel(intel_id, parsed_json=json.dumps(parsed, ensure_ascii=False))
+
+    # Generate greeting via followup prompt
+    greeting_prompt = FOLLOWUP_PROMPT.format(
+        current_json=json.dumps(parsed, ensure_ascii=False, indent=2),
+        user_msg="（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）",
+    )
+    greeting_raw = generate_ai_response(
+        "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
+        greeting_prompt,
+    )
+    # Split on --- to get reply part
+    ai_reply = greeting_raw.split("---")[0].strip() if "---" in greeting_raw else greeting_raw.strip()
+
+    return {"parsed": parsed, "ai_reply": ai_reply}
+
+
+@router.post("/{intel_id}/chat")
+def chat_followup(intel_id: int, body: ChatMessage):
+    """Conversational followup — AI asks questions, user replies, returns updated fields."""
+    intel = get_intel(intel_id)
+    if not intel:
+        raise HTTPException(404, "Intel not found")
+
+    if not check_ai_available():
+        raise HTTPException(503, "AI service not available")
+
+    current = body.current_parsed or {}
+    prompt = FOLLOWUP_PROMPT.format(
+        current_json=json.dumps(current, ensure_ascii=False, indent=2),
+        user_msg=body.message,
+    )
+    ai_raw = generate_ai_response(
+        "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
+        prompt,
+    )
+
+    ai_reply = ai_raw.strip()
+    new_fields = {}
+
+    if "---" in ai_raw:
+        parts = ai_raw.split("---", 1)
+        ai_reply = parts[0].strip()
+        json_part = parts[1].strip()
+        try:
+            if json_part.startswith("```"):
+                json_part = json_part.split("\n", 1)[1].rsplit("```", 1)[0]
+            new_fields = json.loads(json_part)
+        except (json.JSONDecodeError, IndexError):
+            logger.warning("Chat parse failed for intel #%d: %s", intel_id, json_part[:200])
+
+    # Merge new fields into current
+    merged = {**current}
+    for k, v in new_fields.items():
+        if v is not None:
+            merged[k] = v
+
+    # Save to intel
+    update_intel(intel_id, parsed_json=json.dumps(merged, ensure_ascii=False))
+
+    return {"ai_reply": ai_reply, "new_fields": new_fields, "parsed": merged}
+
+
 @router.delete("/{intel_id}", status_code=204)
 def remove_intel(intel_id: int):
-    if not delete_intel(intel_id):
-        raise HTTPException(404, "Intel not found")
+    # Treat delete as idempotent so stale UI items do not surface as errors.
+    delete_intel(intel_id)
+    return Response(status_code=204)

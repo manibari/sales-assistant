@@ -1,319 +1,114 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
-import { Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  Send,
+  Zap,
+  User,
+  Bot,
+} from "lucide-react";
 import { nxApi, type NxIntel } from "@/lib/nexus-api";
-import { INDUSTRIES, BUDGET_PRESETS } from "@/lib/options";
 
-// --- Q&A Flow Definition ---
-
-interface QaQuestion {
-  id: string;
-  question: string;
-  options: { label: string; value: string }[];
-  multiSelect?: boolean;
-  allowCustom?: boolean; // show "+ 自訂" for single-select too
-  skipLabel?: string;
-  tbdQuestion?: string; // TBD text if skipped
+interface ChatMsg {
+  role: "user" | "ai" | "system";
+  text: string;
 }
 
-const ROLE_QUESTION: QaQuestion = {
-  id: "role",
-  question: "這是什麼類型的情報？",
-  options: [
-    { label: "客戶", value: "client" },
-    { label: "夥伴", value: "partner" },
-    { label: "政府補貼", value: "subsidy" },
-    { label: "SI", value: "si" },
-    { label: "其他", value: "other" },
-  ],
-  skipLabel: "稍後再說",
-  tbdQuestion: "確認分類",
-};
-
-const CLIENT_QUESTIONS: QaQuestion[] = [
-  {
-    id: "industry",
-    question: "什麼產業？",
-    options: INDUSTRIES,
-    allowCustom: true,
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認產業別",
-  },
-  {
-    id: "pain_points",
-    question: "已知痛點？",
-    multiSelect: true,
-    options: [
-      { label: "產線自動化", value: "automation" },
-      { label: "品質檢測 (AOI)", value: "aoi" },
-      { label: "能源管理", value: "energy" },
-      { label: "安全監控", value: "safety" },
-      { label: "ERP/系統整合", value: "erp" },
-      { label: "IoT 資料收集", value: "iot" },
-    ],
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認客戶痛點",
-  },
-  {
-    id: "nda_status",
-    question: "NDA 狀態？",
-    options: [
-      { label: "尚未開始", value: "pending" },
-      { label: "進行中", value: "in_progress" },
-      { label: "已簽署", value: "signed" },
-      { label: "不需要", value: "not_required" },
-    ],
-  },
-  {
-    id: "mou_status",
-    question: "MOU 狀態？",
-    options: [
-      { label: "尚未開始", value: "pending" },
-      { label: "進行中", value: "in_progress" },
-      { label: "已簽署", value: "signed" },
-      { label: "不需要", value: "not_required" },
-    ],
-  },
-  {
-    id: "budget",
-    question: "預估預算範圍？",
-    options: BUDGET_PRESETS.map((p) => ({ label: p.label, value: String(p.amount) })),
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認預算範圍",
-  },
-];
-
-const PARTNER_QUESTIONS: QaQuestion[] = [
-  {
-    id: "capabilities",
-    question: "能力標籤？",
-    multiSelect: true,
-    options: [
-      { label: "IoT", value: "iot" },
-      { label: "影像辨識", value: "vision" },
-      { label: "ERP", value: "erp" },
-      { label: "自動控制", value: "auto_ctrl" },
-      { label: "資安", value: "security" },
-      { label: "ML/AI", value: "ml_ai" },
-    ],
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認夥伴能力",
-  },
-  {
-    id: "industry_exp",
-    question: "產業經驗？",
-    multiSelect: true,
-    options: [
-      { label: "食品業", value: "food" },
-      { label: "石化業", value: "petrochemical" },
-      { label: "半導體", value: "semiconductor" },
-      { label: "製造業", value: "manufacturing" },
-      { label: "系統整合", value: "system_integration" },
-    ],
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認產業經驗",
-  },
-  {
-    id: "team_size",
-    question: "團隊規模？",
-    options: [
-      { label: "1-10 人", value: "1-10" },
-      { label: "10-50 人", value: "10-50" },
-      { label: "50-200 人", value: "50-200" },
-      { label: "200+ 人", value: "200+" },
-    ],
-  },
-];
-
-const SUBSIDY_QUESTIONS: QaQuestion[] = [
-  {
-    id: "subsidy_partner",
-    question: "預計合作夥伴？",
-    options: [
-      { label: "已有夥伴", value: "has_partner" },
-      { label: "尋找中", value: "searching" },
-      { label: "不需要", value: "not_required" },
-      { label: "未定", value: "undecided" },
-    ],
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認補貼合作夥伴",
-  },
-  {
-    id: "subsidy_deadline",
-    question: "補助截止日期？",
-    options: [
-      { label: "一個月內", value: "within_1m" },
-      { label: "一到三個月", value: "1-3m" },
-      { label: "三個月以上", value: "3m+" },
-      { label: "未知", value: "unknown" },
-    ],
-    skipLabel: "稍後再問",
-    tbdQuestion: "確認補助截止日期",
-  },
-];
-
-// --- Component ---
-
-function QaFlow() {
+function ChatFlow() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const intelId = Number(searchParams.get("id"));
 
   const [intel, setIntel] = useState<NxIntel | null>(null);
-  const [questions, setQuestions] = useState<QaQuestion[]>([ROLE_QUESTION]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
-  const [selected, setSelected] = useState<string[]>([]);
-  const [customInput, setCustomInput] = useState("");
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [extraOptions, setExtraOptions] = useState<Record<string, { label: string; value: string }[]>>({});
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [parsed, setParsed] = useState<Record<string, unknown>>({});
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [matResult, setMatResult] = useState<Record<string, unknown> | null>(null);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
-    if (intelId) {
-      nxApi.intel.get(intelId).then(setIntel).catch(console.error);
-    }
+    scrollToBottom();
+  }, [messages]);
+
+  // Initial load + AI parse
+  useEffect(() => {
+    if (!intelId) return;
+    (async () => {
+      try {
+        const intelData = await nxApi.intel.get(intelId);
+        setIntel(intelData);
+
+        // Show raw input as first message
+        setMessages([
+          { role: "user", text: intelData.raw_input },
+          { role: "system", text: "AI 正在分析..." },
+        ]);
+
+        // Run initial parse
+        const result = await nxApi.intel.parse(intelId);
+        setParsed(result.parsed);
+
+        setMessages([
+          { role: "user", text: intelData.raw_input },
+          { role: "ai", text: result.ai_reply },
+        ]);
+      } catch (err) {
+        console.error("Init failed:", err);
+        setMessages([{ role: "system", text: "AI 解析失敗，請重試" }]);
+      } finally {
+        setInitializing(false);
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    })();
   }, [intelId]);
 
-  const currentQ = questions[currentIndex];
-  const totalSteps = questions.length;
-  const progress = ((currentIndex + 1) / totalSteps) * 100;
+  const handleSend = useCallback(async () => {
+    const msg = input.trim();
+    if (!msg || sending) return;
 
-  const handleSelect = (value: string) => {
-    if (currentQ?.multiSelect) {
-      setSelected((prev) =>
-        prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
-      );
-    } else {
-      // Single select — advance immediately
-      processAnswer(value);
-    }
-  };
+    setInput("");
+    setSending(true);
+    setMessages((prev) => [...prev, { role: "user", text: msg }]);
 
-  const resetInputState = () => {
-    setSelected([]);
-    setCustomInput("");
-    setShowCustomInput(false);
-  };
-
-  const processAnswer = useCallback(
-    (answer: string | string[]) => {
-      if (!currentQ) return;
-      const newAnswers = { ...answers, [currentQ.id]: answer };
-      setAnswers(newAnswers);
-
-      // If role question, determine branch and advance
-      if (currentQ.id === "role") {
-        const role = typeof answer === "string" ? answer : answer[0];
-        if (role === "client") {
-          setQuestions([ROLE_QUESTION, ...CLIENT_QUESTIONS]);
-          setCurrentIndex(1);
-          resetInputState();
-          return;
-        } else if (role === "partner") {
-          setQuestions([ROLE_QUESTION, ...PARTNER_QUESTIONS]);
-          setCurrentIndex(1);
-          resetInputState();
-          return;
-        } else if (role === "subsidy") {
-          setQuestions([ROLE_QUESTION, ...SUBSIDY_QUESTIONS]);
-          setCurrentIndex(1);
-          resetInputState();
-          return;
-        } else {
-          // SI / other — done after role
-          finishFlow(newAnswers);
-          return;
-        }
-      }
-
-      // Move to next question or finish
-      if (currentIndex < questions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-        resetInputState();
-      } else {
-        finishFlow(newAnswers);
-      }
-    },
-    [currentQ, answers, currentIndex, questions.length]
-  );
-
-  const handleMultiConfirm = () => {
-    if (selected.length > 0) {
-      processAnswer(selected);
-    }
-  };
-
-  const handleGoBack = () => {
-    if (currentIndex > 0) {
-      const prevQ = questions[currentIndex - 1];
-      const prevAnswer = answers[prevQ.id];
-      // Restore previous selection state for multiSelect
-      if (prevQ.multiSelect && Array.isArray(prevAnswer)) {
-        setSelected(prevAnswer);
-      } else {
-        setSelected([]);
-      }
-      setCurrentIndex(currentIndex - 1);
-      setCustomInput("");
-      setShowCustomInput(false);
-    }
-  };
-
-  const handleSkip = async () => {
-    if (!currentQ) return;
-    // Create TBD for skipped question
-    if (currentQ.tbdQuestion && intelId) {
-      try {
-        await nxApi.tbd.create({
-          question: currentQ.tbdQuestion,
-          linked_type: "contact",
-          linked_id: intelId,
-          source: "skip",
-        });
-      } catch (err) {
-        console.error("Failed to create TBD:", err);
-      }
-    }
-
-    // Same branching logic for role skip
-    if (currentQ.id === "role") {
-      finishFlow(answers);
-      return;
-    }
-
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-      resetInputState();
-    } else {
-      finishFlow(answers);
-    }
-  };
-
-  const finishFlow = async (finalAnswers: Record<string, string | string[]>) => {
-    setSaving(true);
     try {
-      // Confirm intel with parsed answers
-      await nxApi.intel.confirm(intelId, JSON.stringify(finalAnswers));
+      const result = await nxApi.intel.chat(intelId, msg, parsed);
+      setParsed(result.parsed);
+      setMessages((prev) => [...prev, { role: "ai", text: result.ai_reply }]);
+    } catch (err) {
+      console.error("Chat failed:", err);
+      setMessages((prev) => [...prev, { role: "system", text: "AI 回覆失敗，請重試" }]);
+    } finally {
+      setSending(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [input, sending, intelId, parsed]);
 
-      // Auto-materialize entities from parsed intel
-      const matResult = await nxApi.intel.materialize(intelId);
-      if (matResult.client) {
-        console.log(`Client ${matResult.client.action}:`, matResult.client.id, matResult.client.name);
-      }
-      for (const c of matResult.contacts) {
-        console.log(`Contact ${c.action}:`, c.id, c.name);
-      }
-
+  const handleConfirm = async () => {
+    setConfirming(true);
+    try {
+      await nxApi.intel.confirm(intelId, JSON.stringify(parsed));
+      const mat = await nxApi.intel.materialize(intelId);
+      setMatResult(mat);
       setDone(true);
     } catch (err) {
-      console.error("Failed to finish flow:", err);
+      console.error("Confirm failed:", err);
+      setMessages((prev) => [...prev, { role: "system", text: "確認失敗，請重試" }]);
     } finally {
-      setSaving(false);
+      setConfirming(false);
     }
   };
 
@@ -322,7 +117,7 @@ function QaFlow() {
   if (!intelId) {
     return (
       <div className="flex flex-col h-full">
-        <TopBar title="Q&A" />
+        <TopBar title="情報對話" />
         <div className="flex-1 flex items-center justify-center text-slate-500">
           Missing intel ID
         </div>
@@ -331,6 +126,9 @@ function QaFlow() {
   }
 
   if (done) {
+    const client = (matResult as Record<string, Record<string, string>> | null)?.client;
+    const partner = (matResult as Record<string, Record<string, string>> | null)?.partner;
+    const contacts = ((matResult as Record<string, unknown[]> | null)?.contacts || []) as { name: string; action: string }[];
     return (
       <div className="flex flex-col h-full">
         <TopBar title="完成" />
@@ -338,24 +136,36 @@ function QaFlow() {
           <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
             <Check size={32} className="text-green-500" />
           </div>
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <h2 className="text-xl font-bold text-slate-900 dark:text-slate-50">
-              情報已確認
+              情報 #{intelId} 已確認
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-              資料已儲存，可在情報 Feed 中查看
-            </p>
+            {client && (
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                🔗 {client.action === "created" ? "已建立" : "已匹配"}客戶「{client.name}」
+              </p>
+            )}
+            {partner && (
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                🤝 {partner.action === "created" ? "已建立" : "已匹配"}夥伴「{partner.name}」
+              </p>
+            )}
+            {contacts.map((c, i) => (
+              <p key={i} className="text-sm text-slate-600 dark:text-slate-300">
+                👤 {c.action === "created" ? "已建立" : "已匹配"}聯絡人「{c.name}」
+              </p>
+            ))}
           </div>
           <div className="flex gap-3 w-full max-w-xs">
             <button
               onClick={() => router.push("/capture")}
-              className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-medium px-6 py-3 rounded-lg min-h-[44px] cursor-pointer transition-colors duration-200"
+              className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-medium px-6 py-3 rounded-lg min-h-[44px] cursor-pointer transition-colors"
             >
               再加一筆
             </button>
             <button
               onClick={() => router.push("/intel")}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200 cursor-pointer"
+              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] cursor-pointer transition-all"
             >
               查看情報
             </button>
@@ -367,196 +177,106 @@ function QaFlow() {
 
   return (
     <div className="flex flex-col h-full">
-      <TopBar title="情報問答" />
+      <TopBar title={`情報 #${intelId} 對話`}>
+        <button
+          onClick={handleConfirm}
+          disabled={confirming || initializing}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white text-sm font-medium rounded-lg cursor-pointer transition-colors"
+        >
+          {confirming ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+          確認
+        </button>
+      </TopBar>
 
-      <div className="flex-1 px-4 py-6 flex flex-col max-w-2xl mx-auto w-full">
-        {/* Progress bar */}
-        <div className="mb-6">
-          <div className="flex justify-between text-[11px] text-slate-400 dark:text-slate-500 mb-2">
-            <span>
-              問題 {currentIndex + 1} / {totalSteps}
-            </span>
-            <span>{Math.round(progress)}%</span>
-          </div>
-          <div className="h-1 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Raw input preview */}
-        {intel && currentIndex === 0 && (
-          <div className="mb-6 p-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">
-              原始輸入
-            </p>
-            <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-3">
-              {intel.raw_input}
-            </p>
+      {/* Chat messages */}
+      <div className="flex-1 overflow-auto px-4 py-4 space-y-3">
+        {/* Parsed fields summary (collapsible) */}
+        {Object.keys(parsed).length > 0 && (
+          <div className="mx-auto max-w-2xl mb-2">
+            <details className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg">
+              <summary className="px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 cursor-pointer flex items-center gap-1.5">
+                <Zap size={12} /> 已解析 {Object.keys(parsed).length} 個欄位
+              </summary>
+              <div className="px-3 pb-2 text-xs text-slate-600 dark:text-slate-300 space-y-0.5">
+                {Object.entries(parsed).map(([k, v]) => (
+                  <div key={k}>
+                    <span className="text-slate-400">{k}:</span>{" "}
+                    <span>{Array.isArray(v) ? (v as string[]).join(", ") : String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         )}
 
-        {/* Question */}
-        {currentQ && (
-          <div className="flex-1 flex flex-col">
-            <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-50 mb-6">
-              {currentQ.question}
-            </h2>
-
-            {/* Options grid */}
-            <div className="grid grid-cols-2 gap-2">
-              {[...currentQ.options, ...(extraOptions[currentQ.id] || [])].map((opt) => {
-                const isSelected = currentQ.multiSelect
-                  ? selected.includes(opt.value)
-                  : answers[currentQ.id] === opt.value;
-
-                return (
-                  <button
-                    key={opt.value}
-                    onClick={() => handleSelect(opt.value)}
-                    className={`min-h-[44px] px-4 py-3 text-sm font-medium rounded-lg border transition-colors duration-200 cursor-pointer ${
-                      isSelected
-                        ? "border-blue-500 bg-blue-500/10 text-blue-500 dark:text-blue-400"
-                        : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-50 hover:border-blue-500 hover:bg-slate-200 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    {currentQ.multiSelect && isSelected && (
-                      <Check size={14} className="inline mr-1.5 -mt-0.5" />
-                    )}
-                    {opt.label}
-                  </button>
-                );
-              })}
-
-              {/* Add custom option tile */}
-              {(currentQ.multiSelect || currentQ.allowCustom) && !showCustomInput && (
-                <button
-                  onClick={() => setShowCustomInput(true)}
-                  className="min-h-[44px] px-4 py-3 text-sm font-medium rounded-lg border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:border-blue-500 hover:text-blue-500 transition-colors duration-200 cursor-pointer"
-                >
-                  + 自訂
-                </button>
+        <div className="max-w-2xl mx-auto space-y-3">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              {msg.role !== "user" && (
+                <div className="w-7 h-7 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Bot size={14} className="text-blue-500" />
+                </div>
               )}
-
-              {/* Inline input tile */}
-              {(currentQ.multiSelect || currentQ.allowCustom) && showCustomInput && (
-                <div className="col-span-2 flex gap-2">
-                  <input
-                    type="text"
-                    value={customInput}
-                    onChange={(e) => setCustomInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && customInput.trim()) {
-                        const val = customInput.trim();
-                        const allOpts = [...currentQ.options, ...(extraOptions[currentQ.id] || [])];
-                        if (!allOpts.some((o) => o.value === val || o.label === val)) {
-                          setExtraOptions((prev) => ({
-                            ...prev,
-                            [currentQ.id]: [...(prev[currentQ.id] || []), { label: val, value: val }],
-                          }));
-                        }
-                        if (currentQ.multiSelect) {
-                          setSelected((prev) => prev.includes(val) ? prev : [...prev, val]);
-                          setCustomInput("");
-                          setShowCustomInput(false);
-                        } else {
-                          setCustomInput("");
-                          setShowCustomInput(false);
-                          processAnswer(val);
-                        }
-                      }
-                      if (e.key === "Escape") {
-                        setCustomInput("");
-                        setShowCustomInput(false);
-                      }
-                    }}
-                    placeholder={`輸入自訂${currentQ.question.replace("？", "")}...`}
-                    className="flex-1 bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded-lg px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => {
-                      if (!customInput.trim()) return;
-                      const val = customInput.trim();
-                      const allOpts = [...currentQ.options, ...(extraOptions[currentQ.id] || [])];
-                      if (!allOpts.some((o) => o.value === val || o.label === val)) {
-                        setExtraOptions((prev) => ({
-                          ...prev,
-                          [currentQ.id]: [...(prev[currentQ.id] || []), { label: val, value: val }],
-                        }));
-                      }
-                      if (currentQ.multiSelect) {
-                        setSelected((prev) => prev.includes(val) ? prev : [...prev, val]);
-                        setCustomInput("");
-                        setShowCustomInput(false);
-                      } else {
-                        setCustomInput("");
-                        setShowCustomInput(false);
-                        processAnswer(val);
-                      }
-                    }}
-                    disabled={!customInput.trim()}
-                    className="px-4 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg min-h-[44px] cursor-pointer disabled:opacity-40 disabled:cursor-default transition-colors"
-                  >
-                    加入
-                  </button>
-                  <button
-                    onClick={() => { setCustomInput(""); setShowCustomInput(false); }}
-                    className="px-3 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-500 text-sm rounded-lg min-h-[44px] cursor-pointer transition-colors"
-                  >
-                    取消
-                  </button>
+              <div
+                className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                  msg.role === "user"
+                    ? "bg-blue-500 text-white rounded-br-md"
+                    : msg.role === "system"
+                      ? "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 italic"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-bl-md"
+                }`}
+              >
+                {msg.text}
+              </div>
+              {msg.role === "user" && (
+                <div className="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <User size={14} className="text-slate-500" />
                 </div>
               )}
             </div>
+          ))}
 
-            {/* Multi-select confirm button */}
-            {currentQ.multiSelect && selected.length > 0 && (
-              <button
-                onClick={handleMultiConfirm}
-                className="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200 cursor-pointer"
-              >
-                確認 ({selected.length})
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Navigation: back + skip */}
-        <div className="mt-4 flex items-center justify-between">
-          {currentIndex > 0 ? (
-            <button
-              onClick={handleGoBack}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-sm py-2 flex items-center gap-1 cursor-pointer transition-colors duration-200"
-            >
-              <ChevronLeft size={16} strokeWidth={1.5} />
-              上一步
-            </button>
-          ) : (
-            <div />
-          )}
-          {currentQ?.skipLabel && (
-            <button
-              onClick={handleSkip}
-              className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-sm py-2 flex items-center gap-1 cursor-pointer transition-colors duration-200"
-            >
-              {currentQ.skipLabel}
-              <ChevronRight size={16} strokeWidth={1.5} />
-            </button>
-          )}
-        </div>
-
-        {/* Saving overlay */}
-        {saving && (
-          <div className="fixed inset-0 bg-slate-950/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 flex flex-col items-center gap-3">
-              <Loader2 size={24} className="animate-spin text-blue-500" />
-              <span className="text-sm text-slate-500">儲存中...</span>
+          {sending && (
+            <div className="flex gap-2 justify-start">
+              <div className="w-7 h-7 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                <Bot size={14} className="text-blue-500" />
+              </div>
+              <div className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-bl-md">
+                <Loader2 size={16} className="animate-spin text-slate-400" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* Input bar */}
+      <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 bg-white dark:bg-slate-900">
+        <div className="max-w-2xl mx-auto flex gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend();
+            }}
+            placeholder="輸入補充資訊..."
+            disabled={sending || initializing}
+            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none disabled:opacity-50 transition-colors"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending || initializing}
+            className="w-10 h-10 flex items-center justify-center bg-blue-500 hover:bg-blue-600 disabled:opacity-30 text-white rounded-full cursor-pointer transition-colors"
+          >
+            <Send size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -571,7 +291,7 @@ export default function QaPage() {
         </div>
       }
     >
-      <QaFlow />
+      <ChatFlow />
     </Suspense>
   );
 }

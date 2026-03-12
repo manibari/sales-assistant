@@ -345,6 +345,13 @@ export const nxApi = {
     byEntity: (entityType: string, entityId: number) =>
       fetchAPI<NxIntel[]>(`/intel/by-entity/${entityType}/${entityId}`),
     delete: (id: number) => deleteAPI(`/intel/${id}`),
+    parse: (id: number) =>
+      postAPI<{ parsed: Record<string, unknown>; ai_reply: string }>(`/intel/${id}/parse`, {}),
+    chat: (id: number, message: string, currentParsed: Record<string, unknown>) =>
+      postAPI<{ ai_reply: string; new_fields: Record<string, unknown>; parsed: Record<string, unknown> }>(
+        `/intel/${id}/chat`,
+        { message, current_parsed: currentParsed },
+      ),
   },
   deals: {
     list: (view?: string) => fetchAPI<NxDeal[]>(`/deals/?view=${view || "urgency"}`),

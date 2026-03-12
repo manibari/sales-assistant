@@ -11,9 +11,13 @@ from services.nexus.intel import (
     create_intel, get_intel, get_all_intel, confirm_intel, update_intel, delete_intel,
     get_intel_entities, get_entity_intel,
 )
+from services.nexus.clients import find_client_by_name
+from services.nexus.contacts import get_contacts_by_org
+from services.nexus.deals import get_deals_by_client
 from services.nexus.documents import get_files_by_intel
 from services.nexus.intel import get_intel_linked_deals
-from services.nexus.materialize import materialize_intel
+from services.nexus.materialize import materialize_intel, _normalize_company_name
+from services.nexus.partners import find_partner_by_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,6 +47,59 @@ class IntelConfirm(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     current_parsed: dict | None = None
+
+
+def _enrich_from_db(parsed: dict) -> tuple[dict, str]:
+    """Look up company_name/partner_name in DB, enrich parsed fields, return context string for AI."""
+    context_lines: list[str] = []
+    enriched = {**parsed}
+
+    # Client lookup
+    company = parsed.get("company_name")
+    if company:
+        normalized = _normalize_company_name(company)
+        clients = find_client_by_name(normalized)
+        if clients:
+            c = clients[0]
+            enriched.setdefault("company_name", c["name"])
+            if c.get("industry") and not enriched.get("industry"):
+                enriched["industry"] = c["industry"]
+            context_lines.append(f"[系統] 已匹配客戶「{c['name']}」(#{c['id']})")
+            # Fetch contacts
+            contacts = get_contacts_by_org("client", c["id"])
+            if contacts:
+                names = [f"{ct['name']}（{ct.get('title') or '無職稱'}）" for ct in contacts[:5]]
+                context_lines.append(f"[系統] 該客戶已有聯絡人：{'、'.join(names)}")
+                # Auto-fill first contact if not set
+                if not enriched.get("contact_name") and contacts:
+                    enriched["contact_name"] = contacts[0]["name"]
+                    if contacts[0].get("title"):
+                        enriched.setdefault("contact_title", contacts[0]["title"])
+                    if contacts[0].get("email"):
+                        enriched.setdefault("contact_email", contacts[0]["email"])
+                    if contacts[0].get("phone"):
+                        enriched.setdefault("contact_phone", contacts[0]["phone"])
+            # Fetch deals
+            deals = get_deals_by_client(c["id"])
+            if deals:
+                deal_names = [f"「{d['name']}」({d['stage']})" for d in deals[:3]]
+                context_lines.append(f"[系統] 該客戶已有商機：{'、'.join(deal_names)}")
+
+    # Partner lookup
+    partner = parsed.get("partner_name")
+    if partner:
+        normalized = _normalize_company_name(partner)
+        partners = find_partner_by_name(normalized)
+        if partners:
+            p = partners[0]
+            enriched.setdefault("partner_name", p["name"])
+            context_lines.append(f"[系統] 已匹配夥伴「{p['name']}」(#{p['id']})")
+            contacts = get_contacts_by_org("partner", p["id"])
+            if contacts:
+                names = [f"{ct['name']}（{ct.get('title') or '無職稱'}）" for ct in contacts[:5]]
+                context_lines.append(f"[系統] 該夥伴已有聯絡人：{'、'.join(names)}")
+
+    return enriched, "\n".join(context_lines)
 
 
 @router.get("/")
@@ -128,13 +185,19 @@ def initial_parse(intel_id: int):
     except (json.JSONDecodeError, IndexError):
         logger.warning("Initial parse failed for intel #%d: %s", intel_id, ai_raw[:200])
 
+    # Enrich from DB
+    parsed, db_context = _enrich_from_db(parsed)
+
     # Save parsed to intel
     update_intel(intel_id, parsed_json=json.dumps(parsed, ensure_ascii=False))
 
-    # Generate greeting via followup prompt
+    # Generate greeting via followup prompt, include DB context
+    extra_context = ""
+    if db_context:
+        extra_context = f"\n\n以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
     greeting_prompt = FOLLOWUP_PROMPT.format(
         current_json=json.dumps(parsed, ensure_ascii=False, indent=2),
-        user_msg="（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）",
+        user_msg=f"（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）{extra_context}",
     )
     greeting_raw = generate_ai_response(
         "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
@@ -142,6 +205,11 @@ def initial_parse(intel_id: int):
     )
     # Split on --- to get reply part
     ai_reply = greeting_raw.split("---")[0].strip() if "---" in greeting_raw else greeting_raw.strip()
+
+    # Prepend DB enrichment info to AI reply
+    if db_context:
+        system_note = db_context.replace("[系統] ", "✅ ")
+        ai_reply = f"{system_note}\n\n{ai_reply}"
 
     return {"parsed": parsed, "ai_reply": ai_reply}
 
@@ -157,8 +225,12 @@ def chat_followup(intel_id: int, body: ChatMessage):
         raise HTTPException(503, "AI service not available")
 
     current = body.current_parsed or {}
+
+    # Enrich current parsed with DB data before sending to AI
+    enriched_before, _ = _enrich_from_db(current)
+
     prompt = FOLLOWUP_PROMPT.format(
-        current_json=json.dumps(current, ensure_ascii=False, indent=2),
+        current_json=json.dumps(enriched_before, ensure_ascii=False, indent=2),
         user_msg=body.message,
     )
     ai_raw = generate_ai_response(
@@ -181,13 +253,21 @@ def chat_followup(intel_id: int, body: ChatMessage):
             logger.warning("Chat parse failed for intel #%d: %s", intel_id, json_part[:200])
 
     # Merge new fields into current
-    merged = {**current}
+    merged = {**enriched_before}
     for k, v in new_fields.items():
         if v is not None:
             merged[k] = v
 
+    # Enrich again after merge (new company_name may have been added)
+    merged, db_context = _enrich_from_db(merged)
+
     # Save to intel
     update_intel(intel_id, parsed_json=json.dumps(merged, ensure_ascii=False))
+
+    # Prepend DB enrichment info if new entities were found
+    if db_context:
+        system_note = db_context.replace("[系統] ", "✅ ")
+        ai_reply = f"{system_note}\n\n{ai_reply}"
 
     return {"ai_reply": ai_reply, "new_fields": new_fields, "parsed": merged}
 

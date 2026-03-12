@@ -86,6 +86,14 @@ team_size: "1-10" | "10-50" | "50-200" | "200+" (partner only)
 subsidy_partner: "has_partner" | "searching" | "not_required" | "undecided" (subsidy only)
 subsidy_deadline: "within_1m" | "1-3m" | "3m+" | "unknown" (subsidy only)
 
+Subsidy-specific free-form fields (capture when role is "subsidy"):
+subsidy_name: official program name (e.g. "中小企業數位轉型計畫", "SBIR 115年度")
+agency: issuing government agency (e.g. "經濟部中小及新創企業署", "工業局")
+funding_amount: subsidy amount description (e.g. "200萬~300萬", "最高1,000萬")
+deadline: application deadline (free text, e.g. "3/31截止", "115年6月30日")
+eligibility: who can apply (free text)
+scope: what the program covers (free text)
+
 Free-form fields (any string, capture if mentioned):
 company_name: the company/organization name (the PRIMARY entity — usually client)
 contact_name: contact person's name (at the primary company)
@@ -196,6 +204,14 @@ partner_contact_title: partner contact's job title
 partner_contact_email: partner contact's email
 partner_contact_phone: partner contact's phone
 
+Subsidy fields (when role is "subsidy"):
+subsidy_name: official program name
+agency: issuing government agency
+funding_amount: subsidy amount description
+deadline: application deadline (free text)
+eligibility: who can apply
+scope: what the program covers
+
 Deal potential field:
 deal_potential: "high" | "medium" | "low" | "none"
   - "high" = clear need + budget + timeline, ready to create a deal
@@ -214,7 +230,7 @@ deal_potential: "high" | "medium" | "low" | "none"
 _ROLE_FIELDS: dict[str, list[str]] = {
     "client": ["industry", "pain_points", "nda_status", "mou_status", "budget", "deal_potential"],
     "partner": ["capabilities", "team_size"],
-    "subsidy": ["subsidy_partner", "subsidy_deadline"],
+    "subsidy": ["subsidy_name", "agency", "funding_amount", "deadline", "subsidy_partner", "subsidy_deadline"],
     "si": [],
     "other": [],
 }
@@ -416,7 +432,9 @@ _FIELD_LABELS = {
     "nda_status": "NDA", "mou_status": "MOU", "budget": "預算",
     "deal_potential": "開案潛力",
     "capabilities": "能力", "team_size": "團隊規模",
-    "subsidy_partner": "合作夥伴", "subsidy_deadline": "截止日期",
+    "subsidy_name": "計畫名稱", "agency": "主辦機關", "funding_amount": "補助額度",
+    "deadline": "截止日期", "eligibility": "申請資格", "scope": "補助範疇",
+    "subsidy_partner": "合作夥伴", "subsidy_deadline": "截止期程",
 }
 
 
@@ -441,8 +459,16 @@ def _format_summary(parsed: dict) -> str:
     parts = []
     if role := parsed.get("role"):
         parts.append(_ROLE_LABELS.get(role, role))
+    if sn := parsed.get("subsidy_name"):
+        parts.append(sn)
     if co := parsed.get("company_name"):
         parts.append(co)
+    if ag := parsed.get("agency"):
+        parts.append(f"機關：{ag}")
+    if fa := parsed.get("funding_amount"):
+        parts.append(f"額度：{fa}")
+    if dl := parsed.get("deadline"):
+        parts.append(f"截止：{dl}")
     if ind := parsed.get("industry"):
         parts.append(_get_industry_label(ind))
     if pains := parsed.get("pain_points"):

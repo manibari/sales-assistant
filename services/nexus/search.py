@@ -57,12 +57,13 @@ def global_search(query: str, limit: int = 20) -> dict:
 
             # Subsidies
             cur.execute(
-                """SELECT id, name, agency, program_type, stage, deadline, status
+                """SELECT id, name, agency, program_type, stage, deadline, funding_amount, eligibility, scope, notes, status
                    FROM nx_subsidy
-                   WHERE name LIKE %s OR agency LIKE %s
+                   WHERE name LIKE %s OR agency LIKE %s OR notes LIKE %s
+                         OR eligibility LIKE %s OR scope LIKE %s
                    ORDER BY updated_at DESC
                    LIMIT %s""",
-                (q, q, limit),
+                (q, q, q, q, q, limit),
             )
             results["subsidies"] = rows_to_dicts(cur)
 

@@ -380,12 +380,19 @@ def _materialize_subsidy(
     if parsed.get("role") != "subsidy":
         return
 
-    name = parsed.get("company_name") or parsed.get("notes") or "未命名補助案"
+    name = (
+        parsed.get("subsidy_name")
+        or parsed.get("company_name")
+        or parsed.get("notes", "")[:50]
+        or "未命名補助案"
+    )
     subsidy = create_subsidy(
         name=name,
         agency=parsed.get("agency"),
         funding_amount=parsed.get("funding_amount"),
         deadline=parsed.get("deadline"),
+        eligibility=parsed.get("eligibility"),
+        scope=parsed.get("scope"),
         client_id=client_id,
         partner_id=partner_id,
         notes=parsed.get("notes"),

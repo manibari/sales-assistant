@@ -246,10 +246,22 @@ def _materialize_partner(intel_id: int, parsed: dict, result: dict) -> int | Non
 def _materialize_contacts(
     intel_id: int, parsed: dict, client_id: int | None, result: dict
 ) -> None:
-    """Match or create primary contact from parsed fields."""
+    """Match or create primary contact(s) from parsed fields."""
     contact_name = parsed.get("contact_name")
     contact_email = parsed.get("contact_email")
     if not contact_name and not contact_email:
+        return
+
+    # Handle list of contact names (e.g. ["張俊彥", "林靜怡"])
+    if isinstance(contact_name, list):
+        for i, name in enumerate(contact_name):
+            sub_parsed = {**parsed, "contact_name": name}
+            # Only first contact gets email/phone/title
+            if i > 0:
+                sub_parsed.pop("contact_email", None)
+                sub_parsed.pop("contact_phone", None)
+                sub_parsed.pop("contact_title", None)
+            _materialize_contacts(intel_id, sub_parsed, client_id, result)
         return
 
     candidates = find_contact(name=contact_name, email=contact_email)

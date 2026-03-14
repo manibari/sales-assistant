@@ -61,7 +61,7 @@ def update_contact(contact_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_contact SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_contact SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -95,4 +95,4 @@ def delete_contact(contact_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_contact WHERE id = %s", (contact_id,))
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0

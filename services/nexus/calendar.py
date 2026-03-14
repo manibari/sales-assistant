@@ -48,7 +48,7 @@ def get_meetings_by_date(date_str: str) -> list[dict]:
                    FROM nx_meeting m
                    JOIN nx_deal d ON m.deal_id = d.id
                    JOIN nx_client c ON d.client_id = c.id
-                   WHERE date(m.meeting_date) = %s
+                   WHERE m.meeting_date::DATE = %s
                    ORDER BY m.meeting_date ASC""",
                 (date_str,),
             )
@@ -65,7 +65,7 @@ def get_meetings_by_month(year: int, month: int) -> list[dict]:
                           d.name AS deal_name
                    FROM nx_meeting m
                    JOIN nx_deal d ON m.deal_id = d.id
-                   WHERE strftime('%%Y-%%m', m.meeting_date) = %s
+                   WHERE TO_CHAR(m.meeting_date, 'YYYY-MM') = %s
                    ORDER BY m.meeting_date ASC""",
                 (month_str,),
             )
@@ -81,7 +81,7 @@ def get_meetings_by_range(start_date: str, end_date: str) -> list[dict]:
                    FROM nx_meeting m
                    JOIN nx_deal d ON m.deal_id = d.id
                    JOIN nx_client c ON d.client_id = c.id
-                   WHERE date(m.meeting_date) BETWEEN %s AND %s
+                   WHERE m.meeting_date::DATE BETWEEN %s AND %s
                    ORDER BY m.meeting_date ASC""",
                 (start_date, end_date),
             )
@@ -110,7 +110,7 @@ def update_meeting(meeting_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_meeting SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_meeting SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -124,7 +124,7 @@ def delete_meeting(meeting_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_meeting WHERE id = %s", (meeting_id,))
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0
 
 
 # --- Reminders ---
@@ -153,7 +153,7 @@ def get_reminders_by_date(date_str: str) -> list[dict]:
                 """SELECT r.*, d.name AS deal_name
                    FROM nx_reminder r
                    LEFT JOIN nx_deal d ON r.deal_id = d.id
-                   WHERE date(r.due_date) = %s AND r.resolved = 0
+                   WHERE r.due_date::DATE = %s AND r.resolved = FALSE
                    ORDER BY r.due_date ASC""",
                 (date_str,),
             )
@@ -169,7 +169,7 @@ def get_reminders_by_month(year: int, month: int) -> list[dict]:
                           d.name AS deal_name
                    FROM nx_reminder r
                    LEFT JOIN nx_deal d ON r.deal_id = d.id
-                   WHERE strftime('%%Y-%%m', r.due_date) = %s
+                   WHERE TO_CHAR(r.due_date, 'YYYY-MM') = %s
                    ORDER BY r.due_date ASC""",
                 (month_str,),
             )
@@ -180,7 +180,7 @@ def resolve_reminder(reminder_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """UPDATE nx_reminder SET resolved = 1, resolved_at = datetime('now')
+                """UPDATE nx_reminder SET resolved = TRUE, resolved_at = NOW()
                    WHERE id = %s RETURNING *""",
                 (reminder_id,),
             )
@@ -195,7 +195,7 @@ def get_pending_reminders() -> list[dict]:
                 """SELECT r.*, d.name AS deal_name
                    FROM nx_reminder r
                    LEFT JOIN nx_deal d ON r.deal_id = d.id
-                   WHERE r.resolved = 0 AND date(r.due_date) <= date('now')
+                   WHERE r.resolved = FALSE AND r.due_date::DATE <= CURRENT_DATE
                    ORDER BY r.due_date ASC"""
             )
             return rows_to_dicts(cur)

@@ -34,13 +34,13 @@ def get_open_tbds(linked_type: str | None = None, linked_id: int | None = None) 
             if linked_type and linked_id:
                 cur.execute(
                     """SELECT * FROM nx_tbd_item
-                       WHERE linked_type = %s AND linked_id = %s AND resolved = 0
+                       WHERE linked_type = %s AND linked_id = %s AND resolved = FALSE
                        ORDER BY created_at ASC""",
                     (linked_type, linked_id),
                 )
             else:
                 cur.execute(
-                    "SELECT * FROM nx_tbd_item WHERE resolved = 0 ORDER BY created_at ASC"
+                    "SELECT * FROM nx_tbd_item WHERE resolved = FALSE ORDER BY created_at ASC"
                 )
             return rows_to_dicts(cur)
 
@@ -52,7 +52,7 @@ def get_all_tbds(include_resolved: bool = False) -> list[dict]:
                 cur.execute("SELECT * FROM nx_tbd_item ORDER BY resolved, created_at ASC")
             else:
                 cur.execute(
-                    "SELECT * FROM nx_tbd_item WHERE resolved = 0 ORDER BY created_at ASC"
+                    "SELECT * FROM nx_tbd_item WHERE resolved = FALSE ORDER BY created_at ASC"
                 )
             return rows_to_dicts(cur)
 
@@ -61,7 +61,7 @@ def resolve_tbd(tbd_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """UPDATE nx_tbd_item SET resolved = 1, resolved_at = datetime('now')
+                """UPDATE nx_tbd_item SET resolved = TRUE, resolved_at = NOW()
                    WHERE id = %s RETURNING *""",
                 (tbd_id,),
             )
@@ -74,8 +74,8 @@ def get_stale_tbds(older_than_days: int = 7) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT * FROM nx_tbd_item
-                   WHERE resolved = 0
-                     AND julianday('now') - julianday(created_at) > %s
+                   WHERE resolved = FALSE
+                     AND EXTRACT(DAY FROM NOW() - created_at) > %s
                    ORDER BY created_at ASC""",
                 (older_than_days,),
             )
@@ -86,4 +86,4 @@ def delete_tbd(tbd_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_tbd_item WHERE id = %s", (tbd_id,))
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0

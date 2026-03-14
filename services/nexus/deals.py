@@ -61,7 +61,7 @@ def get_deals_by_urgency() -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT d.*, c.name AS client_name, c.industry AS client_industry,
-                          CAST(julianday('now') - julianday(d.last_activity_at) AS INTEGER) AS idle_days
+                          EXTRACT(DAY FROM NOW() - d.last_activity_at)::INTEGER AS idle_days
                    FROM nx_deal d
                    JOIN nx_client c ON d.client_id = c.id
                    WHERE d.status = 'active'
@@ -76,11 +76,11 @@ def get_deals_needing_push(threshold_days: int = 14) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT d.*, c.name AS client_name,
-                          CAST(julianday('now') - julianday(d.last_activity_at) AS INTEGER) AS idle_days
+                          EXTRACT(DAY FROM NOW() - d.last_activity_at)::INTEGER AS idle_days
                    FROM nx_deal d
                    JOIN nx_client c ON d.client_id = c.id
                    WHERE d.status = 'active'
-                     AND julianday('now') - julianday(d.last_activity_at) > %s
+                     AND EXTRACT(DAY FROM NOW() - d.last_activity_at) > %s
                    ORDER BY idle_days DESC""",
                 (threshold_days,),
             )
@@ -99,7 +99,7 @@ def update_deal(deal_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_deal SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_deal SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -111,8 +111,8 @@ def advance_stage(deal_id: int, new_stage: str) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """UPDATE nx_deal SET stage = %s, last_activity_at = datetime('now'),
-                   updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                """UPDATE nx_deal SET stage = %s, last_activity_at = NOW(),
+                   updated_at = NOW() WHERE id = %s RETURNING *""",
                 (new_stage, deal_id),
             )
             return row_to_dict(cur)
@@ -124,7 +124,7 @@ def close_deal(deal_id: int, reason: str, notes: str | None = None) -> dict | No
             cur.execute(
                 """UPDATE nx_deal SET stage = 'closed', status = 'closed',
                    close_reason = %s, close_notes = %s,
-                   updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                   updated_at = NOW() WHERE id = %s RETURNING *""",
                 (reason, notes, deal_id),
             )
             return row_to_dict(cur)
@@ -145,14 +145,13 @@ def get_deals_by_client(client_id: int) -> list[dict]:
             deals = rows_to_dicts(cur)
             if not deals:
                 return deals
-            deal_ids = [d["id"] for d in deals]
-            placeholders = ",".join("?" * len(deal_ids))
+            deal_ids = tuple(d["id"] for d in deals)
             cur.execute(
-                f"""SELECT dp.deal_id, p.name AS partner_name, dp.role
+                """SELECT dp.deal_id, p.name AS partner_name, dp.role
                     FROM nx_deal_partner dp
                     JOIN nx_partner p ON dp.partner_id = p.id
-                    WHERE dp.deal_id IN ({placeholders})""",
-                deal_ids,
+                    WHERE dp.deal_id IN %s""",
+                (deal_ids,),
             )
             partner_rows = rows_to_dicts(cur)
             partner_map: dict[int, list] = {}
@@ -184,7 +183,7 @@ def touch_deal(deal_id: int) -> None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE nx_deal SET last_activity_at = datetime('now') WHERE id = %s",
+                "UPDATE nx_deal SET last_activity_at = NOW() WHERE id = %s",
                 (deal_id,),
             )
 
@@ -194,7 +193,7 @@ def get_meddic_progress(deal_id: int) -> dict:
     deal = get_deal(deal_id)
     if not deal or not deal.get("meddic_json"):
         return {"completed": 0, "total": 6, "missing": list(MEDDIC_KEYS)}
-    meddic = json.loads(deal["meddic_json"])
+    meddic = deal["meddic_json"] if isinstance(deal["meddic_json"], dict) else json.loads(deal["meddic_json"])
     completed = [k for k in MEDDIC_KEYS if meddic.get(k)]
     missing = [k for k in MEDDIC_KEYS if not meddic.get(k)]
     return {"completed": len(completed), "total": 6, "missing": missing, "details": meddic}
@@ -234,7 +233,7 @@ def remove_partner_from_deal(deal_id: int, partner_id: int) -> bool:
                 "DELETE FROM nx_deal_partner WHERE deal_id = %s AND partner_id = %s",
                 (deal_id, partner_id),
             )
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0
 
 
 # --- Deal-Intel M2M ---
@@ -251,7 +250,7 @@ def link_intel_to_deal(deal_id: int, intel_id: int) -> dict:
             result = row_to_dict(cur)
             # Touch deal in same connection to avoid lock
             cur.execute(
-                "UPDATE nx_deal SET last_activity_at = datetime('now') WHERE id = %s",
+                "UPDATE nx_deal SET last_activity_at = NOW() WHERE id = %s",
                 (deal_id,),
             )
             return result
@@ -278,4 +277,4 @@ def unlink_intel_from_deal(deal_id: int, intel_id: int) -> bool:
                 "DELETE FROM nx_deal_intel WHERE deal_id = %s AND intel_id = %s",
                 (deal_id, intel_id),
             )
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0

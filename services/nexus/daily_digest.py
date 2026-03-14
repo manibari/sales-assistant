@@ -152,8 +152,8 @@ def _get_upcoming_meetings(today: str, days: int = 3) -> list[dict]:
                    FROM nx_meeting m
                    JOIN nx_deal d ON m.deal_id = d.id
                    JOIN nx_client c ON d.client_id = c.id
-                   WHERE date(m.meeting_date) > date(%s)
-                     AND date(m.meeting_date) <= date(%s, '+' || %s || ' days')
+                   WHERE m.meeting_date::DATE > %s::DATE
+                     AND m.meeting_date::DATE <= (%s::DATE + %s * INTERVAL '1 day')::DATE
                      AND m.status = 'scheduled'
                    ORDER BY m.meeting_date ASC""",
                 (today, today, days),

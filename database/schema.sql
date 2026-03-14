@@ -1,5 +1,9 @@
--- SPMS Database Schema (PostgreSQL)
--- 13 tables: 11 core + 2 reserved for Phase 3
+-- SPMS + Project Nexus Database Schema (PostgreSQL / Supabase)
+-- All tables unified into a single schema file.
+
+-- =========================================================================
+-- Legacy SPMS Tables (Phase 1-3)
+-- =========================================================================
 
 CREATE TABLE IF NOT EXISTS annual_plan (
     product_id      TEXT PRIMARY KEY,
@@ -7,6 +11,11 @@ CREATE TABLE IF NOT EXISTS annual_plan (
     quota_fy26      NUMERIC NOT NULL DEFAULT 0,
     strategy        TEXT,
     target_industry TEXT,
+    pillar          TEXT,
+    owner           TEXT,
+    kpis            TEXT,
+    status          TEXT NOT NULL DEFAULT 'Q2 計劃',
+    battlefront     TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -22,6 +31,7 @@ CREATE TABLE IF NOT EXISTS crm (
     contact_info   TEXT,
     notes          TEXT,
     data_year      INTEGER,
+    client_health_score INTEGER DEFAULT 75,
     created_at     TIMESTAMPTZ DEFAULT NOW(),
     updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -37,6 +47,7 @@ CREATE TABLE IF NOT EXISTS project_list (
     sales_owner       TEXT,
     postsale_owner    TEXT,
     priority          TEXT DEFAULT 'Medium',
+    channel           TEXT,
     created_at        TIMESTAMPTZ DEFAULT NOW(),
     updated_at        TIMESTAMPTZ DEFAULT NOW()
 );
@@ -154,19 +165,19 @@ CREATE TABLE IF NOT EXISTS project_contact (
 -- S25: MEDDIC table
 CREATE TABLE IF NOT EXISTS project_meddic (
     project_id               INTEGER PRIMARY KEY REFERENCES project_list(project_id) ON DELETE CASCADE,
-    metrics                  TEXT, -- 指標: 客戶希望達成的量化效益
-    economic_buyer           TEXT, -- 經濟決策者: 最終拍板的人是誰
-    decision_criteria        TEXT, -- 決策標準: 客戶用什麼標準來評估廠商
-    decision_process         TEXT, -- 決策流程: 客戶內部的採購流程、時程
-    identify_pain            TEXT, -- 痛點: 他們現在具體遇到了什麼困難
-    champion                 TEXT, -- 擁護者: 我們在客戶內部的「自己人」是誰
+    metrics                  TEXT,
+    economic_buyer           TEXT,
+    decision_criteria        TEXT,
+    decision_process         TEXT,
+    identify_pain            TEXT,
+    champion                 TEXT,
     updated_at               TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- S29: Asynchronous AI task queue
 CREATE TABLE IF NOT EXISTS ai_task_queue (
     task_id        SERIAL PRIMARY KEY,
-    status         TEXT NOT NULL DEFAULT 'pending', -- pending, processing, completed, failed
+    status         TEXT NOT NULL DEFAULT 'pending',
     raw_text       TEXT NOT NULL,
     result_data    JSONB,
     error_message  TEXT,
@@ -206,14 +217,14 @@ CREATE TABLE IF NOT EXISTS agent_actions (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- S33: Nexus tables — stakeholder relationships + intelligence leverage
+-- S33: Nexus tables -- stakeholder relationships + intelligence leverage
 CREATE TABLE IF NOT EXISTS stakeholder_relation (
     id              SERIAL PRIMARY KEY,
     from_contact_id INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
     to_contact_id   INTEGER NOT NULL REFERENCES contact(contact_id) ON DELETE CASCADE,
-    relation_type   TEXT NOT NULL,  -- 'referral', 'reports_to', 'influences', 'competitor_of'
+    relation_type   TEXT NOT NULL,
     notes           TEXT,
-    leverage_value  TEXT DEFAULT 'medium',  -- 'high', 'medium', 'low'
+    leverage_value  TEXT DEFAULT 'medium',
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -221,7 +232,7 @@ CREATE TABLE IF NOT EXISTS intel (
     id                SERIAL PRIMARY KEY,
     title             TEXT NOT NULL,
     summary           TEXT,
-    leverage_value    TEXT DEFAULT 'medium',  -- 'high', 'medium', 'low'
+    leverage_value    TEXT DEFAULT 'medium',
     source_contact_id INTEGER REFERENCES contact(contact_id),
     created_at        TIMESTAMPTZ DEFAULT NOW()
 );
@@ -232,51 +243,269 @@ CREATE TABLE IF NOT EXISTS intel_org (
     PRIMARY KEY (intel_id, crm_id)
 );
 
--- ==========================================================================
--- Idempotent migrations (safe to re-run on every init_db)
--- ==========================================================================
+-- =========================================================================
+-- Project Nexus Engine 1 Tables (Phase 4)
+-- All tables prefixed nx_.
+-- =========================================================================
 
--- S12: Add due_date and is_next_action to project_task
-ALTER TABLE project_task ADD COLUMN IF NOT EXISTS due_date DATE;
-ALTER TABLE project_task ADD COLUMN IF NOT EXISTS is_next_action BOOLEAN DEFAULT FALSE;
+-- 1. Client organizations
+CREATE TABLE IF NOT EXISTS nx_client (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    industry        TEXT,
+    aliases         TEXT,
+    budget_range    TEXT,
+    status          TEXT NOT NULL DEFAULT 'active',
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
 
--- S14: work_log client-level activities
-ALTER TABLE work_log ADD COLUMN IF NOT EXISTS client_id TEXT REFERENCES crm(client_id);
+-- 2. Partner organizations
+CREATE TABLE IF NOT EXISTS nx_partner (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    trust_level     TEXT NOT NULL DEFAULT 'unverified',
+    team_size       TEXT,
+    aliases         TEXT,
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
 
--- S15: Add client_health_score to crm
-ALTER TABLE crm ADD COLUMN IF NOT EXISTS client_health_score INTEGER DEFAULT 75;
+-- 3. Contacts (people, linked to client OR partner)
+CREATE TABLE IF NOT EXISTS nx_contact (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    title           TEXT,
+    phone           TEXT,
+    email           TEXT,
+    line_id         TEXT,
+    org_type        TEXT,
+    org_id          INTEGER,
+    role            TEXT,
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_contact_org ON nx_contact(org_type, org_id);
 
--- S17: project_list channel field and sales_owner
-ALTER TABLE project_list ADD COLUMN IF NOT EXISTS channel TEXT;
-ALTER TABLE project_list ADD COLUMN IF NOT EXISTS sales_owner TEXT;
+-- 4. Intelligence entries (raw + parsed)
+CREATE TABLE IF NOT EXISTS nx_intel (
+    id              SERIAL PRIMARY KEY,
+    title           TEXT,
+    raw_input       TEXT NOT NULL,
+    input_type      TEXT NOT NULL DEFAULT 'text',
+    parsed_json     JSONB,
+    chat_history    JSONB,
+    status          TEXT NOT NULL DEFAULT 'draft',
+    source_contact_id INTEGER REFERENCES nx_contact(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
 
--- S29: Annual plan to support strategic initiatives
-ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS pillar TEXT;
-ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS owner TEXT;
-ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS kpis TEXT;
-ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Q2 計劃';
+-- 5. Universal tags
+CREATE TABLE IF NOT EXISTS nx_tag (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    category        TEXT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(name, category)
+);
 
--- S31: Add battlefront to annual_plan
-ALTER TABLE annual_plan ADD COLUMN IF NOT EXISTS battlefront TEXT;
+-- 6. Polymorphic tag join (entity_type + entity_id -> any entity)
+CREATE TABLE IF NOT EXISTS nx_entity_tag (
+    id              SERIAL PRIMARY KEY,
+    entity_type     TEXT NOT NULL,
+    entity_id       INTEGER NOT NULL,
+    tag_id          INTEGER NOT NULL REFERENCES nx_tag(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(entity_type, entity_id, tag_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nx_entity_tag_entity ON nx_entity_tag(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_nx_entity_tag_tag ON nx_entity_tag(tag_id);
 
-DO $$
-BEGIN
-    -- S14: Make project_id nullable (idempotent: check current nullability first)
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'work_log' AND column_name = 'project_id'
-          AND is_nullable = 'NO'
-    ) THEN
-        ALTER TABLE work_log ALTER COLUMN project_id DROP NOT NULL;
-    END IF;
+-- 7. TBD items (skipped Q&A + meeting action items)
+CREATE TABLE IF NOT EXISTS nx_tbd_item (
+    id              SERIAL PRIMARY KEY,
+    question        TEXT NOT NULL,
+    context         TEXT,
+    linked_type     TEXT,
+    linked_id       INTEGER,
+    source          TEXT NOT NULL DEFAULT 'skip',
+    resolved        BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_tbd_linked ON nx_tbd_item(linked_type, linked_id, resolved);
 
-    -- S14: Add CHECK constraint (at least one of project_id / client_id)
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'work_log_scope_check'
-    ) THEN
-        ALTER TABLE work_log
-        ADD CONSTRAINT work_log_scope_check
-        CHECK (project_id IS NOT NULL OR client_id IS NOT NULL);
-    END IF;
-END
-$$;
+-- 8. Document tracking (NDA/MOU)
+CREATE TABLE IF NOT EXISTS nx_document (
+    id              SERIAL PRIMARY KEY,
+    client_id       INTEGER NOT NULL REFERENCES nx_client(id),
+    doc_type        TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    sign_date       DATE,
+    expiry_date     DATE,
+    file_path       TEXT,
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_document_client ON nx_document(client_id);
+
+-- 9. Deals -- the CORE entity
+CREATE TABLE IF NOT EXISTS nx_deal (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    client_id       INTEGER NOT NULL REFERENCES nx_client(id),
+    stage           TEXT NOT NULL DEFAULT 'L0',
+    budget_range    TEXT,
+    budget_amount   NUMERIC,
+    budget_year     INTEGER DEFAULT 2026,
+    timeline        TEXT,
+    meddic_json     JSONB,
+    close_reason    TEXT,
+    close_notes     TEXT,
+    status          TEXT NOT NULL DEFAULT 'active',
+    last_activity_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_deal_client ON nx_deal(client_id);
+CREATE INDEX IF NOT EXISTS idx_nx_deal_status ON nx_deal(status, stage);
+
+-- 10. Deal x Partner (M2M)
+CREATE TABLE IF NOT EXISTS nx_deal_partner (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER NOT NULL REFERENCES nx_deal(id) ON DELETE CASCADE,
+    partner_id      INTEGER NOT NULL REFERENCES nx_partner(id),
+    role            TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(deal_id, partner_id)
+);
+
+-- 11. Deal x Intel (M2M)
+CREATE TABLE IF NOT EXISTS nx_deal_intel (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER NOT NULL REFERENCES nx_deal(id) ON DELETE CASCADE,
+    intel_id        INTEGER NOT NULL REFERENCES nx_intel(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(deal_id, intel_id)
+);
+
+-- 12. Meetings (calendar events linked to deals)
+CREATE TABLE IF NOT EXISTS nx_meeting (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER NOT NULL REFERENCES nx_deal(id),
+    title           TEXT NOT NULL,
+    meeting_date    TIMESTAMPTZ NOT NULL,
+    duration_minutes INTEGER NOT NULL DEFAULT 60,
+    participants_json JSONB,
+    location        TEXT,
+    notes           TEXT,
+    status          TEXT NOT NULL DEFAULT 'scheduled',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_meeting_deal ON nx_meeting(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_meeting_date ON nx_meeting(meeting_date);
+
+-- 13. Reminders (push/follow-up on calendar)
+CREATE TABLE IF NOT EXISTS nx_reminder (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER REFERENCES nx_deal(id),
+    reminder_type   TEXT NOT NULL,
+    due_date        TIMESTAMPTZ NOT NULL,
+    content         TEXT NOT NULL,
+    resolved        BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_reminder_due ON nx_reminder(due_date, resolved);
+
+-- 14. Files (uploaded files + AI parse results)
+CREATE TABLE IF NOT EXISTS nx_file (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER REFERENCES nx_deal(id),
+    intel_id        INTEGER REFERENCES nx_intel(id),
+    file_type       TEXT NOT NULL,
+    file_name       TEXT NOT NULL,
+    file_path       TEXT NOT NULL,
+    file_size       INTEGER,
+    source_url      TEXT,
+    parsed_json     JSONB,
+    parse_status    TEXT DEFAULT 'pending',
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_file_deal ON nx_file(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_file_intel ON nx_file(intel_id);
+
+-- 15. Intel <-> Entity M2M (auto-materialized links)
+CREATE TABLE IF NOT EXISTS nx_intel_entity (
+    id          SERIAL PRIMARY KEY,
+    intel_id    INTEGER NOT NULL REFERENCES nx_intel(id) ON DELETE CASCADE,
+    entity_type TEXT NOT NULL,
+    entity_id   INTEGER NOT NULL,
+    relation    TEXT DEFAULT 'mentioned',
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(intel_id, entity_type, entity_id)
+);
+
+-- 16. Intel parsed_json flattened index
+CREATE TABLE IF NOT EXISTS nx_intel_field (
+    id          SERIAL PRIMARY KEY,
+    intel_id    INTEGER NOT NULL REFERENCES nx_intel(id) ON DELETE CASCADE,
+    field_key   TEXT NOT NULL,
+    field_value TEXT NOT NULL,
+    UNIQUE(intel_id, field_key, field_value)
+);
+CREATE INDEX IF NOT EXISTS idx_intel_field_kv ON nx_intel_field(field_key, field_value);
+
+-- 17. Subsidy tracking (government grants / subsidies)
+CREATE TABLE IF NOT EXISTS nx_subsidy (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    source          TEXT,
+    agency          TEXT,
+    program_type    TEXT NOT NULL DEFAULT 'other',
+    eligibility     TEXT,
+    funding_amount  TEXT,
+    scope           TEXT,
+    required_docs   TEXT,
+    deadline        TEXT,
+    reference_url   TEXT,
+    stage           TEXT NOT NULL DEFAULT 'draft',
+    client_id       INTEGER REFERENCES nx_client(id),
+    partner_id      INTEGER REFERENCES nx_partner(id),
+    deadline_date   DATE,
+    notes           TEXT,
+    status          TEXT NOT NULL DEFAULT 'active',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_stage ON nx_subsidy(status, stage);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline ON nx_subsidy(deadline_date);
+
+-- 18. Subsidy deadlines (multiple batches per subsidy)
+CREATE TABLE IF NOT EXISTS nx_subsidy_deadline (
+    id          SERIAL PRIMARY KEY,
+    subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,
+    label       TEXT NOT NULL,
+    deadline_date DATE NOT NULL,
+    notes       TEXT,
+    status      TEXT NOT NULL DEFAULT 'open',
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_subsidy ON nx_subsidy_deadline(subsidy_id);
+CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_date ON nx_subsidy_deadline(deadline_date, status);
+
+-- 19. Subsidy x Deal (M2M)
+CREATE TABLE IF NOT EXISTS nx_subsidy_deal (
+    id          SERIAL PRIMARY KEY,
+    subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,
+    deal_id     INTEGER NOT NULL REFERENCES nx_deal(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(subsidy_id, deal_id)
+);

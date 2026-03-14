@@ -51,7 +51,7 @@ def get_subsidy(subsidy_id: int) -> dict | None:
                           c.name AS client_name,
                           p.name AS partner_name,
                           CASE WHEN s.deadline_date IS NOT NULL
-                               THEN CAST(julianday(s.deadline_date) - julianday('now') AS INTEGER)
+                               THEN (s.deadline_date - CURRENT_DATE)
                           END AS days_left
                    FROM nx_subsidy s
                    LEFT JOIN nx_client c ON s.client_id = c.id
@@ -74,7 +74,7 @@ def get_all_subsidies(status: str = "active", view: str = "stage") -> list[dict]
                            c.name AS client_name,
                            p.name AS partner_name,
                            CASE WHEN s.deadline_date IS NOT NULL
-                                THEN CAST(julianday(s.deadline_date) - julianday('now') AS INTEGER)
+                                THEN (s.deadline_date - CURRENT_DATE)
                            END AS days_left
                     FROM nx_subsidy s
                     LEFT JOIN nx_client c ON s.client_id = c.id
@@ -112,7 +112,7 @@ def update_subsidy(subsidy_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_subsidy SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_subsidy SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -125,7 +125,7 @@ def advance_stage(subsidy_id: int, new_stage: str) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """UPDATE nx_subsidy SET stage = %s,
-                   updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                   updated_at = NOW() WHERE id = %s RETURNING *""",
                 (new_stage, subsidy_id),
             )
             return row_to_dict(cur)
@@ -137,7 +137,7 @@ def close_subsidy(subsidy_id: int, notes: str | None = None) -> dict | None:
             cur.execute(
                 """UPDATE nx_subsidy SET status = 'closed',
                    notes = COALESCE(%s, notes),
-                   updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                   updated_at = NOW() WHERE id = %s RETURNING *""",
                 (notes, subsidy_id),
             )
             return row_to_dict(cur)
@@ -161,7 +161,7 @@ def unlink_deal(subsidy_id: int, deal_id: int) -> bool:
                 "DELETE FROM nx_subsidy_deal WHERE subsidy_id = %s AND deal_id = %s",
                 (subsidy_id, deal_id),
             )
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0
 
 
 def get_subsidy_deals(subsidy_id: int) -> list[dict]:
@@ -198,7 +198,7 @@ def _sync_deadline_date_with_cursor(subsidy_id: int, cur) -> None:
     row = cur.fetchone()
     nearest = row[0] if row else None
     cur.execute(
-        "UPDATE nx_subsidy SET deadline_date = %s, updated_at = datetime('now') WHERE id = %s",
+        "UPDATE nx_subsidy SET deadline_date = %s, updated_at = NOW() WHERE id = %s",
         (nearest, subsidy_id),
     )
 
@@ -224,7 +224,7 @@ def get_deadlines(subsidy_id: int) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT *,
-                          CAST(julianday(deadline_date) - julianday('now') AS INTEGER) AS days_left
+                          (deadline_date - CURRENT_DATE) AS days_left
                    FROM nx_subsidy_deadline
                    WHERE subsidy_id = %s
                    ORDER BY deadline_date ASC""",
@@ -242,7 +242,7 @@ def update_deadline(deadline_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_subsidy_deadline SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_subsidy_deadline SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             result = row_to_dict(cur)
@@ -269,14 +269,14 @@ def get_subsidies_expiring_soon(within_days: int = 30) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT s.*, c.name AS client_name, p.name AS partner_name,
-                          CAST(julianday(s.deadline_date) - julianday('now') AS INTEGER) AS days_left
+                          (s.deadline_date - CURRENT_DATE) AS days_left
                    FROM nx_subsidy s
                    LEFT JOIN nx_client c ON s.client_id = c.id
                    LEFT JOIN nx_partner p ON s.partner_id = p.id
                    WHERE s.status = 'active'
                      AND s.deadline_date IS NOT NULL
-                     AND julianday(s.deadline_date) - julianday('now') <= %s
-                     AND julianday(s.deadline_date) - julianday('now') >= 0
+                     AND (s.deadline_date - CURRENT_DATE) <= %s
+                     AND (s.deadline_date - CURRENT_DATE) >= 0
                    ORDER BY s.deadline_date ASC""",
                 (within_days,),
             )

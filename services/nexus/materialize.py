@@ -511,7 +511,7 @@ def _apply_meddic_to_deals(client_id: int, parsed: dict, result: dict) -> None:
             continue
         meddic_raw = deal.get("meddic_json")
         try:
-            meddic = json.loads(meddic_raw) if meddic_raw else {}
+            meddic = meddic_raw if isinstance(meddic_raw, dict) else (json.loads(meddic_raw) if meddic_raw else {})
         except (json.JSONDecodeError, TypeError):
             meddic = {}
 

@@ -40,7 +40,7 @@ def update_document(doc_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_document SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_document SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -63,8 +63,8 @@ def get_expiring_documents(within_days: int = 30) -> list[dict]:
                    JOIN nx_client c ON d.client_id = c.id
                    WHERE d.status = 'signed'
                      AND d.expiry_date IS NOT NULL
-                     AND julianday(d.expiry_date) - julianday('now') <= %s
-                     AND julianday(d.expiry_date) - julianday('now') > 0
+                     AND (d.expiry_date - CURRENT_DATE) <= %s
+                     AND (d.expiry_date - CURRENT_DATE) > 0
                    ORDER BY d.expiry_date ASC""",
                 (within_days,),
             )
@@ -153,4 +153,4 @@ def delete_file(file_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_file WHERE id = %s", (file_id,))
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0

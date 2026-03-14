@@ -4,16 +4,13 @@ from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def _table_has_column(cur, table_name: str, column_name: str) -> bool:
-    """Return True when the SQLite table exists and contains the column."""
+    """Return True when the table exists and contains the column."""
     cur.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = %s",
-        (table_name,),
+        """SELECT column_name FROM information_schema.columns
+           WHERE table_name = %s AND column_name = %s""",
+        (table_name, column_name),
     )
-    if cur.fetchone() is None:
-        return False
-
-    cur.execute(f"PRAGMA table_info({table_name})")
-    return any(row[1] == column_name for row in cur.fetchall())
+    return cur.fetchone() is not None
 
 
 def create_intel(
@@ -46,10 +43,9 @@ def get_intel_by_ids(intel_ids: list[int]) -> list[dict]:
         return []
     with get_connection() as conn:
         with conn.cursor() as cur:
-            placeholders = ",".join(["%s"] * len(intel_ids))
             cur.execute(
-                f"SELECT * FROM nx_intel WHERE id IN ({placeholders}) ORDER BY created_at DESC",
-                intel_ids,
+                "SELECT * FROM nx_intel WHERE id IN %s ORDER BY created_at DESC",
+                (tuple(intel_ids),),
             )
             return rows_to_dicts(cur)
 
@@ -83,13 +79,13 @@ def confirm_intel(intel_id: int, parsed_json: str | None = None) -> dict | None:
             if parsed_json:
                 cur.execute(
                     """UPDATE nx_intel SET status = 'confirmed', parsed_json = %s,
-                       updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                       updated_at = NOW() WHERE id = %s RETURNING *""",
                     (parsed_json, intel_id),
                 )
             else:
                 cur.execute(
                     """UPDATE nx_intel SET status = 'confirmed',
-                       updated_at = datetime('now') WHERE id = %s RETURNING *""",
+                       updated_at = NOW() WHERE id = %s RETURNING *""",
                     (intel_id,),
                 )
             return row_to_dict(cur)
@@ -107,7 +103,7 @@ def update_intel(intel_id: int, **fields) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE nx_intel SET {set_clause}, updated_at = datetime('now') WHERE id = %s RETURNING *",
+                f"UPDATE nx_intel SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
             return row_to_dict(cur)
@@ -131,8 +127,7 @@ def get_intel_linked_deals(intel_id: int) -> list[dict]:
 def delete_intel(intel_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Clean up references first so older local DBs do not trip over
-            # missing tables/columns while we migrate schema forward.
+            # Clean up references first
             cleanup_targets = [
                 ("nx_deal_intel", "intel_id"),
                 ("nx_intel_entity", "intel_id"),
@@ -146,22 +141,23 @@ def delete_intel(intel_id: int) -> bool:
                         (intel_id,),
                     )
             cur.execute("DELETE FROM nx_intel WHERE id = %s", (intel_id,))
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0
 
 
 # ---------------------------------------------------------------------------
-# Intel ↔ Entity linking (nx_intel_entity)
+# Intel <-> Entity linking (nx_intel_entity)
 # ---------------------------------------------------------------------------
 
 def link_intel_entity(
     intel_id: int, entity_type: str, entity_id: int, relation: str = "mentioned"
 ) -> dict | None:
-    """Link an intel to an entity. INSERT OR IGNORE for idempotency."""
+    """Link an intel to an entity. ON CONFLICT DO NOTHING for idempotency."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT OR IGNORE INTO nx_intel_entity (intel_id, entity_type, entity_id, relation)
-                   VALUES (%s, %s, %s, %s)""",
+                """INSERT INTO nx_intel_entity (intel_id, entity_type, entity_id, relation)
+                   VALUES (%s, %s, %s, %s)
+                   ON CONFLICT (intel_id, entity_type, entity_id) DO NOTHING""",
                 (intel_id, entity_type, entity_id, relation),
             )
             # Return the row (may already exist)
@@ -228,15 +224,17 @@ def materialize_intel_fields(intel_id: int, parsed: dict) -> int:
                 if isinstance(value, list):
                     for item in value:
                         cur.execute(
-                            """INSERT OR IGNORE INTO nx_intel_field (intel_id, field_key, field_value)
-                               VALUES (%s, %s, %s)""",
+                            """INSERT INTO nx_intel_field (intel_id, field_key, field_value)
+                               VALUES (%s, %s, %s)
+                               ON CONFLICT (intel_id, field_key, field_value) DO NOTHING""",
                             (intel_id, key, str(item)),
                         )
                         count += 1
                 else:
                     cur.execute(
-                        """INSERT OR IGNORE INTO nx_intel_field (intel_id, field_key, field_value)
-                           VALUES (%s, %s, %s)""",
+                        """INSERT INTO nx_intel_field (intel_id, field_key, field_value)
+                           VALUES (%s, %s, %s)
+                           ON CONFLICT (intel_id, field_key, field_value) DO NOTHING""",
                         (intel_id, key, str(value)),
                     )
                     count += 1

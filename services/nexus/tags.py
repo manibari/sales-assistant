@@ -49,7 +49,7 @@ def untag_entity(entity_type: str, entity_id: int, tag_id: int) -> bool:
                    WHERE entity_type = %s AND entity_id = %s AND tag_id = %s""",
                 (entity_type, entity_id, tag_id),
             )
-            return cur._cur.rowcount > 0
+            return cur.rowcount > 0
 
 
 def get_entity_tags(entity_type: str, entity_id: int) -> list[dict]:

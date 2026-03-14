@@ -17,7 +17,7 @@ from services.nexus.intel import (
     link_intel_entity,
     materialize_intel_fields,
 )
-from services.nexus.deals import get_deals_by_client, get_deal, update_deal, MEDDIC_KEYS
+from services.nexus.deals import get_deals_by_client, update_deal, MEDDIC_KEYS
 from services.nexus.partners import create_partner, find_partner_by_name
 from services.nexus.subsidies import create_subsidy
 

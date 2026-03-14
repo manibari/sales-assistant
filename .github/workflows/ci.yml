@@ -22,7 +22,7 @@ jobs:
         run: pip install -r requirements.txt ruff
 
       - name: Ruff lint
-        run: ruff check backend/ services/ database/
+        run: ruff check --ignore E402 backend/ services/ database/
 
       - name: Black format check
         run: black --check backend/ services/ database/

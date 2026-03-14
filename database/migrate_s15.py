@@ -66,14 +66,14 @@ def migrate():
                         "norm_ch": norm_ch_names,
                     })
 
-            print(f"\n[S15] JSONB vs Normalized Validation Report")
+            print("\n[S15] JSONB vs Normalized Validation Report")
             print(f"{'='*50}")
             print(f"Total clients: {total}")
             print(f"Consistent:    {ok}")
             print(f"Mismatches:    {len(mismatches)}")
 
             if mismatches:
-                print(f"\nMismatch details:")
+                print("\nMismatch details:")
                 for m in mismatches:
                     print(f"  {m['client_id']}:")
                     if not m["dm_match"]:
@@ -83,7 +83,7 @@ def migrate():
             else:
                 print("\nAll data is consistent. JSONB columns can be safely ignored.")
 
-            print(f"\nNote: JSONB columns NOT dropped (kept as historical reference).")
+            print("\nNote: JSONB columns NOT dropped (kept as historical reference).")
 
 
 if __name__ == "__main__":

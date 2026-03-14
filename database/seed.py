@@ -248,10 +248,10 @@ def seed():
                     ),
                 )
 
-    print(f"Seed data loaded successfully!")
+    print("Seed data loaded successfully!")
     print(f"  - {len(companies)} clients (crm) — real contacts with data_year=2025")
-    print(f"  - 0 products, 0 projects, 0 work logs, 0 sales plans, 0 tasks")
-    print(f"  - app_settings preserved (ON CONFLICT DO NOTHING in schema)")
+    print("  - 0 products, 0 projects, 0 work logs, 0 sales plans, 0 tasks")
+    print("  - app_settings preserved (ON CONFLICT DO NOTHING in schema)")
 
 
 if __name__ == "__main__":

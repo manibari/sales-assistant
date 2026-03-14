@@ -1,6 +1,5 @@
 """Nexus client service — CRUD for client organizations."""
 
-import json
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 

@@ -651,7 +651,6 @@ async def _handle_done(chat_id: int) -> None:
 
     # Auto-link to existing deals + deal creation logic
     client_info = mat_result.get("client")
-    partner_info = mat_result.get("partner")
     role = parsed.get("role")
 
     # Find and auto-link existing deals for matched client or partner
@@ -715,7 +714,7 @@ async def _handle_done(chat_id: int) -> None:
         lines.append("")
         lines.append("傳新訊息可開始下一筆情報")
 
-    await _send_reply(chat_id, "\n".join(l for l in lines if l or l == ""))
+    await _send_reply(chat_id, "\n".join(line for line in lines if line or line == ""))
 
 
 async def _handle_deal_response(chat_id: int, text: str) -> bool:

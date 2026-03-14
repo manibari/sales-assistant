@@ -62,7 +62,7 @@ def migrate():
                             else:
                                 stats["skipped"] += 1
 
-            print(f"Migration complete:")
+            print("Migration complete:")
             print(f"  Decision makers migrated: {stats['dm_migrated']}")
             print(f"  Champions migrated: {stats['champ_migrated']}")
             print(f"  Skipped (duplicates): {stats['skipped']}")

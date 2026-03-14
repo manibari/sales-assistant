@@ -112,7 +112,7 @@ def seed():
         "partner_update": "宏碁智雲 + Delta edge computing",
     }))
 
-    print(f"Intel: 5 items (4 confirmed, 1 draft)")
+    print("Intel: 5 items (4 confirmed, 1 draft)")
 
     # --- TBDs ---
     create_tbd("確認 A 食品 ERP 系統版本", linked_type="client", linked_id=c1["id"], source="skip")
@@ -186,7 +186,7 @@ def seed():
             )
         conn.commit()
 
-    print(f"Deals: d1(L2), d2(L1 idle), d3(L0), d4(L1), d5(closed)")
+    print("Deals: d1(L2), d2(L1 idle), d3(L0), d4(L1), d5(closed)")
 
     # --- Meetings ---
     today_str = today.strftime("%Y-%m-%d")
@@ -224,9 +224,9 @@ def seed():
     print("Files: 4 (1 parsed)")
 
     print("\n=== RICH SEED COMPLETE ===")
-    print(f"  4 clients, 4 partners, 6 contacts")
-    print(f"  5 intel, 5 TBDs, 5 deals (1 closed)")
-    print(f"  3 meetings, 4 reminders, 4 files")
+    print("  4 clients, 4 partners, 6 contacts")
+    print("  5 intel, 5 TBDs, 5 deals (1 closed)")
+    print("  3 meetings, 4 reminders, 4 files")
 
 
 if __name__ == "__main__":

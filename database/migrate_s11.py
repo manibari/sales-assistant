@@ -60,7 +60,7 @@ def migrate():
             # Print results
             cur.execute("SELECT COUNT(*) FROM stage_probability")
             total = cur.fetchone()[0]
-            print(f"S11 migration complete:")
+            print("S11 migration complete:")
             print(f"  stage_probability rows: {total}")
 
             cur.execute("SELECT status_code, probability FROM stage_probability ORDER BY sort_order")

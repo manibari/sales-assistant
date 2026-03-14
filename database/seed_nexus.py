@@ -75,8 +75,8 @@ def seed():
 
     # --- TBD ---
     print("\n--- Creating TBDs ---")
-    tbd1 = create_tbd("確認 A 食品 ERP 系統", linked_type="client", linked_id=c1["id"], source="skip")
-    tbd2 = create_tbd("確認是否需要 IoT 設備", linked_type="client", linked_id=c1["id"], source="meeting")
+    create_tbd("確認 A 食品 ERP 系統", linked_type="client", linked_id=c1["id"], source="skip")
+    create_tbd("確認是否需要 IoT 設備", linked_type="client", linked_id=c1["id"], source="meeting")
     open_tbds = get_open_tbds("client", c1["id"])
     print(f"  Open TBDs for {c1['name']}: {len(open_tbds)}")
 

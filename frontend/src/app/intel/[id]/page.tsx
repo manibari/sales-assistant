@@ -19,6 +19,7 @@ import {
   Download,
 } from "lucide-react";
 import { nxApi, type NxIntel, type NxDeal } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 
 const INPUT_ICONS: Record<string, typeof FileText> = {
   text: FileText,
@@ -95,6 +96,8 @@ export default function IntelDetailPage() {
   const intelId = Number(params.id);
   const [intel, setIntel] = useState<NxIntel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
   const [showLinkDeal, setShowLinkDeal] = useState(false);
   const [allDeals, setAllDeals] = useState<NxDeal[]>([]);
   const [linking, setLinking] = useState(false);
@@ -102,7 +105,10 @@ export default function IntelDetailPage() {
   const loadIntel = useCallback(() => {
     nxApi.intel
       .get(intelId)
-      .then(setIntel)
+      .then((data) => {
+        setIntel(data);
+        setTitleDraft(data.title || "");
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [intelId]);
@@ -131,6 +137,22 @@ export default function IntelDetailPage() {
       console.error("Failed to link deal:", err);
     } finally {
       setLinking(false);
+    }
+  };
+
+  const handleSaveTitle = async () => {
+    setSavingTitle(true);
+    try {
+      const updated = await nxApi.intel.update(intelId, {
+        title: titleDraft.trim() || null,
+      });
+      setIntel(updated);
+      setTitleDraft(updated.title || "");
+    } catch (err) {
+      console.error("Failed to save intel title:", err);
+      alert("標題儲存失敗");
+    } finally {
+      setSavingTitle(false);
     }
   };
 
@@ -173,6 +195,8 @@ export default function IntelDetailPage() {
   }
 
   const linkedDealIds = new Set((intel.linked_deals || []).map((d) => d.id));
+  const savedTitle = intel.title?.trim() || "";
+  const titleChanged = titleDraft.trim() !== savedTitle;
 
   return (
     <div className="flex flex-col h-full">
@@ -209,6 +233,37 @@ export default function IntelDetailPage() {
           >
             {isConfirmed ? "已確認" : "草稿"}
           </span>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <p className="text-xs font-medium text-slate-400">情報標題</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                留空則沿用原始輸入。相關情報、搜尋與商機關聯會優先顯示這個標題。
+              </p>
+            </div>
+            <button
+              onClick={handleSaveTitle}
+              disabled={!titleChanged || savingTitle}
+              className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {savingTitle ? "儲存中..." : "儲存"}
+            </button>
+          </div>
+          <input
+            type="text"
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && titleChanged && !savingTitle) {
+                e.preventDefault();
+                void handleSaveTitle();
+              }
+            }}
+            placeholder={getIntelDisplayTitle(intel, 80)}
+            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          />
         </div>
 
         {/* Raw input */}
@@ -306,6 +361,45 @@ export default function IntelDetailPage() {
             </p>
           </div>
         )}
+
+        {/* Chat history */}
+        {intel.chat_history && (() => {
+          let chatMsgs: { role: string; text: string }[] = [];
+          try {
+            chatMsgs = JSON.parse(intel.chat_history);
+          } catch { /* ignore */ }
+          return chatMsgs.length > 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+              <details>
+                <summary className="flex items-center gap-2 cursor-pointer">
+                  <FileText size={16} className="text-cyan-500" />
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                    對話記錄
+                  </span>
+                  <span className="text-xs text-slate-400">({chatMsgs.length} 則)</span>
+                </summary>
+                <div className="mt-3 space-y-2.5 max-h-80 overflow-auto">
+                  {chatMsgs.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                          msg.role === "user"
+                            ? "bg-blue-500 text-white rounded-br-md"
+                            : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 rounded-bl-md"
+                        }`}
+                      >
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </div>
+          ) : null;
+        })()}
 
         {/* Linked deals */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">

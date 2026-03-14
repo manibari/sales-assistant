@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { TopBar } from "@/components/top-bar";
 import { ContactFormModal } from "@/components/contact-form-modal";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import {
   ChevronLeft,
   Handshake,
@@ -446,7 +447,7 @@ export default function PartnerDetailPage() {
                       className="block py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-1 px-1 rounded transition-colors"
                     >
                       <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
-                        {i.raw_input.slice(0, 80)}{i.raw_input.length > 80 ? "…" : ""}
+                        {getIntelDisplayTitle(i, 80)}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <span

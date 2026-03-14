@@ -19,6 +19,7 @@ import {
   type NxTbdItem,
   type MeddicProgress,
 } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import Link from "next/link";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
@@ -233,7 +234,7 @@ export default function MeetingPrepPage() {
             <div className="space-y-2">
               {deal.intel.slice(0, 3).map((i: { id: number; raw_input: string }) => (
                 <p key={i.id} className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2">
-                  {i.raw_input}
+                  {getIntelDisplayTitle(i, 80)}
                 </p>
               ))}
             </div>

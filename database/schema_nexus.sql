@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS nx_client (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     name            TEXT NOT NULL,
     industry        TEXT,
+    aliases         TEXT,          -- comma-separated alternate names
     budget_range    TEXT,          -- '<100K', '100-500K', '500K-1M', '1M+', 'unknown'
     status          TEXT NOT NULL DEFAULT 'active',  -- active, inactive
     notes           TEXT,
@@ -45,9 +46,11 @@ CREATE INDEX IF NOT EXISTS idx_nx_contact_org ON nx_contact(org_type, org_id);
 -- 4. Intelligence entries (raw + parsed)
 CREATE TABLE IF NOT EXISTS nx_intel (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    title           TEXT,
     raw_input       TEXT NOT NULL,
     input_type      TEXT NOT NULL DEFAULT 'text',  -- 'text', 'photo', 'voice'
     parsed_json     TEXT,          -- AI-parsed structured output (JSON string)
+    chat_history    TEXT,          -- JSON array of {role, text} chat messages
     status          TEXT NOT NULL DEFAULT 'draft',  -- draft, confirmed
     source_contact_id INTEGER REFERENCES nx_contact(id),
     created_at      TEXT DEFAULT (datetime('now')),

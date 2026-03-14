@@ -17,6 +17,7 @@ from services.nexus.intel import (
     link_intel_entity,
     materialize_intel_fields,
 )
+from services.nexus.deals import get_deals_by_client, get_deal, update_deal, MEDDIC_KEYS
 from services.nexus.partners import create_partner, find_partner_by_name
 from services.nexus.subsidies import create_subsidy
 
@@ -170,7 +171,11 @@ def materialize_intel(intel_id: int) -> dict:
     if client_id and parsed.get("budget"):
         _update_client_budget(client_id, parsed["budget"])
 
-    # 8. Flatten all fields into nx_intel_field
+    # 8. MEDDIC auto-fill on linked deals
+    if client_id:
+        _apply_meddic_to_deals(client_id, parsed, result)
+
+    # 9. Flatten all fields into nx_intel_field
     count = materialize_intel_fields(intel_id, parsed)
     result["fields_indexed"] = count
 
@@ -430,3 +435,96 @@ def _update_client_budget(client_id: int, budget: int | str) -> None:
         budget_range = "1M+"
 
     update_client(client_id, budget_range=budget_range)
+
+
+# ---------------------------------------------------------------------------
+# MEDDIC auto-fill from parsed intel fields
+# ---------------------------------------------------------------------------
+
+# Map parsed_json keys → MEDDIC keys with value formatters
+_PAIN_LABELS = {
+    "automation": "產線自動化",
+    "aoi": "AOI 瑕疵檢測",
+    "energy": "能源管理",
+    "safety": "工安監控",
+    "erp": "ERP 系統",
+    "iot": "IoT 數據整合",
+}
+
+
+def _meddic_from_parsed(parsed: dict) -> dict[str, str]:
+    """Extract MEDDIC field values from parsed intel JSON (deterministic mapping)."""
+    updates: dict[str, str] = {}
+
+    # identify_pain ← pain_points
+    pains = parsed.get("pain_points")
+    if pains:
+        if isinstance(pains, list):
+            labels = [_PAIN_LABELS.get(p, p) for p in pains]
+            updates["identify_pain"] = "、".join(labels)
+        elif isinstance(pains, str):
+            updates["identify_pain"] = pains
+
+    # economic_buyer ← decision_maker
+    dm = parsed.get("decision_maker")
+    if dm:
+        updates["economic_buyer"] = dm
+
+    # metrics ← budget (quantifiable)
+    budget = parsed.get("budget")
+    if budget:
+        try:
+            amount = int(budget)
+            wan = amount / 10000
+            updates["metrics"] = f"預算約 {wan:.0f} 萬"
+        except (ValueError, TypeError):
+            updates["metrics"] = str(budget)
+
+    # champion ← contact with internal advocacy signals
+    contact = parsed.get("contact_name")
+    title = parsed.get("contact_title")
+    if contact and title:
+        updates.setdefault("champion", f"{contact}（{title}）")
+
+    # decision_criteria / decision_process ← direct fields if AI extracted them
+    if parsed.get("decision_criteria"):
+        updates["decision_criteria"] = str(parsed["decision_criteria"])
+    if parsed.get("decision_process"):
+        updates["decision_process"] = str(parsed["decision_process"])
+
+    return updates
+
+
+def _apply_meddic_to_deals(client_id: int, parsed: dict, result: dict) -> None:
+    """Auto-fill MEDDIC fields on all deals linked to this client."""
+    new_fields = _meddic_from_parsed(parsed)
+    if not new_fields:
+        return
+
+    deals = get_deals_by_client(client_id)
+    if not deals:
+        return
+
+    meddic_updates = []
+    for deal in deals:
+        if deal.get("status") == "closed":
+            continue
+        meddic_raw = deal.get("meddic_json")
+        try:
+            meddic = json.loads(meddic_raw) if meddic_raw else {}
+        except (json.JSONDecodeError, TypeError):
+            meddic = {}
+
+        changed = False
+        for k, v in new_fields.items():
+            if k in MEDDIC_KEYS and not meddic.get(k):
+                meddic[k] = v
+                changed = True
+
+        if changed:
+            update_deal(deal["id"], meddic_json=json.dumps(meddic, ensure_ascii=False))
+            meddic_updates.append(deal["name"])
+
+    if meddic_updates:
+        result["meddic_updated"] = meddic_updates
+        logger.info("Auto-filled MEDDIC for deals: %s", meddic_updates)

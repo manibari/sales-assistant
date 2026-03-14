@@ -73,9 +73,11 @@ export interface NxContact {
 
 export interface NxIntel {
   id: number;
+  title: string | null;
   raw_input: string;
   input_type: string;
   parsed_json: string | null;
+  chat_history: string | null;
   status: string;
   source_contact_id: number | null;
   created_at: string;
@@ -256,7 +258,7 @@ export interface SearchResults {
   clients: { id: number; name: string; industry: string | null; status: string }[];
   partners: { id: number; name: string; trust_level: string }[];
   contacts: { id: number; name: string; title: string | null; org_type: string | null; org_id: number | null }[];
-  intel: { id: number; raw_input: string; status: string; created_at: string }[];
+  intel: { id: number; title: string | null; raw_input: string; status: string; created_at: string }[];
   subsidies: { id: number; name: string; agency: string | null; program_type: string; stage: string; deadline: string | null; status: string }[];
 }
 
@@ -334,8 +336,10 @@ export const nxApi = {
       return fetchAPI<NxIntel[]>(`/intel/${qs ? `?${qs}` : ""}`);
     },
     get: (id: number) => fetchAPI<NxIntel>(`/intel/${id}`),
-    create: (data: { raw_input: string; input_type?: string }) =>
+    create: (data: { title?: string | null; raw_input: string; input_type?: string }) =>
       postAPI<NxIntel>("/intel/", data),
+    update: (id: number, data: Partial<Pick<NxIntel, "title" | "raw_input" | "parsed_json" | "status" | "source_contact_id">>) =>
+      patchAPI<NxIntel>(`/intel/${id}`, data),
     confirm: (id: number, parsed_json?: string) =>
       postAPI<NxIntel>(`/intel/${id}/confirm`, { parsed_json }),
     materialize: (id: number) =>
@@ -351,6 +355,11 @@ export const nxApi = {
       postAPI<{ ai_reply: string; new_fields: Record<string, unknown>; parsed: Record<string, unknown> }>(
         `/intel/${id}/chat`,
         { message, current_parsed: currentParsed },
+      ),
+    summarize: (intelIds: number[]) =>
+      postAPI<{ summary: string; intel_count: number; intel_ids: number[] }>(
+        "/intel/summarize",
+        { intel_ids: intelIds },
       ),
   },
   deals: {
@@ -375,6 +384,11 @@ export const nxApi = {
       postAPI<unknown>(`/deals/${dealId}/intel`, { intel_id: intelId }),
     unlinkIntel: (dealId: number, intelId: number) =>
       deleteAPI(`/deals/${dealId}/intel/${intelId}`),
+    aiFillMeddic: (dealId: number) =>
+      postAPI<{ meddic: Record<string, string | null>; ai_filled: string[]; unchanged: string[] }>(
+        `/deals/${dealId}/meddic/ai-fill`,
+        {},
+      ),
   },
   calendar: {
     getMeeting: (id: number) => fetchAPI<NxMeeting>(`/calendar/meetings/${id}`),
@@ -425,7 +439,7 @@ export const nxApi = {
   },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
   searchIntelFields: (key: string, value: string) =>
-    fetchAPI<{ id: number; raw_input: string; status: string; created_at: string; field_key: string; field_value: string }[]>(
+    fetchAPI<{ id: number; title: string | null; raw_input: string; status: string; created_at: string; field_key: string; field_value: string }[]>(
       `/search/intel-fields?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`
     ),
 };

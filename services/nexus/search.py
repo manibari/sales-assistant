@@ -67,15 +67,15 @@ def global_search(query: str, limit: int = 20) -> dict:
             )
             results["subsidies"] = rows_to_dicts(cur)
 
-            # Intel — raw_input + intel_field values
+            # Intel — title + raw_input + intel_field values
             cur.execute(
-                """SELECT DISTINCT i.id, i.raw_input, i.status, i.created_at
+                """SELECT DISTINCT i.id, i.title, i.raw_input, i.status, i.created_at
                    FROM nx_intel i
                    LEFT JOIN nx_intel_field f ON f.intel_id = i.id
-                   WHERE i.raw_input LIKE %s OR f.field_value LIKE %s
+                   WHERE i.title LIKE %s OR i.raw_input LIKE %s OR f.field_value LIKE %s
                    ORDER BY i.created_at DESC
                    LIMIT %s""",
-                (q, q, limit),
+                (q, q, q, limit),
             )
             results["intel"] = rows_to_dicts(cur)
 
@@ -90,7 +90,7 @@ def search_intel_by_field(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT i.id, i.raw_input, i.status, i.created_at,
+                """SELECT i.id, i.title, i.raw_input, i.status, i.created_at,
                           f.field_key, f.field_value
                    FROM nx_intel_field f
                    JOIN nx_intel i ON f.intel_id = i.id

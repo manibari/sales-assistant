@@ -145,35 +145,34 @@ def init_db():
     logger.info("Database initialized at %s", _get_db_path())
 
 
+def _get_table_columns(conn: sqlite3.Connection, table_name: str) -> set[str] | None:
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    )
+    if not cur.fetchone():
+        return None
+    cur = conn.execute(f"PRAGMA table_info({table_name})")
+    return {row[1] for row in cur.fetchall()}
+
+
 def _run_migrations(conn: sqlite3.Connection):
     """Add columns missing from older schema versions."""
-    # Check if nx_file table exists (skip on fresh db — schema will create it)
-    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_file'")
-    if not cur.fetchone():
-        return
-    cur = conn.execute("PRAGMA table_info(nx_file)")
-    columns = {row[1] for row in cur.fetchall()}
-    if "intel_id" not in columns:
+    file_columns = _get_table_columns(conn, "nx_file")
+    if file_columns is not None and "intel_id" not in file_columns:
         conn.execute("ALTER TABLE nx_file ADD COLUMN intel_id INTEGER REFERENCES nx_intel(id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_nx_file_intel ON nx_file(intel_id)")
         logger.info("Migration: added intel_id to nx_file")
 
     # Migration: duration_minutes on nx_meeting
-    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_meeting'")
-    if cur.fetchone():
-        cur = conn.execute("PRAGMA table_info(nx_meeting)")
-        meeting_columns = {row[1] for row in cur.fetchall()}
-        if "duration_minutes" not in meeting_columns:
-            conn.execute("ALTER TABLE nx_meeting ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60")
-            logger.info("Migration: added duration_minutes to nx_meeting")
+    meeting_columns = _get_table_columns(conn, "nx_meeting")
+    if meeting_columns is not None and "duration_minutes" not in meeting_columns:
+        conn.execute("ALTER TABLE nx_meeting ADD COLUMN duration_minutes INTEGER NOT NULL DEFAULT 60")
+        logger.info("Migration: added duration_minutes to nx_meeting")
 
     # Migration: budget_amount + budget_year on nx_deal
-    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_deal'")
-    if not cur.fetchone():
-        return
-    cur = conn.execute("PRAGMA table_info(nx_deal)")
-    deal_columns = {row[1] for row in cur.fetchall()}
-    if "budget_amount" not in deal_columns:
+    deal_columns = _get_table_columns(conn, "nx_deal")
+    if deal_columns is not None and "budget_amount" not in deal_columns:
         conn.execute("ALTER TABLE nx_deal ADD COLUMN budget_amount REAL")
         conn.execute("ALTER TABLE nx_deal ADD COLUMN budget_year INTEGER DEFAULT 2026")
         # Backfill from budget_range
@@ -194,10 +193,15 @@ def _run_migrations(conn: sqlite3.Connection):
         logger.info("Migration: added budget_amount, budget_year to nx_deal + backfill")
 
     # Migration: aliases on nx_client
-    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='nx_client'")
-    if cur.fetchone():
-        cur = conn.execute("PRAGMA table_info(nx_client)")
-        client_columns = {row[1] for row in cur.fetchall()}
-        if "aliases" not in client_columns:
-            conn.execute("ALTER TABLE nx_client ADD COLUMN aliases TEXT")
-            logger.info("Migration: added aliases to nx_client")
+    client_columns = _get_table_columns(conn, "nx_client")
+    if client_columns is not None and "aliases" not in client_columns:
+        conn.execute("ALTER TABLE nx_client ADD COLUMN aliases TEXT")
+        logger.info("Migration: added aliases to nx_client")
+
+    intel_columns = _get_table_columns(conn, "nx_intel")
+    if intel_columns is not None and "title" not in intel_columns:
+        conn.execute("ALTER TABLE nx_intel ADD COLUMN title TEXT")
+        logger.info("Migration: added title to nx_intel")
+    if intel_columns is not None and "chat_history" not in intel_columns:
+        conn.execute("ALTER TABLE nx_intel ADD COLUMN chat_history TEXT")
+        logger.info("Migration: added chat_history to nx_intel")

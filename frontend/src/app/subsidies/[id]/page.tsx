@@ -17,6 +17,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { nxApi, type NxSubsidy, type NxSubsidyDeadline, type NxClient, type NxPartner, type NxDeal } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import Link from "next/link";
 
 const STAGE_ORDER = [
@@ -388,7 +389,7 @@ export default function SubsidyDetailPage() {
                       href={`/intel/${i.id}`}
                       className="block px-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors truncate"
                     >
-                      #{i.id} {i.raw_input.slice(0, 60)}
+                      #{i.id} {getIntelDisplayTitle(i, 60)}
                     </Link>
                   ))}
                 </div>

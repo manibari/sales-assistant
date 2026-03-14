@@ -14,6 +14,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { nxApi, type SearchResults } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import Link from "next/link";
 
 type TabKey = "all" | "deals" | "clients" | "partners" | "contacts" | "intel" | "subsidies";
@@ -186,7 +187,7 @@ export default function SearchPage() {
               <ResultSection title="情報" icon={Zap} count={results.intel.length}>
                 {results.intel.map((i) => (
                   <div key={i.id} className="py-2">
-                    <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">{i.raw_input}</p>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">{getIntelDisplayTitle(i, 80)}</p>
                     <p className="text-xs text-slate-400 mt-0.5">
                       {i.status} · {new Date(i.created_at).toLocaleDateString("zh-TW")}
                     </p>

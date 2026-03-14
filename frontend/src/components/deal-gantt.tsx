@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { nxApi, type NxMeeting, type NxIntel } from "@/lib/nexus-api";
+import { nxApi, type NxMeeting } from "@/lib/nexus-api";
 import { Flag, ZoomIn, ZoomOut, Pencil, Check, X } from "lucide-react";
 
 interface DealGanttProps {
   dealId: number;
   dealCreatedAt: string;
   currentStage: string;
-  intel?: NxIntel[];
   onDealUpdated?: () => void;
 }
 
@@ -58,7 +57,7 @@ interface GanttRow {
 const ZOOM_LEVELS = [14, 30, 60, 90, 180];
 const COL_MIN_W = 28; // minimum px per day column
 
-export function DealGantt({ dealId, dealCreatedAt, currentStage, intel, onDealUpdated }: DealGanttProps) {
+export function DealGantt({ dealId, dealCreatedAt, currentStage, onDealUpdated }: DealGanttProps) {
   const [meetings, setMeetings] = useState<NxMeeting[]>([]);
   const [zoomIdx, setZoomIdx] = useState(2);
   const [editingStart, setEditingStart] = useState(false);
@@ -135,33 +134,7 @@ export function DealGantt({ dealId, dealCreatedAt, currentStage, intel, onDealUp
       });
     });
 
-  // Intel rows
-  (intel || []).forEach((i) => {
-    const dateStr = (i as unknown as Record<string, string>).intel_created_at || i.created_at;
-    const iStart = toDay(new Date(dateStr));
-    const intelId = (i as unknown as Record<string, number>).intel_id ?? i.id;
-    rows.push({
-      id: `i-${intelId}`,
-      label: i.raw_input.slice(0, 20) + (i.raw_input.length > 20 ? "…" : ""),
-      start: iStart,
-      end: iStart,
-      color: "cyan",
-      tooltip: (
-        <div className="max-w-[240px]">
-          <div className="font-semibold mb-1">情報</div>
-          <div>{fmtFull(iStart)}</div>
-          <div className="mt-1 whitespace-normal leading-relaxed">{i.raw_input.slice(0, 120)}{i.raw_input.length > 120 ? "…" : ""}</div>
-          {i.status && (
-            <div className="mt-1">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                i.status === "confirmed" ? "bg-green-500/20 text-green-300" : "bg-amber-500/20 text-amber-300"
-              }`}>{STATUS_ZH[i.status] || i.status}</span>
-            </div>
-          )}
-        </div>
-      ),
-    });
-  });
+  // Intel rows removed — intel is shown in the "相關情報" section instead
 
   // Bar position helpers
   const colIndex = (d: Date): number => daysBetween(winStart, d);

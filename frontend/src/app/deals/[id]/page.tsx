@@ -22,10 +22,12 @@ import {
   Users,
 } from "lucide-react";
 import { nxApi, type NxDeal, type NxPartner, type NxIntel, type NxContact, type MeddicProgress } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import { formatBudget } from "@/lib/options";
 import { FileUploadModal } from "@/components/file-upload-modal";
 import { ContactFormModal } from "@/components/contact-form-modal";
 import { DealGantt } from "@/components/deal-gantt";
+import { IntelSummaryModal } from "@/components/intel-summary-modal";
 import Link from "next/link";
 
 const TRUST_LABELS: Record<string, string> = {
@@ -60,6 +62,93 @@ const CLOSE_REASONS = [
   { label: "其他", value: "other" },
 ];
 
+function IntelRow({
+  intelId,
+  title,
+  date,
+  editing,
+  onUnlink,
+  onTitleSaved,
+}: {
+  intelId: number;
+  title: string;
+  date?: string;
+  editing: boolean;
+  onUnlink: () => void;
+  onTitleSaved: () => void;
+}) {
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!draft.trim() || saving) return;
+    setSaving(true);
+    try {
+      await nxApi.intel.update(intelId, { title: draft.trim() });
+      setEditingTitle(false);
+      onTitleSaved();
+    } catch (err) {
+      console.error("Failed to save intel title:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-start justify-between py-2 gap-2">
+      <div className="flex-1 min-w-0">
+        {editingTitle ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditingTitle(false); }}
+              className="flex-1 text-sm bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded px-2 py-1 text-slate-900 dark:text-slate-50 focus:outline-none"
+              autoFocus
+              placeholder="情報標題..."
+            />
+            <button onClick={handleSave} disabled={saving} className="p-1 text-blue-500 hover:text-blue-600 cursor-pointer disabled:opacity-50"><Check size={14} /></button>
+            <button onClick={() => setEditingTitle(false)} className="p-1 text-slate-400 hover:text-slate-500 cursor-pointer"><X size={14} /></button>
+          </div>
+        ) : (
+          <div className="group">
+            <Link
+              href={`/intel/${intelId}`}
+              className="text-sm text-slate-700 dark:text-slate-300 hover:text-blue-500 dark:hover:text-blue-400 line-clamp-2 transition-colors"
+            >
+              {title}
+              <ExternalLink size={11} className="inline ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />
+            </Link>
+          </div>
+        )}
+        <span className="text-[11px] text-slate-400 mt-1 block">
+          {date ? new Date(date).toLocaleDateString("zh-TW") : ""}
+        </span>
+      </div>
+      {editing && !editingTitle && (
+        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          <button
+            onClick={() => { setDraft(title); setEditingTitle(true); }}
+            className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 rounded cursor-pointer transition-colors"
+            title="修改標題"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={onUnlink}
+            className="p-1 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded cursor-pointer transition-colors"
+            title="取消關聯"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -83,6 +172,7 @@ export default function DealDetailPage() {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
   const [showAddIntel, setShowAddIntel] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showAddTbd, setShowAddTbd] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [allPartners, setAllPartners] = useState<NxPartner[]>([]);
@@ -425,7 +515,6 @@ export default function DealDetailPage() {
             dealId={dealId}
             dealCreatedAt={deal.created_at}
             currentStage={deal.stage}
-            intel={deal.intel}
             onDealUpdated={loadDeal}
           />
         )}
@@ -462,6 +551,28 @@ export default function DealDetailPage() {
           </button>
           {meddicOpen && (
             <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
+              {progress.missing.length > 0 && !isClosed && (
+                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await nxApi.deals.aiFillMeddic(dealId);
+                        if (res.ai_filled.length > 0) {
+                          loadDeal();
+                        } else {
+                          alert("AI 未找到新的 MEDDIC 線索");
+                        }
+                      } catch (err) {
+                        console.error("AI MEDDIC fill failed:", err);
+                        alert("AI 分析失敗，請確認有關聯情報");
+                      }
+                    }}
+                    className="text-xs text-cyan-500 hover:text-cyan-400 font-medium cursor-pointer transition-colors"
+                  >
+                    ✨ AI 從情報自動填寫（{progress.missing.length} 項未填）
+                  </button>
+                </div>
+              )}
               {Object.entries(MEDDIC_LABELS).map(([key, label]) => {
                 const value = meddic[key];
                 const isEditing = editingMeddic === key;
@@ -653,36 +764,37 @@ export default function DealDetailPage() {
           } : undefined}
         >
           {deal.intel && deal.intel.length > 0 ? (
-            deal.intel.map((i: { id: number; intel_id?: number; raw_input: string; intel_created_at?: string }) => (
-              <div key={i.intel_id ?? i.id} className="flex items-start justify-between py-2 gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
-                    {i.raw_input}
-                  </p>
-                  <span className="text-[11px] text-slate-400 mt-1">
-                    {i.intel_created_at
-                      ? new Date(i.intel_created_at).toLocaleDateString("zh-TW")
-                      : ""}
-                  </span>
-                </div>
-                {editingSection === "intel" && (
-                  <button
-                    onClick={async () => {
-                      if (!confirm("確定取消關聯此情報？")) return;
-                      try {
-                        await nxApi.deals.unlinkIntel(dealId, i.intel_id ?? i.id);
-                        loadDeal();
-                      } catch (err) { console.error(err); }
-                    }}
-                    className="p-1 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded cursor-pointer transition-colors flex-shrink-0 mt-0.5"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            ))
+            deal.intel.map((i) => {
+              const ii = i as unknown as { id: number; intel_id?: number; raw_input: string; intel_created_at?: string };
+              const realId = ii.intel_id ?? ii.id;
+              return (
+                <IntelRow
+                  key={realId}
+                  intelId={realId}
+                  title={getIntelDisplayTitle(i, 80)}
+                  date={ii.intel_created_at}
+                  editing={editingSection === "intel"}
+                  onUnlink={async () => {
+                    if (!confirm("確定取消關聯此情報？")) return;
+                    try {
+                      await nxApi.deals.unlinkIntel(dealId, realId);
+                      loadDeal();
+                    } catch (err) { console.error(err); }
+                  }}
+                  onTitleSaved={loadDeal}
+                />
+              );
+            })
           ) : (
             <p className="text-xs text-slate-400">尚無關聯情報</p>
+          )}
+          {deal.intel && deal.intel.length >= 2 && (
+            <button
+              onClick={() => setShowSummaryModal(true)}
+              className="mt-2 w-full py-2 text-xs font-medium text-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/5 rounded-lg cursor-pointer transition-colors"
+            >
+              彙整 {deal.intel.length} 筆情報
+            </button>
           )}
         </Section>
 
@@ -921,6 +1033,28 @@ export default function DealDetailPage() {
       )}
 
       {/* Add Intel modal */}
+      {showSummaryModal && deal?.intel && (
+        <IntelSummaryModal
+          intelIds={deal.intel.map((i) => {
+            const ii = i as unknown as { intel_id?: number };
+            return ii.intel_id ?? i.id;
+          })}
+          onClose={() => setShowSummaryModal(false)}
+          onSaveAsIntel={async (summary) => {
+            const newIntel = await nxApi.intel.create({
+              raw_input: summary,
+              input_type: "text",
+            });
+            await nxApi.deals.linkIntel(dealId, newIntel.id);
+            await nxApi.intel.update(newIntel.id, {
+              title: `${deal.name} 情報彙整`,
+              status: "confirmed",
+            });
+            loadDeal();
+          }}
+        />
+      )}
+
       {showAddIntel && (
         <div className="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4">
@@ -946,7 +1080,7 @@ export default function DealDetailPage() {
                       }}
                       className="w-full py-3 px-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded transition-colors cursor-pointer text-left"
                     >
-                      <p className="text-sm text-slate-900 dark:text-slate-50 line-clamp-2">{i.raw_input}</p>
+                      <p className="text-sm text-slate-900 dark:text-slate-50 line-clamp-2">{getIntelDisplayTitle(i, 80)}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${i.status === "confirmed" ? "bg-green-500/10 text-green-400" : "bg-amber-500/10 text-amber-400"}`}>
                           {i.status === "confirmed" ? "已確認" : "草稿"}

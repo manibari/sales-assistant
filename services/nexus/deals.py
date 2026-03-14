@@ -261,7 +261,7 @@ def get_deal_intel(deal_id: int) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT di.*, i.raw_input, i.parsed_json, i.status, i.created_at AS intel_created_at
+                """SELECT di.*, i.title, i.raw_input, i.parsed_json, i.status, i.created_at AS intel_created_at
                    FROM nx_deal_intel di
                    JOIN nx_intel i ON di.intel_id = i.id
                    WHERE di.deal_id = %s

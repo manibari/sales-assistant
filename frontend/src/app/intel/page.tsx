@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxIntel } from "@/lib/nexus-api";
+import { getIntelDisplayTitle } from "@/lib/intel-display";
 import { FileText, Camera, Mic, ChevronRight, Paperclip, Trash2 } from "lucide-react";
 
 const INPUT_ICONS: Record<string, typeof FileText> = {
@@ -67,7 +68,7 @@ export default function IntelPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-slate-900 dark:text-slate-50 line-clamp-2">
-                        {intel.raw_input}
+                        {getIntelDisplayTitle(intel, 80)}
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span

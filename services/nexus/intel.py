@@ -18,6 +18,7 @@ def _table_has_column(cur, table_name: str, column_name: str) -> bool:
 
 def create_intel(
     raw_input: str,
+    title: str | None = None,
     input_type: str = "text",
     parsed_json: str | None = None,
     source_contact_id: int | None = None,
@@ -25,10 +26,10 @@ def create_intel(
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_intel (raw_input, input_type, parsed_json, source_contact_id)
-                   VALUES (%s, %s, %s, %s)
+                """INSERT INTO nx_intel (title, raw_input, input_type, parsed_json, source_contact_id)
+                   VALUES (%s, %s, %s, %s, %s)
                    RETURNING *""",
-                (raw_input, input_type, parsed_json, source_contact_id),
+                (title, raw_input, input_type, parsed_json, source_contact_id),
             )
             return row_to_dict(cur)
 
@@ -38,6 +39,19 @@ def get_intel(intel_id: int) -> dict | None:
         with conn.cursor() as cur:
             cur.execute("SELECT * FROM nx_intel WHERE id = %s", (intel_id,))
             return row_to_dict(cur)
+
+
+def get_intel_by_ids(intel_ids: list[int]) -> list[dict]:
+    if not intel_ids:
+        return []
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            placeholders = ",".join(["%s"] * len(intel_ids))
+            cur.execute(
+                f"SELECT * FROM nx_intel WHERE id IN ({placeholders}) ORDER BY created_at DESC",
+                intel_ids,
+            )
+            return rows_to_dicts(cur)
 
 
 def get_all_intel(status: str | None = None, limit: int = 50) -> list[dict]:
@@ -84,7 +98,7 @@ def confirm_intel(intel_id: int, parsed_json: str | None = None) -> dict | None:
 def update_intel(intel_id: int, **fields) -> dict | None:
     if not fields:
         return get_intel(intel_id)
-    allowed = {"raw_input", "input_type", "parsed_json", "status", "source_contact_id"}
+    allowed = {"title", "raw_input", "input_type", "parsed_json", "chat_history", "status", "source_contact_id"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_intel(intel_id)

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from services.ai_provider import check_ai_available, generate_ai_response
 from services.nexus.intel import (
-    create_intel, get_intel, get_all_intel, confirm_intel, update_intel, delete_intel,
+    create_intel, get_intel, get_intel_by_ids, get_all_intel, confirm_intel, update_intel, delete_intel,
     get_intel_entities, get_entity_intel,
 )
 from services.nexus.clients import find_client_by_name
@@ -27,6 +27,7 @@ from backend.routers.nexus.telegram import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT
 
 
 class IntelCreate(BaseModel):
+    title: str | None = None
     raw_input: str
     input_type: str = "text"
     parsed_json: str | None = None
@@ -34,6 +35,7 @@ class IntelCreate(BaseModel):
 
 
 class IntelUpdate(BaseModel):
+    title: str | None = None
     raw_input: str | None = None
     parsed_json: str | None = None
     status: str | None = None
@@ -47,6 +49,10 @@ class IntelConfirm(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     current_parsed: dict | None = None
+
+
+class IntelSummarize(BaseModel):
+    intel_ids: list[int]
 
 
 def _enrich_from_db(parsed: dict) -> tuple[dict, str]:
@@ -111,6 +117,66 @@ def list_intel(status: str | None = None, limit: int = 50):
 def intel_by_entity(entity_type: str, entity_id: int):
     """Get all intel linked to a specific entity (client, partner, contact, deal)."""
     return get_entity_intel(entity_type, entity_id)
+
+
+INTEL_SUMMARIZE_PROMPT = """你是 B2B 業務情報分析師。根據以下多筆情報原文，產生一份結構化摘要。
+
+格式要求（繁體中文）：
+## 關鍵實體
+列出所有提到的公司、人物、組織
+
+## 痛點與需求
+客戶面臨的問題和需求
+
+## 時程與預算
+任何提到的時間線、預算範圍、年度
+
+## 關鍵聯絡人
+提到的決策者、聯絡窗口及其角色
+
+## 商機潛力評估
+綜合判斷這些情報反映的商機成熟度和下一步建議
+
+如果某個區段沒有相關資訊，請標註「未提及」而非省略。"""
+
+
+@router.post("/summarize")
+def summarize_intel(body: IntelSummarize):
+    """AI-generated summary from multiple intel records."""
+    if not body.intel_ids:
+        raise HTTPException(422, "No intel IDs provided")
+
+    if not check_ai_available():
+        raise HTTPException(503, "AI service not available")
+
+    intels = get_intel_by_ids(body.intel_ids)
+    if not intels:
+        raise HTTPException(404, "No intel found for given IDs")
+
+    # Compose user prompt from all intel
+    sections = []
+    for i, intel in enumerate(intels, 1):
+        section = f"--- 情報 #{intel['id']} ({intel.get('created_at', '')}) ---\n{intel['raw_input']}"
+        if intel.get("parsed_json"):
+            try:
+                parsed = json.loads(intel["parsed_json"]) if isinstance(intel["parsed_json"], str) else intel["parsed_json"]
+                section += f"\n[已解析欄位] {json.dumps(parsed, ensure_ascii=False)}"
+            except (json.JSONDecodeError, TypeError):
+                pass
+        sections.append(section)
+
+    user_prompt = "\n\n".join(sections)
+    # Truncate to avoid token limits
+    if len(user_prompt) > 8000:
+        user_prompt = user_prompt[:8000] + "\n\n（內容已截斷）"
+
+    summary = generate_ai_response(INTEL_SUMMARIZE_PROMPT, user_prompt)
+
+    return {
+        "summary": summary.strip(),
+        "intel_count": len(intels),
+        "intel_ids": [i["id"] for i in intels],
+    }
 
 
 @router.get("/{intel_id}")
@@ -211,6 +277,13 @@ def initial_parse(intel_id: int):
         system_note = db_context.replace("[系統] ", "✅ ")
         ai_reply = f"{system_note}\n\n{ai_reply}"
 
+    # Save chat history
+    chat_history = [
+        {"role": "user", "text": raw},
+        {"role": "ai", "text": ai_reply},
+    ]
+    update_intel(intel_id, chat_history=json.dumps(chat_history, ensure_ascii=False))
+
     return {"parsed": parsed, "ai_reply": ai_reply}
 
 
@@ -262,12 +335,27 @@ def chat_followup(intel_id: int, body: ChatMessage):
     merged, db_context = _enrich_from_db(merged)
 
     # Save to intel
-    update_intel(intel_id, parsed_json=json.dumps(merged, ensure_ascii=False))
+    # Append to chat history
+    existing_history = []
+    if intel.get("chat_history"):
+        try:
+            existing_history = json.loads(intel["chat_history"]) if isinstance(intel["chat_history"], str) else intel["chat_history"]
+        except (json.JSONDecodeError, TypeError):
+            pass
 
     # Prepend DB enrichment info if new entities were found
     if db_context:
         system_note = db_context.replace("[系統] ", "✅ ")
         ai_reply = f"{system_note}\n\n{ai_reply}"
+
+    existing_history.append({"role": "user", "text": body.message})
+    existing_history.append({"role": "ai", "text": ai_reply})
+
+    update_intel(
+        intel_id,
+        parsed_json=json.dumps(merged, ensure_ascii=False),
+        chat_history=json.dumps(existing_history, ensure_ascii=False),
+    )
 
     return {"ai_reply": ai_reply, "new_fields": new_fields, "parsed": merged}
 

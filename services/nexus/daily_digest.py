@@ -113,7 +113,7 @@ def format_digest_telegram(data: dict) -> str:
         lines.append("")
         lines.append(f"📝 <b>未確認情報 ({len(drafts)})</b>")
         for i in drafts[:3]:
-            preview = i["raw_input"][:40].replace("\n", " ")
+            preview = (i.get("title") or i["raw_input"])[:40].replace("\n", " ")
             lines.append(f"  • #{i['id']} {preview}...")
         if len(drafts) > 3:
             lines.append(f"  ...還有 {len(drafts) - 3} 筆")

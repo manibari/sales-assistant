@@ -34,7 +34,7 @@ function ChatFlow() {
   const [matResult, setMatResult] = useState<MaterializeResult | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -81,6 +81,7 @@ function ChatFlow() {
     if (!msg || sending) return;
 
     setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
     setSending(true);
     setMessages((prev) => [...prev, { role: "user", text: msg }]);
 
@@ -257,17 +258,25 @@ function ChatFlow() {
       {/* Input bar */}
       <div className="border-t border-slate-200 dark:border-slate-700 px-4 py-3 bg-white dark:bg-slate-900">
         <div className="max-w-2xl mx-auto flex gap-2">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) handleSend();
+            onChange={(e) => {
+              setInput(e.target.value);
+              // Auto-resize
+              e.target.style.height = "auto";
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
             }}
-            placeholder="輸入補充資訊..."
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="輸入補充資訊...（Enter 送出，Shift+Enter 換行）"
             disabled={sending || initializing}
-            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none disabled:opacity-50 transition-colors"
+            rows={1}
+            className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none disabled:opacity-50 transition-colors resize-none leading-relaxed"
           />
           <button
             onClick={handleSend}

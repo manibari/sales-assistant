@@ -28,7 +28,7 @@ def check_ai_available() -> tuple[bool, str]:
 
     if provider not in _VALID_PROVIDERS:
         return False, (
-            f"AI_PROVIDER=\"{provider}\" 不是有效的選項。"
+            f'AI_PROVIDER="{provider}" 不是有效的選項。'
             f"請設定為：{', '.join(_VALID_PROVIDERS)}"
         )
 
@@ -39,7 +39,12 @@ def check_ai_available() -> tuple[bool, str]:
 
     if provider == "azure_openai":
         missing = [
-            v for v in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_KEY", "AZURE_OPENAI_DEPLOYMENT")
+            v
+            for v in (
+                "AZURE_OPENAI_ENDPOINT",
+                "AZURE_OPENAI_KEY",
+                "AZURE_OPENAI_DEPLOYMENT",
+            )
             if not os.getenv(v)
         ]
         if missing:
@@ -52,7 +57,12 @@ def check_ai_available() -> tuple[bool, str]:
     return True, provider
 
 
-def generate_ai_vision_response(system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+def generate_ai_vision_response(
+    system_prompt: str,
+    user_text: str,
+    image_bytes: bytes,
+    mime_type: str = "image/jpeg",
+) -> str:
     """Dispatch a vision AI call (text + image) to the active provider.
 
     Args:
@@ -69,7 +79,9 @@ def generate_ai_vision_response(system_prompt: str, user_text: str, image_bytes:
     if provider == "gemini":
         return _call_gemini_vision(system_prompt, user_text, image_bytes, mime_type)
     if provider == "azure_openai":
-        return _call_azure_openai_vision(system_prompt, user_text, image_bytes, mime_type)
+        return _call_azure_openai_vision(
+            system_prompt, user_text, image_bytes, mime_type
+        )
     if provider == "anthropic":
         return _call_anthropic_vision(system_prompt, user_text, image_bytes, mime_type)
 
@@ -105,6 +117,7 @@ def generate_ai_response(system_prompt: str, user_text: str) -> str:
 # ---------------------------------------------------------------------------
 # Private provider implementations
 # ---------------------------------------------------------------------------
+
 
 def _call_gemini(system_prompt: str, user_text: str) -> str:
     import google.generativeai as genai  # noqa: E402 — lazy import
@@ -154,7 +167,10 @@ def _call_anthropic(system_prompt: str, user_text: str) -> str:
 # Vision provider implementations
 # ---------------------------------------------------------------------------
 
-def _call_gemini_vision(system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str) -> str:
+
+def _call_gemini_vision(
+    system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str
+) -> str:
     import google.generativeai as genai  # noqa: E402
 
     model_name = os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")
@@ -170,7 +186,9 @@ def _call_gemini_vision(system_prompt: str, user_text: str, image_bytes: bytes, 
     return response.text.strip()
 
 
-def _call_azure_openai_vision(system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str) -> str:
+def _call_azure_openai_vision(
+    system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str
+) -> str:
     import base64
     from openai import AzureOpenAI  # noqa: E402
 
@@ -196,7 +214,9 @@ def _call_azure_openai_vision(system_prompt: str, user_text: str, image_bytes: b
     return response.choices[0].message.content.strip()
 
 
-def _call_anthropic_vision(system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str) -> str:
+def _call_anthropic_vision(
+    system_prompt: str, user_text: str, image_bytes: bytes, mime_type: str
+) -> str:
     import base64
     import anthropic  # noqa: E402
 
@@ -204,7 +224,10 @@ def _call_anthropic_vision(system_prompt: str, user_text: str, image_bytes: byte
     model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     content = [
-        {"type": "image", "source": {"type": "base64", "media_type": mime_type, "data": b64}},
+        {
+            "type": "image",
+            "source": {"type": "base64", "media_type": mime_type, "data": b64},
+        },
     ]
     if user_text:
         content.append({"type": "text", "text": user_text})

@@ -2,19 +2,17 @@
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
-
 # --- NDA/MOU Document Tracking ---
+
 
 def get_all_documents() -> list[dict]:
     """Get all NDA/MOU documents with client names."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT d.*, c.name AS client_name
+            cur.execute("""SELECT d.*, c.name AS client_name
                    FROM nx_document d
                    JOIN nx_client c ON d.client_id = c.id
-                   ORDER BY d.expiry_date ASC NULLS LAST"""
-            )
+                   ORDER BY d.expiry_date ASC NULLS LAST""")
             return rows_to_dicts(cur)
 
 
@@ -73,6 +71,7 @@ def get_expiring_documents(within_days: int = 30) -> list[dict]:
 
 # --- File Uploads ---
 
+
 def create_file(
     deal_id: int | None = None,
     file_type: str = "attachment",
@@ -88,7 +87,15 @@ def create_file(
                 """INSERT INTO nx_file (deal_id, intel_id, file_type, file_name, file_path, file_size, source_url)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, intel_id, file_type, file_name, file_path, file_size, source_url),
+                (
+                    deal_id,
+                    intel_id,
+                    file_type,
+                    file_name,
+                    file_path,
+                    file_size,
+                    source_url,
+                ),
             )
             return row_to_dict(cur)
 
@@ -131,7 +138,9 @@ def update_file(file_id: int, **fields) -> dict | None:
             return row_to_dict(cur)
 
 
-def update_file_parse(file_id: int, parsed_json: str, parse_status: str = "parsed") -> dict | None:
+def update_file_parse(
+    file_id: int, parsed_json: str, parse_status: str = "parsed"
+) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(

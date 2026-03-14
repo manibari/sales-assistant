@@ -14,9 +14,19 @@ Public API:
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
-def create(project_id, task_name, owner=None, status="planned",
-           start_date=None, end_date=None, estimated_hours=0,
-           actual_hours=0, sort_order=0, due_date=None, is_next_action=False):
+def create(
+    project_id,
+    task_name,
+    owner=None,
+    status="planned",
+    start_date=None,
+    end_date=None,
+    estimated_hours=0,
+    actual_hours=0,
+    sort_order=0,
+    due_date=None,
+    is_next_action=False,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -25,8 +35,19 @@ def create(project_id, task_name, owner=None, status="planned",
                     estimated_hours, actual_hours, sort_order, due_date, is_next_action)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING task_id""",
-                (project_id, task_name, owner, status, start_date, end_date,
-                 estimated_hours, actual_hours, sort_order, due_date, is_next_action),
+                (
+                    project_id,
+                    task_name,
+                    owner,
+                    status,
+                    start_date,
+                    end_date,
+                    estimated_hours,
+                    actual_hours,
+                    sort_order,
+                    due_date,
+                    is_next_action,
+                ),
             )
             return cur.fetchone()[0]
 
@@ -48,9 +69,19 @@ def get_by_id(task_id):
             return row_to_dict(cur)
 
 
-def update(task_id, task_name, owner=None, status="planned",
-           start_date=None, end_date=None, estimated_hours=0,
-           actual_hours=0, sort_order=0, due_date=None, is_next_action=False):
+def update(
+    task_id,
+    task_name,
+    owner=None,
+    status="planned",
+    start_date=None,
+    end_date=None,
+    estimated_hours=0,
+    actual_hours=0,
+    sort_order=0,
+    due_date=None,
+    is_next_action=False,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -61,9 +92,19 @@ def update(task_id, task_name, owner=None, status="planned",
                        sort_order = %s, due_date = %s, is_next_action = %s,
                        updated_at = NOW()
                    WHERE task_id = %s""",
-                (task_name, owner, status, start_date, end_date,
-                 estimated_hours, actual_hours, sort_order,
-                 due_date, is_next_action, task_id),
+                (
+                    task_name,
+                    owner,
+                    status,
+                    start_date,
+                    end_date,
+                    estimated_hours,
+                    actual_hours,
+                    sort_order,
+                    due_date,
+                    is_next_action,
+                    task_id,
+                ),
             )
 
 

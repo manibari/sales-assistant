@@ -7,7 +7,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.connection import get_connection
 
-
 # Default probabilities per stage
 _SEED_DATA = [
     ("L0", 0.05, 1),
@@ -51,11 +50,14 @@ def migrate():
 
             # 3. Seed stage_probability (idempotent)
             for status_code, probability, sort_order in _SEED_DATA:
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO stage_probability (status_code, probability, sort_order)
                     VALUES (%s, %s, %s)
                     ON CONFLICT (status_code) DO NOTHING
-                """, (status_code, probability, sort_order))
+                """,
+                    (status_code, probability, sort_order),
+                )
 
             # Print results
             cur.execute("SELECT COUNT(*) FROM stage_probability")
@@ -63,7 +65,9 @@ def migrate():
             print("S11 migration complete:")
             print(f"  stage_probability rows: {total}")
 
-            cur.execute("SELECT status_code, probability FROM stage_probability ORDER BY sort_order")
+            cur.execute(
+                "SELECT status_code, probability FROM stage_probability ORDER BY sort_order"
+            )
             for code, prob in cur.fetchall():
                 print(f"    {code}: {prob}")
 

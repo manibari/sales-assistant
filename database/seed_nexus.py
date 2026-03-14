@@ -12,8 +12,13 @@ from services.nexus.partners import create_partner, get_all_partners
 from services.nexus.contacts import create_contact
 from services.nexus.intel import create_intel, confirm_intel
 from services.nexus.deals import (
-    create_deal, get_deal, advance_stage, add_partner_to_deal,
-    link_intel_to_deal, get_deals_by_urgency, get_meddic_progress,
+    create_deal,
+    get_deal,
+    advance_stage,
+    add_partner_to_deal,
+    link_intel_to_deal,
+    get_deals_by_urgency,
+    get_meddic_progress,
 )
 from services.nexus.calendar import create_meeting, create_reminder
 from services.nexus.documents import get_documents_by_client, create_file
@@ -40,13 +45,25 @@ def seed():
     print("\n--- Creating partners ---")
     p1 = create_partner("Vision 科技", trust_level="verified", team_size="10-50")
     p2 = create_partner("IoT 系統", trust_level="testing", team_size="1-10")
-    print(f"  Created: {p1['name']} (trust={p1['trust_level']}), {p2['name']} (trust={p2['trust_level']})")
+    print(
+        f"  Created: {p1['name']} (trust={p1['trust_level']}), {p2['name']} (trust={p2['trust_level']})"
+    )
 
     # --- Contacts ---
     print("\n--- Creating contacts ---")
-    ct1 = create_contact("陳副廠長", org_type="client", org_id=c1["id"], title="副廠長", role="decision_maker")
-    ct2 = create_contact("林工程師", org_type="partner", org_id=p1["id"], title="技術長", role="engineer")
-    print(f"  Created: {ct1['name']} ({ct1['org_type']}), {ct2['name']} ({ct2['org_type']})")
+    ct1 = create_contact(
+        "陳副廠長",
+        org_type="client",
+        org_id=c1["id"],
+        title="副廠長",
+        role="decision_maker",
+    )
+    ct2 = create_contact(
+        "林工程師", org_type="partner", org_id=p1["id"], title="技術長", role="engineer"
+    )
+    print(
+        f"  Created: {ct1['name']} ({ct1['org_type']}), {ct2['name']} ({ct2['org_type']})"
+    )
 
     # --- Tags ---
     print("\n--- Creating tags ---")
@@ -66,23 +83,40 @@ def seed():
         input_type="text",
         source_contact_id=ct1["id"],
     )
-    i1 = confirm_intel(i1["id"], json.dumps({
-        "pain_points": ["產線自動化", "AOI"],
-        "budget": "300K",
-        "timeline": "今年",
-    }))
+    i1 = confirm_intel(
+        i1["id"],
+        json.dumps(
+            {
+                "pain_points": ["產線自動化", "AOI"],
+                "budget": "300K",
+                "timeline": "今年",
+            }
+        ),
+    )
     print(f"  Intel #{i1['id']}: status={i1['status']}")
 
     # --- TBD ---
     print("\n--- Creating TBDs ---")
-    create_tbd("確認 A 食品 ERP 系統", linked_type="client", linked_id=c1["id"], source="skip")
-    create_tbd("確認是否需要 IoT 設備", linked_type="client", linked_id=c1["id"], source="meeting")
+    create_tbd(
+        "確認 A 食品 ERP 系統", linked_type="client", linked_id=c1["id"], source="skip"
+    )
+    create_tbd(
+        "確認是否需要 IoT 設備",
+        linked_type="client",
+        linked_id=c1["id"],
+        source="meeting",
+    )
     open_tbds = get_open_tbds("client", c1["id"])
     print(f"  Open TBDs for {c1['name']}: {len(open_tbds)}")
 
     # --- Deal ---
     print("\n--- Creating deal ---")
-    d1 = create_deal("A 食品 AOI 產線自動化", client_id=c1["id"], budget_range="100-500K", timeline="this_quarter")
+    d1 = create_deal(
+        "A 食品 AOI 產線自動化",
+        client_id=c1["id"],
+        budget_range="100-500K",
+        timeline="this_quarter",
+    )
     print(f"  Deal: {d1['name']} (stage={d1['stage']})")
 
     # Add partner to deal
@@ -95,7 +129,9 @@ def seed():
 
     # Check MEDDIC
     meddic = get_meddic_progress(d1["id"])
-    print(f"  MEDDIC: {meddic['completed']}/{meddic['total']} (missing: {meddic['missing']})")
+    print(
+        f"  MEDDIC: {meddic['completed']}/{meddic['total']} (missing: {meddic['missing']})"
+    )
 
     # Advance stage
     advance_stage(d1["id"], "L1")
@@ -144,7 +180,9 @@ def seed():
     print("\n--- Pipeline (urgency view) ---")
     deals = get_deals_by_urgency()
     for deal in deals:
-        print(f"  {deal['name']} | stage={deal['stage']} | idle={deal.get('idle_days', 0)} days")
+        print(
+            f"  {deal['name']} | stage={deal['stage']} | idle={deal.get('idle_days', 0)} days"
+        )
 
     # --- Summary ---
     print("\n=== SEED COMPLETE ===")

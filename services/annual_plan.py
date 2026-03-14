@@ -58,13 +58,23 @@ def get_all():
 def get_by_id(product_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM annual_plan WHERE product_id = %s", (product_id,))
+            cur.execute(
+                "SELECT * FROM annual_plan WHERE product_id = %s", (product_id,)
+            )
             return row_to_dict(cur)
 
 
 def update(
-    product_id, product_name, quota_fy26, strategy, target_industry,
-    pillar, owner, kpis, status, battlefront
+    product_id,
+    product_name,
+    quota_fy26,
+    strategy,
+    target_industry,
+    pillar,
+    owner,
+    kpis,
+    status,
+    battlefront,
 ):
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -75,8 +85,16 @@ def update(
                        status = %s, battlefront = %s, updated_at = NOW()
                    WHERE product_id = %s""",
                 (
-                    product_name, quota_fy26, strategy, target_industry,
-                    pillar, owner, kpis, status, battlefront, product_id
+                    product_name,
+                    quota_fy26,
+                    strategy,
+                    target_industry,
+                    pillar,
+                    owner,
+                    kpis,
+                    status,
+                    battlefront,
+                    product_id,
                 ),
             )
 

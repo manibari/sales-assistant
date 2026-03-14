@@ -4,8 +4,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.contacts import (
-    create_contact, get_contact, get_all_contacts, get_contacts_by_org,
-    update_contact, delete_contact,
+    create_contact,
+    get_contact,
+    get_all_contacts,
+    get_contacts_by_org,
+    update_contact,
+    delete_contact,
 )
 
 router = APIRouter()

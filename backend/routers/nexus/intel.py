@@ -8,8 +8,15 @@ from pydantic import BaseModel
 
 from services.ai_provider import check_ai_available, generate_ai_response
 from services.nexus.intel import (
-    create_intel, get_intel, get_intel_by_ids, get_all_intel, confirm_intel, update_intel, delete_intel,
-    get_intel_entities, get_entity_intel,
+    create_intel,
+    get_intel,
+    get_intel_by_ids,
+    get_all_intel,
+    confirm_intel,
+    update_intel,
+    delete_intel,
+    get_intel_entities,
+    get_entity_intel,
 )
 from services.nexus.clients import find_client_by_name
 from services.nexus.contacts import get_contacts_by_org
@@ -74,7 +81,10 @@ def _enrich_from_db(parsed: dict) -> tuple[dict, str]:
             # Fetch contacts
             contacts = get_contacts_by_org("client", c["id"])
             if contacts:
-                names = [f"{ct['name']}（{ct.get('title') or '無職稱'}）" for ct in contacts[:5]]
+                names = [
+                    f"{ct['name']}（{ct.get('title') or '無職稱'}）"
+                    for ct in contacts[:5]
+                ]
                 context_lines.append(f"[系統] 該客戶已有聯絡人：{'、'.join(names)}")
                 # Auto-fill first contact if not set
                 if not enriched.get("contact_name") and contacts:
@@ -102,7 +112,10 @@ def _enrich_from_db(parsed: dict) -> tuple[dict, str]:
             context_lines.append(f"[系統] 已匹配夥伴「{p['name']}」(#{p['id']})")
             contacts = get_contacts_by_org("partner", p["id"])
             if contacts:
-                names = [f"{ct['name']}（{ct.get('title') or '無職稱'}）" for ct in contacts[:5]]
+                names = [
+                    f"{ct['name']}（{ct.get('title') or '無職稱'}）"
+                    for ct in contacts[:5]
+                ]
                 context_lines.append(f"[系統] 該夥伴已有聯絡人：{'、'.join(names)}")
 
     return enriched, "\n".join(context_lines)
@@ -159,7 +172,11 @@ def summarize_intel(body: IntelSummarize):
         section = f"--- 情報 #{intel['id']} ({intel.get('created_at', '')}) ---\n{intel['raw_input']}"
         if intel.get("parsed_json"):
             try:
-                parsed = json.loads(intel["parsed_json"]) if isinstance(intel["parsed_json"], str) else intel["parsed_json"]
+                parsed = (
+                    json.loads(intel["parsed_json"])
+                    if isinstance(intel["parsed_json"], str)
+                    else intel["parsed_json"]
+                )
                 section += f"\n[已解析欄位] {json.dumps(parsed, ensure_ascii=False)}"
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -260,7 +277,9 @@ def initial_parse(intel_id: int):
     # Generate greeting via followup prompt, include DB context
     extra_context = ""
     if db_context:
-        extra_context = f"\n\n以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
+        extra_context = (
+            f"\n\n以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
+        )
     greeting_prompt = FOLLOWUP_PROMPT.format(
         current_json=json.dumps(parsed, ensure_ascii=False, indent=2),
         user_msg=f"（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）{extra_context}",
@@ -270,7 +289,11 @@ def initial_parse(intel_id: int):
         greeting_prompt,
     )
     # Split on --- to get reply part
-    ai_reply = greeting_raw.split("---")[0].strip() if "---" in greeting_raw else greeting_raw.strip()
+    ai_reply = (
+        greeting_raw.split("---")[0].strip()
+        if "---" in greeting_raw
+        else greeting_raw.strip()
+    )
 
     # Prepend DB enrichment info to AI reply
     if db_context:
@@ -323,7 +346,9 @@ def chat_followup(intel_id: int, body: ChatMessage):
                 json_part = json_part.split("\n", 1)[1].rsplit("```", 1)[0]
             new_fields = json.loads(json_part)
         except (json.JSONDecodeError, IndexError):
-            logger.warning("Chat parse failed for intel #%d: %s", intel_id, json_part[:200])
+            logger.warning(
+                "Chat parse failed for intel #%d: %s", intel_id, json_part[:200]
+            )
 
     # Merge new fields into current
     merged = {**enriched_before}
@@ -339,7 +364,11 @@ def chat_followup(intel_id: int, body: ChatMessage):
     existing_history = []
     if intel.get("chat_history"):
         try:
-            existing_history = json.loads(intel["chat_history"]) if isinstance(intel["chat_history"], str) else intel["chat_history"]
+            existing_history = (
+                json.loads(intel["chat_history"])
+                if isinstance(intel["chat_history"], str)
+                else intel["chat_history"]
+            )
         except (json.JSONDecodeError, TypeError):
             pass
 

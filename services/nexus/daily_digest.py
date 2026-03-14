@@ -80,7 +80,9 @@ def format_digest_telegram(data: dict) -> str:
         lines.append(f"⏰ <b>待處理提醒 ({len(reminders)})</b>")
         for r in reminders[:5]:
             deal_name = r.get("deal_name", "")
-            lines.append(f"  • {r['content']}" + (f" ({deal_name})" if deal_name else ""))
+            lines.append(
+                f"  • {r['content']}" + (f" ({deal_name})" if deal_name else "")
+            )
         if len(reminders) > 5:
             lines.append(f"  ...還有 {len(reminders) - 5} 項")
 
@@ -131,7 +133,12 @@ def format_digest_telegram(data: dict) -> str:
 
     # Summary count
     total = (
-        len(meetings) + len(reminders) + len(idle) + len(tbds) + len(drafts) + len(expiring)
+        len(meetings)
+        + len(reminders)
+        + len(idle)
+        + len(tbds)
+        + len(drafts)
+        + len(expiring)
     )
     if total == 0:
         lines.append("")

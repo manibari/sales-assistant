@@ -3,6 +3,7 @@
 This service interacts with the configured AI provider to extract structured
 data from unstructured text.
 """
+
 import json
 import logging
 
@@ -12,6 +13,7 @@ from services.config import get_ai_prompt
 logger = logging.getLogger(__name__)
 
 # --- AI Log Parsing ---
+
 
 def parse_log_entry(text_input: str) -> list[dict] | None:
     """
@@ -33,7 +35,9 @@ def parse_log_entry(text_input: str) -> list[dict] | None:
 
     system_prompt = get_ai_prompt()
     if not system_prompt:
-        raise ValueError("System prompt for 'ai_smart_log' could not be loaded from prompts.yml.")
+        raise ValueError(
+            "System prompt for 'ai_smart_log' could not be loaded from prompts.yml."
+        )
 
     raw_response_text = ""
     try:
@@ -52,14 +56,15 @@ def parse_log_entry(text_input: str) -> list[dict] | None:
 
         # For single-entry input, preserve the original text as log_content
         if len(parsed_json) == 1:
-            parsed_json[0]['log_content'] = text_input
+            parsed_json[0]["log_content"] = text_input
 
         return parsed_json
 
     except json.JSONDecodeError as e:
         logger.error(
             "AI response parsing failed. Error: %s\nRaw response:\n%s",
-            e, raw_response_text,
+            e,
+            raw_response_text,
         )
         return None
     except Exception as e:

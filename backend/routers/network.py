@@ -26,6 +26,7 @@ class IntelCreate(BaseModel):
 
 # --- Relations ---
 
+
 @router.get("/relations")
 def list_relations():
     return network_svc.get_all_relations()
@@ -54,6 +55,7 @@ def delete_relation(relation_id: int):
 
 
 # --- Intel ---
+
 
 @router.get("/intel")
 def list_intel():
@@ -86,6 +88,7 @@ def delete_intel(intel_id: int):
 
 
 # --- Graph ---
+
 
 @router.get("/graph")
 def get_graph():

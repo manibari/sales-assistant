@@ -9,7 +9,11 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 
-from services.ai_provider import check_ai_available, generate_ai_response, generate_ai_vision_response
+from services.ai_provider import (
+    check_ai_available,
+    generate_ai_response,
+    generate_ai_vision_response,
+)
 from services.nexus.documents import create_file
 from services.nexus.intel import confirm_intel, create_intel, update_intel
 from services.nexus.deals import get_deals_by_client, link_intel_to_deal
@@ -31,7 +35,9 @@ _conversations: dict[int, dict] = {}
 _pending_deal: dict[int, dict] = {}
 
 # Registered chat IDs for daily digest (persisted to file)
-_REGISTERED_CHATS_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".telegram_chats.json"
+_REGISTERED_CHATS_FILE = (
+    Path(__file__).resolve().parent.parent.parent.parent / ".telegram_chats.json"
+)
 
 
 def _load_registered_chats() -> set[int]:
@@ -229,9 +235,23 @@ deal_potential: "high" | "medium" | "low" | "none"
 # ---------------------------------------------------------------------------
 
 _ROLE_FIELDS: dict[str, list[str]] = {
-    "client": ["industry", "pain_points", "nda_status", "mou_status", "budget", "deal_potential"],
+    "client": [
+        "industry",
+        "pain_points",
+        "nda_status",
+        "mou_status",
+        "budget",
+        "deal_potential",
+    ],
     "partner": ["capabilities", "team_size"],
-    "subsidy": ["subsidy_name", "agency", "funding_amount", "deadline", "subsidy_partner", "subsidy_deadline"],
+    "subsidy": [
+        "subsidy_name",
+        "agency",
+        "funding_amount",
+        "deadline",
+        "subsidy_partner",
+        "subsidy_deadline",
+    ],
     "si": [],
     "other": [],
 }
@@ -249,6 +269,7 @@ def _missing_fields(parsed: dict) -> list[str]:
 # ---------------------------------------------------------------------------
 # Telegram Bot API helpers
 # ---------------------------------------------------------------------------
+
 
 def _bot_token() -> str:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -288,6 +309,7 @@ async def _send_reply(chat_id: int, text: str):
 # ---------------------------------------------------------------------------
 # AI helpers
 # ---------------------------------------------------------------------------
+
 
 def _strip_json_fences(text: str) -> str:
     """Remove markdown code fences from AI response."""
@@ -352,10 +374,14 @@ async def _parse_business_card(image_bytes: bytes, caption: str = "") -> list[di
         logger.warning("AI not available for business card parse: %s", info)
         return []
     try:
-        user_text = caption or "請辨識這張圖片中所有名片的資訊，每張名片各自回傳一個 JSON object"
+        user_text = (
+            caption
+            or "請辨識這張圖片中所有名片的資訊，每張名片各自回傳一個 JSON object"
+        )
         response = await asyncio.to_thread(
             generate_ai_vision_response,
-            BUSINESS_CARD_PROMPT + "\n\nIMPORTANT: If the image contains MULTIPLE business cards, return a JSON ARRAY of objects, one per card. If only one card, still return a single JSON object (not an array).",
+            BUSINESS_CARD_PROMPT
+            + "\n\nIMPORTANT: If the image contains MULTIPLE business cards, return a JSON ARRAY of objects, one per card. If only one card, still return a single JSON object (not an array).",
             user_text,
             image_bytes,
             "image/jpeg",
@@ -410,32 +436,62 @@ async def _followup_parse(current_parsed: dict, user_msg: str) -> tuple[str, dic
 # ---------------------------------------------------------------------------
 
 _ROLE_LABELS = {
-    "client": "客戶", "partner": "夥伴", "subsidy": "政府補貼",
-    "si": "SI", "other": "其他",
+    "client": "客戶",
+    "partner": "夥伴",
+    "subsidy": "政府補貼",
+    "si": "SI",
+    "other": "其他",
 }
 _KNOWN_INDUSTRIES = {
-    "food", "petrochemical", "semiconductor", "manufacturing",
-    "tech", "finance", "healthcare", "transportation", "other",
+    "food",
+    "petrochemical",
+    "semiconductor",
+    "manufacturing",
+    "tech",
+    "finance",
+    "healthcare",
+    "transportation",
+    "other",
 }
 _INDUSTRY_LABELS = {
-    "food": "食品業", "petrochemical": "石化業", "semiconductor": "半導體",
-    "manufacturing": "製造業", "tech": "科技", "finance": "金融",
-    "healthcare": "醫療", "transportation": "交通運輸", "other": "其他",
+    "food": "食品業",
+    "petrochemical": "石化業",
+    "semiconductor": "半導體",
+    "manufacturing": "製造業",
+    "tech": "科技",
+    "finance": "金融",
+    "healthcare": "醫療",
+    "transportation": "交通運輸",
+    "other": "其他",
 }
 # Custom industries added at runtime (persists until server restart)
 _custom_industries: dict[str, str] = {}  # { snake_key: "中文 label" }
 _PAIN_LABELS = {
-    "automation": "產線自動化", "aoi": "AOI", "energy": "能源管理",
-    "safety": "安全監控", "erp": "ERP/系統整合", "iot": "IoT",
+    "automation": "產線自動化",
+    "aoi": "AOI",
+    "energy": "能源管理",
+    "safety": "安全監控",
+    "erp": "ERP/系統整合",
+    "iot": "IoT",
 }
 _FIELD_LABELS = {
-    "role": "分類", "industry": "產業", "pain_points": "痛點",
-    "nda_status": "NDA", "mou_status": "MOU", "budget": "預算",
+    "role": "分類",
+    "industry": "產業",
+    "pain_points": "痛點",
+    "nda_status": "NDA",
+    "mou_status": "MOU",
+    "budget": "預算",
     "deal_potential": "開案潛力",
-    "capabilities": "能力", "team_size": "團隊規模",
-    "subsidy_name": "計畫名稱", "agency": "主辦機關", "funding_amount": "補助額度",
-    "deadline": "截止日期", "eligibility": "申請資格", "scope": "補助範疇",
-    "subsidy_partner": "合作夥伴", "subsidy_deadline": "截止期程",
+    "capabilities": "能力",
+    "team_size": "團隊規模",
+    "subsidy_name": "計畫名稱",
+    "agency": "主辦機關",
+    "funding_amount": "補助額度",
+    "deadline": "截止日期",
+    "eligibility": "申請資格",
+    "scope": "補助範疇",
+    "subsidy_partner": "合作夥伴",
+    "subsidy_deadline": "截止期程",
 }
 
 
@@ -452,7 +508,7 @@ def _check_new_industry(parsed: dict) -> str | None:
     # AI suggested a new industry
     label = parsed.pop("industry_label", None) or ind
     _custom_industries[ind] = label
-    return f'🆕 偵測到新產業分類：「{label}」（{ind}）\n要使用這個分類嗎？回覆「是」確認，或告訴我正確的產業'
+    return f"🆕 偵測到新產業分類：「{label}」（{ind}）\n要使用這個分類嗎？回覆「是」確認，或告訴我正確的產業"
 
 
 def _format_summary(parsed: dict) -> str:
@@ -534,9 +590,8 @@ def _format_initial_reply(intel_id: int, parsed: dict | None, has_missing: bool)
 # Save file helper
 # ---------------------------------------------------------------------------
 
-async def _save_attachment(
-    file_id: str, file_name: str | None, intel_id: int
-) -> None:
+
+async def _save_attachment(file_id: str, file_name: str | None, intel_id: int) -> None:
     """Download file from Telegram and save to uploads/ + DB."""
     tg_path, content = await _tg_get_file(file_id)
     name = file_name or Path(tg_path).name
@@ -558,6 +613,7 @@ async def _save_attachment(
 # ---------------------------------------------------------------------------
 # Conversation handlers
 # ---------------------------------------------------------------------------
+
 
 async def _auto_create_deal(
     intel_id: int, client_id: int, client_name: str, parsed: dict
@@ -682,7 +738,9 @@ async def _handle_done(chat_id: int) -> None:
                 lines.append(
                     f"💼 已自動建立商機「{deal_result['name']}」(#{deal_result['id']})"
                 )
-                lines.append(f"   階段：L0 | 開案潛力：{'高' if dp == 'high' else '中'}")
+                lines.append(
+                    f"   階段：L0 | 開案潛力：{'高' if dp == 'high' else '中'}"
+                )
         elif dp == "low":
             _pending_deal[chat_id] = {
                 "intel_id": intel_id,
@@ -691,7 +749,9 @@ async def _handle_done(chat_id: int) -> None:
                 "parsed": parsed,
             }
             lines.append("")
-            lines.append(f"💼 開案潛力偏低，仍要為「{client_info['name']}」建立新商機嗎？")
+            lines.append(
+                f"💼 開案潛力偏低，仍要為「{client_info['name']}」建立新商機嗎？"
+            )
             lines.append("回覆「是」建立，或傳新訊息開始下一筆情報")
         elif dp != "none":
             _pending_deal[chat_id] = {
@@ -706,7 +766,9 @@ async def _handle_done(chat_id: int) -> None:
                 lines.append("回覆「是」建立，或傳新訊息開始下一筆情報")
             else:
                 lines.append("")
-                lines.append("💼 要另外建立新商機嗎？回覆「是」建立，或傳新訊息開始下一筆")
+                lines.append(
+                    "💼 要另外建立新商機嗎？回覆「是」建立，或傳新訊息開始下一筆"
+                )
         else:
             lines.append("")
             lines.append("傳新訊息可開始下一筆情報")
@@ -740,7 +802,9 @@ async def _handle_deal_response(chat_id: int, text: str) -> bool:
                 f"傳新訊息可開始下一筆情報",
             )
         else:
-            await _send_reply(chat_id, "⚠️ 建立商機失敗，請稍後重試\n傳新訊息可開始下一筆情報")
+            await _send_reply(
+                chat_id, "⚠️ 建立商機失敗，請稍後重試\n傳新訊息可開始下一筆情報"
+            )
         return True
 
     elif low in ("否", "no", "不", "不用", "跳過", "skip"):
@@ -839,7 +903,9 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
                 card_label = _format_card_raw(card)
                 raw_parts.append(f"--- 名片 {i+1} ---\n{card_label}")
 
-            raw = "📇 名片辨識（共 {} 張）\n\n{}".format(len(cards), "\n\n".join(raw_parts))
+            raw = "📇 名片辨識（共 {} 張）\n\n{}".format(
+                len(cards), "\n\n".join(raw_parts)
+            )
             await asyncio.to_thread(update_intel, intel_id, raw_input=raw)
 
             # First card goes to current intel
@@ -853,24 +919,33 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
                     create_intel, raw_input=card_raw, input_type="photo"
                 )
                 await asyncio.to_thread(
-                    update_intel, extra_intel["id"],
+                    update_intel,
+                    extra_intel["id"],
                     parsed_json=json.dumps(card, ensure_ascii=False),
                 )
                 name = card.get("contact_name", "?")
                 company = card.get("company_name", "")
-                extra_lines.append(f"  #{extra_intel['id']} {name}" + (f"（{company}）" if company else ""))
+                extra_lines.append(
+                    f"  #{extra_intel['id']} {name}"
+                    + (f"（{company}）" if company else "")
+                )
             await _send_reply(
                 chat_id,
                 f"📇 偵測到 {len(cards)} 張名片！\n"
-                f"其他 {len(cards)-1} 張已存為草稿：\n" + "\n".join(extra_lines) +
-                "\n\n先處理第 1 張，其他可之後用 /done 逐一確認"
+                f"其他 {len(cards)-1} 張已存為草稿：\n"
+                + "\n".join(extra_lines)
+                + "\n\n先處理第 1 張，其他可之後用 /done 逐一確認",
             )
 
         elif len(cards) == 1:
             parsed = cards[0]
             raw = "📇 名片辨識\n" + _format_card_raw(parsed)
             await asyncio.to_thread(update_intel, intel_id, raw_input=raw)
-            logger.info("Card parse result for intel #%d: %s", intel_id, json.dumps(parsed, ensure_ascii=False))
+            logger.info(
+                "Card parse result for intel #%d: %s",
+                intel_id,
+                json.dumps(parsed, ensure_ascii=False),
+            )
 
     elif text:
         parsed = await _auto_parse(text) or {}
@@ -878,7 +953,8 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
     # Save to DB (as draft with partial parsed_json)
     if parsed:
         await asyncio.to_thread(
-            update_intel, intel_id,
+            update_intel,
+            intel_id,
             parsed_json=json.dumps(parsed, ensure_ascii=False),
         )
 
@@ -926,17 +1002,24 @@ async def _handle_followup(chat_id: int, text: str) -> None:
     if conv.get("pending_role_confirm"):
         low = text.strip().lower()
         role_map = {
-            "客戶": "client", "client": "client",
-            "夥伴": "partner", "partner": "partner", "合作夥伴": "partner",
-            "其他": "other", "other": "other",
-            "si": "si", "補助": "subsidy", "subsidy": "subsidy",
+            "客戶": "client",
+            "client": "client",
+            "夥伴": "partner",
+            "partner": "partner",
+            "合作夥伴": "partner",
+            "其他": "other",
+            "other": "other",
+            "si": "si",
+            "補助": "subsidy",
+            "subsidy": "subsidy",
         }
         matched_role = role_map.get(low)
         if matched_role:
             conv["parsed"]["role"] = matched_role
             conv["pending_role_confirm"] = False
             await asyncio.to_thread(
-                update_intel, intel_id,
+                update_intel,
+                intel_id,
                 parsed_json=json.dumps(conv["parsed"], ensure_ascii=False),
             )
             role_label = _ROLE_LABELS.get(matched_role, matched_role)
@@ -962,7 +1045,8 @@ async def _handle_followup(chat_id: int, text: str) -> None:
             # Confirmed — keep the industry as-is
             conv["pending_industry_confirm"] = False
             await asyncio.to_thread(
-                update_intel, intel_id,
+                update_intel,
+                intel_id,
                 parsed_json=json.dumps(conv["parsed"], ensure_ascii=False),
             )
             await _send_reply(
@@ -986,7 +1070,8 @@ async def _handle_followup(chat_id: int, text: str) -> None:
             conv["parsed"]["industry"] = new_key
             conv["pending_industry_confirm"] = False
             await asyncio.to_thread(
-                update_intel, intel_id,
+                update_intel,
+                intel_id,
                 parsed_json=json.dumps(conv["parsed"], ensure_ascii=False),
             )
             await _send_reply(
@@ -1020,7 +1105,8 @@ async def _handle_followup(chat_id: int, text: str) -> None:
     if new_fields or card_base:
         # Update DB
         await asyncio.to_thread(
-            update_intel, intel_id,
+            update_intel,
+            intel_id,
             parsed_json=json.dumps(conv["parsed"], ensure_ascii=False),
         )
 
@@ -1042,6 +1128,7 @@ async def _handle_followup(chat_id: int, text: str) -> None:
 # Daily digest
 # ---------------------------------------------------------------------------
 
+
 async def _handle_today(chat_id: int) -> None:
     """Send daily digest to chat."""
     from services.nexus.daily_digest import build_daily_digest, format_digest_telegram
@@ -1054,6 +1141,7 @@ async def _handle_today(chat_id: int) -> None:
 # ---------------------------------------------------------------------------
 # Webhook endpoint
 # ---------------------------------------------------------------------------
+
 
 @router.post("/webhook")
 async def telegram_webhook(
@@ -1113,7 +1201,10 @@ async def telegram_webhook(
                 _pending_deal.pop(chat_id, None)
                 await _send_reply(chat_id, "好的，傳訊息開始新的情報！")
             else:
-                await _send_reply(chat_id, "未知指令。可用：/done /cancel /status /new /today /register")
+                await _send_reply(
+                    chat_id,
+                    "未知指令。可用：/done /cancel /status /new /today /register",
+                )
             return {"ok": True}
 
         # --- Pending deal creation prompt ---
@@ -1135,7 +1226,9 @@ async def telegram_webhook(
                 if photos := message.get("photo"):
                     await _save_attachment(photos[-1]["file_id"], None, intel_id)
                 elif doc := message.get("document"):
-                    await _save_attachment(doc["file_id"], doc.get("file_name"), intel_id)
+                    await _save_attachment(
+                        doc["file_id"], doc.get("file_name"), intel_id
+                    )
                 await _send_reply(chat_id, f"📎 檔案已加到情報 #{intel_id}")
             return {"ok": True}
 
@@ -1155,6 +1248,7 @@ async def telegram_webhook(
 # ---------------------------------------------------------------------------
 # Management endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/webhook/info")
 async def webhook_info():
@@ -1193,7 +1287,9 @@ async def send_daily_digest(chat_id: int | None = Query(None)):
         targets = sorted(_registered_chats)
 
     if not targets:
-        raise HTTPException(400, "No targets: pass chat_id or /register in Telegram first")
+        raise HTTPException(
+            400, "No targets: pass chat_id or /register in Telegram first"
+        )
 
     for t in targets:
         await _send_reply(t, text)

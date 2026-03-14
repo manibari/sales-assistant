@@ -94,7 +94,15 @@ def confirm_intel(intel_id: int, parsed_json: str | None = None) -> dict | None:
 def update_intel(intel_id: int, **fields) -> dict | None:
     if not fields:
         return get_intel(intel_id)
-    allowed = {"title", "raw_input", "input_type", "parsed_json", "chat_history", "status", "source_contact_id"}
+    allowed = {
+        "title",
+        "raw_input",
+        "input_type",
+        "parsed_json",
+        "chat_history",
+        "status",
+        "source_contact_id",
+    }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_intel(intel_id)
@@ -147,6 +155,7 @@ def delete_intel(intel_id: int) -> bool:
 # ---------------------------------------------------------------------------
 # Intel <-> Entity linking (nx_intel_entity)
 # ---------------------------------------------------------------------------
+
 
 def link_intel_entity(
     intel_id: int, entity_type: str, entity_id: int, relation: str = "mentioned"
@@ -207,6 +216,7 @@ def get_entity_intel(entity_type: str, entity_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Intel field index (nx_intel_field)
 # ---------------------------------------------------------------------------
+
 
 def materialize_intel_fields(intel_id: int, parsed: dict) -> int:
     """Flatten parsed_json into nx_intel_field rows. Returns count of fields indexed.

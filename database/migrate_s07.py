@@ -15,8 +15,12 @@ def migrate():
             cur.execute("ALTER TABLE crm ADD COLUMN IF NOT EXISTS department TEXT")
 
             # Add presale_owner, postsale_owner to project_list
-            cur.execute("ALTER TABLE project_list ADD COLUMN IF NOT EXISTS presale_owner TEXT")
-            cur.execute("ALTER TABLE project_list ADD COLUMN IF NOT EXISTS postsale_owner TEXT")
+            cur.execute(
+                "ALTER TABLE project_list ADD COLUMN IF NOT EXISTS presale_owner TEXT"
+            )
+            cur.execute(
+                "ALTER TABLE project_list ADD COLUMN IF NOT EXISTS postsale_owner TEXT"
+            )
 
             # Check if old 'owner' column exists and migrate data
             cur.execute("""
@@ -24,11 +28,15 @@ def migrate():
                 WHERE table_name = 'project_list' AND column_name = 'owner'
             """)
             if cur.fetchone():
-                cur.execute("UPDATE project_list SET presale_owner = owner WHERE presale_owner IS NULL")
+                cur.execute(
+                    "UPDATE project_list SET presale_owner = owner WHERE presale_owner IS NULL"
+                )
                 cur.execute("ALTER TABLE project_list DROP COLUMN owner")
 
             # Update default for status_code
-            cur.execute("ALTER TABLE project_list ALTER COLUMN status_code SET DEFAULT 'L0'")
+            cur.execute(
+                "ALTER TABLE project_list ALTER COLUMN status_code SET DEFAULT 'L0'"
+            )
 
     print("S07 migration complete!")
     print("  - crm: added department column")

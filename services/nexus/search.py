@@ -6,7 +6,14 @@ from database.connection import get_connection, rows_to_dicts
 def global_search(query: str, limit: int = 20) -> dict:
     """Search across deals, clients, partners, contacts, intel, and intel fields."""
     q = f"%{query}%"
-    results: dict = {"deals": [], "clients": [], "partners": [], "contacts": [], "intel": [], "subsidies": []}
+    results: dict = {
+        "deals": [],
+        "clients": [],
+        "partners": [],
+        "contacts": [],
+        "intel": [],
+        "subsidies": [],
+    }
 
     with get_connection() as conn:
         with conn.cursor() as cur:

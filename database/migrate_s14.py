@@ -40,7 +40,9 @@ def migrate():
                 $$
             """)
 
-            print("[S14] work_log: project_id nullable, client_id FK added, scope CHECK added.")
+            print(
+                "[S14] work_log: project_id nullable, client_id FK added, scope CHECK added."
+            )
 
 
 if __name__ == "__main__":

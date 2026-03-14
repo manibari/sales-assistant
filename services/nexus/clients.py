@@ -1,6 +1,5 @@
 """Nexus client service — CRUD for client organizations."""
 
-
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
@@ -75,13 +74,11 @@ def get_all_clients(status: str | None = None) -> list[dict]:
                     (status,),
                 )
             else:
-                cur.execute(
-                    """SELECT c.*,
+                cur.execute("""SELECT c.*,
                               (SELECT SUM(d.budget_amount)
                                FROM nx_deal d
                                WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
-                       FROM nx_client c ORDER BY c.updated_at DESC"""
-                )
+                       FROM nx_client c ORDER BY c.updated_at DESC""")
             return rows_to_dicts(cur)
 
 

@@ -4,8 +4,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.tags import (
-    create_tag, get_all_tags, tag_entity, untag_entity,
-    get_entity_tags, search_by_tag_name,
+    create_tag,
+    get_all_tags,
+    tag_entity,
+    untag_entity,
+    get_entity_tags,
+    search_by_tag_name,
 )
 
 router = APIRouter()

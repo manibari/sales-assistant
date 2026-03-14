@@ -3,14 +3,33 @@
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 VALID_STAGES = {
-    "draft", "evaluating", "applying", "under_review",
-    "approved", "rejected", "executing", "completed",
+    "draft",
+    "evaluating",
+    "applying",
+    "under_review",
+    "approved",
+    "rejected",
+    "executing",
+    "completed",
 }
 
 ALLOWED_FIELDS = {
-    "name", "source", "agency", "program_type", "eligibility",
-    "funding_amount", "scope", "required_docs", "deadline", "deadline_date",
-    "reference_url", "stage", "client_id", "partner_id", "notes", "status",
+    "name",
+    "source",
+    "agency",
+    "program_type",
+    "eligibility",
+    "funding_amount",
+    "scope",
+    "required_docs",
+    "deadline",
+    "deadline_date",
+    "reference_url",
+    "stage",
+    "client_id",
+    "partner_id",
+    "notes",
+    "status",
 }
 
 
@@ -37,8 +56,21 @@ def create_subsidy(
                     eligibility, scope, required_docs, reference_url, client_id, partner_id, notes)
                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (name, program_type, source, agency, deadline, funding_amount,
-                 eligibility, scope, required_docs, reference_url, client_id, partner_id, notes),
+                (
+                    name,
+                    program_type,
+                    source,
+                    agency,
+                    deadline,
+                    funding_amount,
+                    eligibility,
+                    scope,
+                    required_docs,
+                    reference_url,
+                    client_id,
+                    partner_id,
+                    notes,
+                ),
             )
             return row_to_dict(cur)
 
@@ -65,7 +97,9 @@ def get_subsidy(subsidy_id: int) -> dict | None:
 def get_all_subsidies(status: str = "active", view: str = "stage") -> list[dict]:
     order = "s.stage ASC, s.created_at DESC"
     if view == "deadline":
-        order = "CASE WHEN s.deadline_date IS NULL THEN 1 ELSE 0 END, s.deadline_date ASC"
+        order = (
+            "CASE WHEN s.deadline_date IS NULL THEN 1 ELSE 0 END, s.deadline_date ASC"
+        )
 
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -204,8 +238,11 @@ def _sync_deadline_date_with_cursor(subsidy_id: int, cur) -> None:
 
 
 def add_deadline(
-    subsidy_id: int, label: str, deadline_date: str,
-    notes: str | None = None, status: str = "open",
+    subsidy_id: int,
+    label: str,
+    deadline_date: str,
+    notes: str | None = None,
+    status: str = "open",
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -254,7 +291,10 @@ def update_deadline(deadline_id: int, **fields) -> dict | None:
 def delete_deadline(deadline_id: int) -> bool:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT subsidy_id FROM nx_subsidy_deadline WHERE id = %s", (deadline_id,))
+            cur.execute(
+                "SELECT subsidy_id FROM nx_subsidy_deadline WHERE id = %s",
+                (deadline_id,),
+            )
             row = cur.fetchone()
             if not row:
                 return False

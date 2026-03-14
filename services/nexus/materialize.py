@@ -56,7 +56,9 @@ def scan_raw_for_entities(raw_input: str) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Scan clients (name + aliases)
-            cur.execute("SELECT id, name, aliases FROM nx_client WHERE status = 'active'")
+            cur.execute(
+                "SELECT id, name, aliases FROM nx_client WHERE status = 'active'"
+            )
             clients = rows_to_dicts(cur)
             for c in clients:
                 names_to_check = [c["name"], _normalize_company_name(c["name"])]
@@ -135,7 +137,11 @@ def materialize_intel(intel_id: int) -> dict:
 
     # Remap company_name → partner_name when role is partner
     role = parsed.get("role")
-    if role == "partner" and parsed.get("company_name") and not parsed.get("partner_name"):
+    if (
+        role == "partner"
+        and parsed.get("company_name")
+        and not parsed.get("partner_name")
+    ):
         parsed["partner_name"] = parsed["company_name"]
         logger.info("Remapped company_name → partner_name for role=partner")
 
@@ -211,7 +217,11 @@ def _materialize_client(intel_id: int, parsed: dict, result: dict) -> int | None
         # Update industry if missing
         if not client.get("industry") and parsed.get("industry"):
             update_client(client["id"], industry=parsed["industry"])
-        result["client"] = {"id": client["id"], "name": client["name"], "action": "matched"}
+        result["client"] = {
+            "id": client["id"],
+            "name": client["name"],
+            "action": "matched",
+        }
         return client["id"]
 
     # No match — create new client
@@ -238,13 +248,21 @@ def _materialize_partner(intel_id: int, parsed: dict, result: dict) -> int | Non
     if candidates:
         partner = candidates[0]
         link_intel_entity(intel_id, "partner", partner["id"], "mentioned")
-        result["partner"] = {"id": partner["id"], "name": partner["name"], "action": "matched"}
+        result["partner"] = {
+            "id": partner["id"],
+            "name": partner["name"],
+            "action": "matched",
+        }
         return partner["id"]
 
     # No match — create new partner
     partner = create_partner(name=partner_name)
     link_intel_entity(intel_id, "partner", partner["id"], "created_from")
-    result["partner"] = {"id": partner["id"], "name": partner["name"], "action": "created"}
+    result["partner"] = {
+        "id": partner["id"],
+        "name": partner["name"],
+        "action": "created",
+    }
     return partner["id"]
 
 
@@ -271,9 +289,13 @@ def _materialize_contacts(
 
     candidates = find_contact(name=contact_name, email=contact_email)
     if not candidates and contact_name:
-        candidates = find_contact(name=_cc_t2s.convert(contact_name), email=contact_email)
+        candidates = find_contact(
+            name=_cc_t2s.convert(contact_name), email=contact_email
+        )
     if not candidates and contact_name:
-        candidates = find_contact(name=_cc_s2t.convert(contact_name), email=contact_email)
+        candidates = find_contact(
+            name=_cc_s2t.convert(contact_name), email=contact_email
+        )
 
     if candidates:
         contact = candidates[0]
@@ -371,7 +393,10 @@ def _materialize_decision_maker(
     if candidates:
         contact = candidates[0]
         # Ensure role is set
-        if not contact.get("role") or "decision" not in (contact.get("role") or "").lower():
+        if (
+            not contact.get("role")
+            or "decision" not in (contact.get("role") or "").lower()
+        ):
             update_contact(contact["id"], role="decision_maker")
         link_intel_entity(intel_id, "contact", contact["id"], "mentioned")
         result["contacts"].append(
@@ -391,7 +416,11 @@ def _materialize_decision_maker(
 
 
 def _materialize_subsidy(
-    intel_id: int, parsed: dict, client_id: int | None, partner_id: int | None, result: dict
+    intel_id: int,
+    parsed: dict,
+    client_id: int | None,
+    partner_id: int | None,
+    result: dict,
 ) -> None:
     """Create a subsidy record when role == 'subsidy'."""
     if parsed.get("role") != "subsidy":
@@ -415,7 +444,11 @@ def _materialize_subsidy(
         notes=parsed.get("notes"),
     )
     link_intel_entity(intel_id, "subsidy", subsidy["id"], "created_from")
-    result["subsidy"] = {"id": subsidy["id"], "name": subsidy["name"], "action": "created"}
+    result["subsidy"] = {
+        "id": subsidy["id"],
+        "name": subsidy["name"],
+        "action": "created",
+    }
 
 
 def _update_client_budget(client_id: int, budget: int | str) -> None:
@@ -511,7 +544,11 @@ def _apply_meddic_to_deals(client_id: int, parsed: dict, result: dict) -> None:
             continue
         meddic_raw = deal.get("meddic_json")
         try:
-            meddic = meddic_raw if isinstance(meddic_raw, dict) else (json.loads(meddic_raw) if meddic_raw else {})
+            meddic = (
+                meddic_raw
+                if isinstance(meddic_raw, dict)
+                else (json.loads(meddic_raw) if meddic_raw else {})
+            )
         except (json.JSONDecodeError, TypeError):
             meddic = {}
 

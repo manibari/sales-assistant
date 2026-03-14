@@ -47,7 +47,9 @@ def migrate():
                     WHERE decision_maker IS NOT NULL
                 """)
 
-                print("Migration complete: champion → champions, decision_maker updated.")
+                print(
+                    "Migration complete: champion → champions, decision_maker updated."
+                )
             else:
                 print("Column rename already applied — skipping.")
 

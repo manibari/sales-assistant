@@ -14,8 +14,15 @@ import streamlit as st
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
-def create(project_id, product_id=None, expected_invoice_date=None,
-           amount=0, confidence_level=0.5, prime_contractor=True, notes=None):
+def create(
+    project_id,
+    product_id=None,
+    expected_invoice_date=None,
+    amount=0,
+    confidence_level=0.5,
+    prime_contractor=True,
+    notes=None,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -24,8 +31,15 @@ def create(project_id, product_id=None, expected_invoice_date=None,
                     confidence_level, prime_contractor, notes)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING plan_id""",
-                (project_id, product_id, expected_invoice_date, amount,
-                 confidence_level, prime_contractor, notes),
+                (
+                    project_id,
+                    product_id,
+                    expected_invoice_date,
+                    amount,
+                    confidence_level,
+                    prime_contractor,
+                    notes,
+                ),
             )
             return cur.fetchone()[0]
 
@@ -45,8 +59,16 @@ def get_by_id(plan_id):
             return row_to_dict(cur)
 
 
-def update(plan_id, project_id, product_id, expected_invoice_date,
-           amount, confidence_level, prime_contractor, notes):
+def update(
+    plan_id,
+    project_id,
+    product_id,
+    expected_invoice_date,
+    amount,
+    confidence_level,
+    prime_contractor,
+    notes,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -55,8 +77,16 @@ def update(plan_id, project_id, product_id, expected_invoice_date,
                        amount = %s, confidence_level = %s, prime_contractor = %s,
                        notes = %s, updated_at = NOW()
                    WHERE plan_id = %s""",
-                (project_id, product_id, expected_invoice_date, amount,
-                 confidence_level, prime_contractor, notes, plan_id),
+                (
+                    project_id,
+                    product_id,
+                    expected_invoice_date,
+                    amount,
+                    confidence_level,
+                    prime_contractor,
+                    notes,
+                    plan_id,
+                ),
             )
 
 

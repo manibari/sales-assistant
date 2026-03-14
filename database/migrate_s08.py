@@ -34,7 +34,9 @@ def migrate():
 
     print("S08 migration complete.")
     print("  - Added header_post_closure setting")
-    print("  - Updated default labels (presale→案件管理, postsale→專案管理, annual_plan→產品策略管理)")
+    print(
+        "  - Updated default labels (presale→案件管理, postsale→專案管理, annual_plan→產品策略管理)"
+    )
 
 
 if __name__ == "__main__":

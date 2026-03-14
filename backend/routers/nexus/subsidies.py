@@ -4,11 +4,21 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.subsidies import (
-    create_subsidy, get_subsidy, get_all_subsidies,
-    get_subsidies_by_client, update_subsidy, advance_stage,
-    close_subsidy, link_deal, unlink_deal, get_subsidy_deals,
+    create_subsidy,
+    get_subsidy,
+    get_all_subsidies,
+    get_subsidies_by_client,
+    update_subsidy,
+    advance_stage,
+    close_subsidy,
+    link_deal,
+    unlink_deal,
+    get_subsidy_deals,
     get_subsidies_expiring_soon,
-    add_deadline, get_deadlines, update_deadline, delete_deadline,
+    add_deadline,
+    get_deadlines,
+    update_deadline,
+    delete_deadline,
 )
 from services.nexus.intel import get_entity_intel
 
@@ -143,6 +153,7 @@ def unlink_deal_from_subsidy(subsidy_id: int, deal_id: int):
 
 # --- Deadline endpoints ---
 
+
 @router.get("/{subsidy_id}/deadlines")
 def list_deadlines(subsidy_id: int):
     return get_deadlines(subsidy_id)
@@ -150,7 +161,9 @@ def list_deadlines(subsidy_id: int):
 
 @router.post("/{subsidy_id}/deadlines", status_code=201)
 def create_deadline(subsidy_id: int, body: DeadlineCreate):
-    return add_deadline(subsidy_id, body.label, body.deadline_date, body.notes, body.status)
+    return add_deadline(
+        subsidy_id, body.label, body.deadline_date, body.notes, body.status
+    )
 
 
 @router.patch("/{subsidy_id}/deadlines/{deadline_id}")

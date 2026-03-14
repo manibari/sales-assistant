@@ -4,7 +4,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.clients import (
-    create_client, get_client, get_all_clients, update_client, delete_client,
+    create_client,
+    get_client,
+    get_all_clients,
+    update_client,
+    delete_client,
 )
 from services.nexus.documents import get_documents_by_client
 from services.nexus.tags import get_entity_tags

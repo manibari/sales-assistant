@@ -4,6 +4,7 @@ Public API:
     get_manpower_by_initiative() -> dict[str, float]
     get_potential_pipeline_by_initiative() -> dict[str, float]
 """
+
 from collections import defaultdict
 from database.connection import get_connection
 
@@ -13,7 +14,7 @@ def get_manpower_by_initiative():
     Calculates the total work_log hours for each strategic initiative.
 
     Traverses the relationship: work_log -> project_list -> annual_plan
-    
+
     Returns:
         A dictionary mapping product_id (initiative_id) to total hours.
     """
@@ -43,7 +44,7 @@ def get_manpower_by_initiative():
 def get_potential_pipeline_by_initiative():
     """
     Calculates the total potential sales amount for each strategic initiative.
-    
+
     This only includes projects that are not yet Closed/Won (status < 'L7').
 
     Traverses the relationship: sales_plan -> project_list -> annual_plan

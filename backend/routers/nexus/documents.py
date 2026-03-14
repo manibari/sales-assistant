@@ -8,9 +8,17 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.nexus.documents import (
-    get_all_documents, get_documents_by_client, update_document, get_expiring_documents,
-    create_file, get_files_by_deal, get_files_by_intel,
-    update_file, update_file_parse, get_file, delete_file,
+    get_all_documents,
+    get_documents_by_client,
+    update_document,
+    get_expiring_documents,
+    create_file,
+    get_files_by_deal,
+    get_files_by_intel,
+    update_file,
+    update_file_parse,
+    get_file,
+    delete_file,
 )
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
@@ -49,6 +57,7 @@ class FileParse(BaseModel):
 
 # --- NDA/MOU Documents ---
 
+
 @router.get("/nda-mou")
 def list_documents(client_id: int | None = None):
     if client_id:
@@ -71,6 +80,7 @@ def patch_document(doc_id: int, body: DocumentUpdate):
 
 
 # --- Files ---
+
 
 @router.get("/files")
 def list_files(deal_id: int | None = None, intel_id: int | None = None):

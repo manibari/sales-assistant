@@ -28,7 +28,9 @@ def get_tbd(tbd_id: int) -> dict | None:
             return row_to_dict(cur)
 
 
-def get_open_tbds(linked_type: str | None = None, linked_id: int | None = None) -> list[dict]:
+def get_open_tbds(
+    linked_type: str | None = None, linked_id: int | None = None
+) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             if linked_type and linked_id:
@@ -49,7 +51,9 @@ def get_all_tbds(include_resolved: bool = False) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             if include_resolved:
-                cur.execute("SELECT * FROM nx_tbd_item ORDER BY resolved, created_at ASC")
+                cur.execute(
+                    "SELECT * FROM nx_tbd_item ORDER BY resolved, created_at ASC"
+                )
             else:
                 cur.execute(
                     "SELECT * FROM nx_tbd_item WHERE resolved = FALSE ORDER BY created_at ASC"

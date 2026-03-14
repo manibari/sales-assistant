@@ -51,7 +51,9 @@ def migrate():
 
                 # 4. Migrate champions
                 if champions:
-                    champ_list = champions if isinstance(champions, list) else [champions]
+                    champ_list = (
+                        champions if isinstance(champions, list) else [champions]
+                    )
                     for idx, ch in enumerate(champ_list):
                         if isinstance(ch, dict) and ch.get("name"):
                             contact_id = _upsert_contact(
@@ -84,37 +86,46 @@ def _upsert_contact(cur, client_id, data, role, sort_order=0):
         return None
 
     # Check for existing duplicate: same name, email, and already linked to this client
-    cur.execute("""
+    cur.execute(
+        """
         SELECT c.contact_id FROM contact c
         JOIN account_contact ac ON c.contact_id = ac.contact_id
         WHERE c.name = %s AND ac.client_id = %s
           AND COALESCE(c.email, '') = COALESCE(%s, '')
-    """, (name, client_id, email))
+    """,
+        (name, client_id, email),
+    )
     existing = cur.fetchone()
 
     if existing:
         return None  # duplicate
 
     # Insert new contact
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO contact (name, title, email, phone, notes)
         VALUES (%s, %s, %s, %s, %s)
         RETURNING contact_id
-    """, (
-        name,
-        data.get("title", "").strip() or None,
-        email,
-        data.get("phone", "").strip() or None,
-        data.get("notes", "").strip() or None,
-    ))
+    """,
+        (
+            name,
+            data.get("title", "").strip() or None,
+            email,
+            data.get("phone", "").strip() or None,
+            data.get("notes", "").strip() or None,
+        ),
+    )
     contact_id = cur.fetchone()[0]
 
     # Link to client
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO account_contact (client_id, contact_id, role, sort_order)
         VALUES (%s, %s, %s, %s)
         ON CONFLICT (client_id, contact_id) DO NOTHING
-    """, (client_id, contact_id, role, sort_order))
+    """,
+        (client_id, contact_id, role, sort_order),
+    )
 
     return contact_id
 

@@ -28,36 +28,50 @@ def migrate():
 
                 for old_id in remove_ids:
                     # Re-point account_contact FKs
-                    cur.execute("""
+                    cur.execute(
+                        """
                         UPDATE account_contact SET contact_id = %s
                         WHERE contact_id = %s
                         AND NOT EXISTS (
                             SELECT 1 FROM account_contact
                             WHERE client_id = account_contact.client_id AND contact_id = %s
                         )
-                    """, (keep_id, old_id, keep_id))
+                    """,
+                        (keep_id, old_id, keep_id),
+                    )
                     # Delete conflicting account_contact rows
-                    cur.execute("DELETE FROM account_contact WHERE contact_id = %s", (old_id,))
+                    cur.execute(
+                        "DELETE FROM account_contact WHERE contact_id = %s", (old_id,)
+                    )
 
                     # Re-point project_contact FKs
-                    cur.execute("""
+                    cur.execute(
+                        """
                         UPDATE project_contact SET contact_id = %s
                         WHERE contact_id = %s
                         AND NOT EXISTS (
                             SELECT 1 FROM project_contact
                             WHERE project_id = project_contact.project_id AND contact_id = %s
                         )
-                    """, (keep_id, old_id, keep_id))
+                    """,
+                        (keep_id, old_id, keep_id),
+                    )
                     # Delete conflicting project_contact rows
-                    cur.execute("DELETE FROM project_contact WHERE contact_id = %s", (old_id,))
+                    cur.execute(
+                        "DELETE FROM project_contact WHERE contact_id = %s", (old_id,)
+                    )
 
                     # Delete the duplicate contact
                     cur.execute("DELETE FROM contact WHERE contact_id = %s", (old_id,))
                     total_merged += 1
 
-                print(f"  Merged {name} ({email_key or 'no email'}): kept #{keep_id}, removed {remove_ids}")
+                print(
+                    f"  Merged {name} ({email_key or 'no email'}): kept #{keep_id}, removed {remove_ids}"
+                )
 
-            print(f"\n[S16] Deduplicated {total_merged} contact(s) across {len(dup_groups)} group(s).")
+            print(
+                f"\n[S16] Deduplicated {total_merged} contact(s) across {len(dup_groups)} group(s)."
+            )
 
             # 2. Create UNIQUE INDEX
             cur.execute("""

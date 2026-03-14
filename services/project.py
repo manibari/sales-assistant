@@ -4,7 +4,12 @@ S31: Refactored connection management to prevent nested connections.
 
 import streamlit as st
 from constants import PRESALE_STATUS_CODES, POSTSALE_STATUS_CODES, VALID_TRANSITIONS
-from database.connection import get_connection, read_sql_file, row_to_dict, rows_to_dicts
+from database.connection import (
+    get_connection,
+    read_sql_file,
+    row_to_dict,
+    rows_to_dicts,
+)
 from services import meddic as meddic_svc
 from services.config import get_meddic_gate_rules
 
@@ -16,7 +21,7 @@ def _check_meddic_gate(project_id: int, new_status: str):
     """
     rule = get_meddic_gate_rules().get(new_status)
     if not rule:
-        return # No gate for this status
+        return  # No gate for this status
 
     meddic_data = meddic_svc.get_by_project(project_id)
     if not meddic_data:
@@ -32,14 +37,32 @@ def _check_meddic_gate(project_id: int, new_status: str):
         )
 
 
-def create(project_name, client_id=None, product_id=None, status_code="L0",
-           presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium",
-           channel=None):
+def create(
+    project_name,
+    client_id=None,
+    product_id=None,
+    status_code="L0",
+    presale_owner=None,
+    postsale_owner=None,
+    sales_owner=None,
+    priority="Medium",
+    channel=None,
+):
     """Public method to create a project. Manages its own connection."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            return _create(cur, project_name, client_id, product_id, status_code,
-                           presale_owner, postsale_owner, sales_owner, priority, channel)
+            return _create(
+                cur,
+                project_name,
+                client_id,
+                product_id,
+                status_code,
+                presale_owner,
+                postsale_owner,
+                sales_owner,
+                priority,
+                channel,
+            )
 
 
 def find_or_create_project(
@@ -63,7 +86,7 @@ def find_or_create_project(
             # Try to find an existing project with a similar name for this client
             cur.execute(
                 "SELECT project_id FROM project_list WHERE client_id = %s AND project_name = %s",
-                (client_id, project_name)
+                (client_id, project_name),
             )
             row = cur.fetchone()
             if row:
@@ -93,7 +116,9 @@ def get_all():
 def get_by_id(project_id):
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM project_list WHERE project_id = %s", (project_id,))
+            cur.execute(
+                "SELECT * FROM project_list WHERE project_id = %s", (project_id,)
+            )
             return row_to_dict(cur)
 
 
@@ -131,8 +156,17 @@ def get_closed():
             return rows_to_dicts(cur)
 
 
-def update(project_id, project_name, client_id, product_id,
-           presale_owner, postsale_owner, priority, sales_owner=None, channel=None):
+def update(
+    project_id,
+    project_name,
+    client_id,
+    product_id,
+    presale_owner,
+    postsale_owner,
+    priority,
+    sales_owner=None,
+    channel=None,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -141,9 +175,17 @@ def update(project_id, project_name, client_id, product_id,
                        presale_owner = %s, sales_owner = %s, postsale_owner = %s,
                        priority = %s, channel = %s, updated_at = NOW()
                    WHERE project_id = %s""",
-                (project_name, client_id, product_id,
-                 presale_owner, sales_owner, postsale_owner, priority, channel,
-                 project_id),
+                (
+                    project_name,
+                    client_id,
+                    product_id,
+                    presale_owner,
+                    sales_owner,
+                    postsale_owner,
+                    priority,
+                    channel,
+                    project_id,
+                ),
             )
 
 
@@ -173,8 +215,7 @@ def transition_status(project_id, new_status, force=False):
 
         if new_status not in allowed:
             raise ValueError(
-                f"無法從 {current} 轉換至 {new_status}. "
-                f"允許的轉換: {allowed}"
+                f"無法從 {current} 轉換至 {new_status}. " f"允許的轉換: {allowed}"
             )
 
     with get_connection() as conn:
@@ -232,11 +273,22 @@ def get_contacts(project_id):
             )
             return rows_to_dicts(cur)
 
+
 # --- Internal Helpers ---
 
-def _create(cur, project_name, client_id=None, product_id=None, status_code="L0",
-            presale_owner=None, postsale_owner=None, sales_owner=None, priority="Medium",
-            channel=None):
+
+def _create(
+    cur,
+    project_name,
+    client_id=None,
+    product_id=None,
+    status_code="L0",
+    presale_owner=None,
+    postsale_owner=None,
+    sales_owner=None,
+    priority="Medium",
+    channel=None,
+):
     """Internal method to create a project using a provided cursor."""
     cur.execute(
         """INSERT INTO project_list
@@ -244,7 +296,16 @@ def _create(cur, project_name, client_id=None, product_id=None, status_code="L0"
             presale_owner, sales_owner, postsale_owner, priority, channel)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
            RETURNING project_id""",
-        (project_name, client_id, product_id, status_code,
-         presale_owner, sales_owner, postsale_owner, priority, channel),
+        (
+            project_name,
+            client_id,
+            product_id,
+            status_code,
+            presale_owner,
+            sales_owner,
+            postsale_owner,
+            priority,
+            channel,
+        ),
     )
     return cur.fetchone()[0]

@@ -32,9 +32,14 @@ app = FastAPI(title="Project Nexus API", version="0.2.0", redirect_slashes=False
 
 class TrailingSlashMiddleware(BaseHTTPMiddleware):
     """Internally add trailing slash so routes match without 307 redirect."""
+
     async def dispatch(self, request: Request, call_next):
         path = request.scope["path"]
-        if path.startswith("/api/") and not path.endswith("/") and "." not in path.split("/")[-1]:
+        if (
+            path.startswith("/api/")
+            and not path.endswith("/")
+            and "." not in path.split("/")[-1]
+        ):
             request.scope["path"] = path + "/"
         return await call_next(request)
 
@@ -83,6 +88,7 @@ def startup():
         init_db()
     except Exception as e:
         import logging
+
         logging.getLogger(__name__).warning("DB init skipped: %s", e)
 
 

@@ -16,19 +16,45 @@ Internal:
     _upsert_contact(cur, data) → contact_id
     _get_normalized_contacts(cur, client_id) → dict
 """
+
 from datetime import date
 import streamlit as st
-from database.connection import get_connection, read_sql_file, row_to_dict, rows_to_dicts
+from database.connection import (
+    get_connection,
+    read_sql_file,
+    row_to_dict,
+    rows_to_dicts,
+)
 
 
-def create(client_id, company_name, industry=None, department=None, email=None,
-           decision_maker=None, champions=None, contact_info=None, notes=None,
-           data_year=None):
+def create(
+    client_id,
+    company_name,
+    industry=None,
+    department=None,
+    email=None,
+    decision_maker=None,
+    champions=None,
+    contact_info=None,
+    notes=None,
+    data_year=None,
+):
     """Public method to create a client. Manages its own connection."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            _create(cur, client_id, company_name, industry, department, email,
-                    decision_maker, champions, contact_info, notes, data_year)
+            _create(
+                cur,
+                client_id,
+                company_name,
+                industry,
+                department,
+                email,
+                decision_maker,
+                champions,
+                contact_info,
+                notes,
+                data_year,
+            )
 
 
 def find_or_create_client(company_name: str) -> str | None:
@@ -46,7 +72,9 @@ def find_or_create_client(company_name: str) -> str | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Try to find an existing client
-            cur.execute("SELECT client_id FROM crm WHERE company_name = %s", (company_name,))
+            cur.execute(
+                "SELECT client_id FROM crm WHERE company_name = %s", (company_name,)
+            )
             row = cur.fetchone()
             if row:
                 return row[0]
@@ -58,7 +86,7 @@ def find_or_create_client(company_name: str) -> str | None:
             max_id = 0
             for client_id in existing_ids:
                 try:
-                    num_part = int(client_id.split('-')[1])
+                    num_part = int(client_id.split("-")[1])
                     if num_part > max_id:
                         max_id = num_part
                 except (ValueError, IndexError):
@@ -69,7 +97,7 @@ def find_or_create_client(company_name: str) -> str | None:
 
             # Call the internal _create function with the current cursor
             _create(cur, client_id=new_client_id, company_name=company_name)
-            
+
             return new_client_id
 
 
@@ -101,9 +129,18 @@ def get_by_id(client_id):
             return result
 
 
-def update(client_id, company_name, industry, department, email=None,
-           decision_maker=None, champions=None, contact_info=None, notes=None,
-           data_year=None):
+def update(
+    client_id,
+    company_name,
+    industry,
+    department,
+    email=None,
+    decision_maker=None,
+    champions=None,
+    contact_info=None,
+    notes=None,
+    data_year=None,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Update CRM row without JSONB fields
@@ -113,8 +150,16 @@ def update(client_id, company_name, industry, department, email=None,
                        email = %s, contact_info = %s, notes = %s, data_year = %s,
                        updated_at = NOW()
                    WHERE client_id = %s""",
-                (company_name, industry, department, email,
-                 contact_info, notes, data_year, client_id),
+                (
+                    company_name,
+                    industry,
+                    department,
+                    email,
+                    contact_info,
+                    notes,
+                    data_year,
+                    client_id,
+                ),
             )
             # Write contacts to normalized tables only
             _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
@@ -131,9 +176,20 @@ def delete(client_id):
 # Internal helpers — these operate on a provided cursor
 # ---------------------------------------------------------------------------
 
-def _create(cur, client_id, company_name, industry=None, department=None, email=None,
-            decision_maker=None, champions=None, contact_info=None, notes=None,
-            data_year=None):
+
+def _create(
+    cur,
+    client_id,
+    company_name,
+    industry=None,
+    department=None,
+    email=None,
+    decision_maker=None,
+    champions=None,
+    contact_info=None,
+    notes=None,
+    data_year=None,
+):
     """Internal method to create a client using a provided cursor."""
     # Insert CRM row without JSONB fields
     cur.execute(
@@ -142,8 +198,16 @@ def _create(cur, client_id, company_name, industry=None, department=None, email=
             contact_info, notes, data_year)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (client_id) DO NOTHING""",
-        (client_id, company_name, industry, department, email,
-         contact_info, notes, data_year or date.today().year),
+        (
+            client_id,
+            company_name,
+            industry,
+            department,
+            email,
+            contact_info,
+            notes,
+            data_year or date.today().year,
+        ),
     )
     # Write contacts to normalized tables only
     _sync_contacts_to_normalized(cur, client_id, decision_maker, champions)
@@ -155,15 +219,22 @@ def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
     cur.execute("DELETE FROM account_contact WHERE client_id = %s", (client_id,))
 
     # Insert decision_maker
-    if decision_maker and isinstance(decision_maker, dict) and decision_maker.get("name"):
+    if (
+        decision_maker
+        and isinstance(decision_maker, dict)
+        and decision_maker.get("name")
+    ):
         contact_id = _upsert_contact(cur, decision_maker)
         if contact_id:
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO account_contact (client_id, contact_id, role, sort_order)
                 VALUES (%s, %s, 'decision_maker', 0)
                 ON CONFLICT (client_id, contact_id) DO UPDATE
                 SET role = 'decision_maker', sort_order = 0
-            """, (client_id, contact_id))
+            """,
+                (client_id, contact_id),
+            )
 
     # Insert champions
     if champions and isinstance(champions, list):
@@ -171,12 +242,15 @@ def _sync_contacts_to_normalized(cur, client_id, decision_maker, champions):
             if isinstance(ch, dict) and ch.get("name"):
                 contact_id = _upsert_contact(cur, ch)
                 if contact_id:
-                    cur.execute("""
+                    cur.execute(
+                        """
                         INSERT INTO account_contact (client_id, contact_id, role, sort_order)
                         VALUES (%s, %s, 'champion', %s)
                         ON CONFLICT (client_id, contact_id) DO UPDATE
                         SET role = 'champion', sort_order = %s
-                    """, (client_id, contact_id, idx, idx))
+                    """,
+                        (client_id, contact_id, idx, idx),
+                    )
 
     # Clean up orphaned contacts (no links anywhere)
     cur.execute("""
@@ -198,38 +272,50 @@ def _upsert_contact(cur, data):
     notes = (data.get("notes") or "").strip() or None
 
     # Try to find existing contact by name + email
-    cur.execute("""
+    cur.execute(
+        """
         SELECT contact_id FROM contact
         WHERE name = %s AND COALESCE(email, '') = COALESCE(%s, '')
-    """, (name, email))
+    """,
+        (name, email),
+    )
     existing = cur.fetchone()
 
     if existing:
         contact_id = existing[0]
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE contact SET title = %s, phone = %s, notes = %s, updated_at = NOW()
             WHERE contact_id = %s
-        """, (title, phone, notes, contact_id))
+        """,
+            (title, phone, notes, contact_id),
+        )
         return contact_id
 
     # Create new contact
-    cur.execute("""
+    cur.execute(
+        """
         INSERT INTO contact (name, title, email, phone, notes)
         VALUES (%s, %s, %s, %s, %s)
         RETURNING contact_id
-    """, (name, title, email, phone, notes))
+    """,
+        (name, title, email, phone, notes),
+    )
     return cur.fetchone()[0]
 
 
 def _get_normalized_contacts(cur, client_id):
     """Read contacts from normalized tables and assemble into dict format."""
-    cur.execute("""
+    cur.execute(
+        """
         SELECT c.name, c.title, c.email, c.phone, c.notes, ac.role, ac.sort_order
         FROM contact c
         JOIN account_contact ac ON c.contact_id = ac.contact_id
         WHERE ac.client_id = %s
         ORDER BY ac.role DESC, ac.sort_order
-    """, (client_id,))
+    """,
+        (client_id,),
+    )
 
     contacts = rows_to_dicts(cur)
     if not contacts:

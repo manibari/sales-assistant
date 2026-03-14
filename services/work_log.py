@@ -14,8 +14,16 @@ Public API:
 from database.connection import get_connection, rows_to_dicts
 
 
-def create(project_id=None, action_type=None, log_date=None, content=None,
-           duration_hours=1.0, source="manual", ref_id=None, client_id=None):
+def create(
+    project_id=None,
+    action_type=None,
+    log_date=None,
+    content=None,
+    duration_hours=1.0,
+    source="manual",
+    ref_id=None,
+    client_id=None,
+):
     """Create a work log entry. Either project_id or client_id must be provided."""
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -25,8 +33,16 @@ def create(project_id=None, action_type=None, log_date=None, content=None,
                     duration_hours, source, ref_id)
                    VALUES (%s, %s, COALESCE(%s, CURRENT_DATE), %s, %s, %s, %s, %s)
                    RETURNING log_id""",
-                (project_id, client_id, log_date, action_type, content,
-                 duration_hours, source, ref_id),
+                (
+                    project_id,
+                    client_id,
+                    log_date,
+                    action_type,
+                    content,
+                    duration_hours,
+                    source,
+                    ref_id,
+                ),
             )
             return cur.fetchone()[0]
 

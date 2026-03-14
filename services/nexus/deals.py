@@ -5,7 +5,14 @@ import json
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 VALID_STAGES = {"L0", "L1", "L2", "L3", "L4", "closed"}
-MEDDIC_KEYS = {"metrics", "economic_buyer", "decision_criteria", "decision_process", "identify_pain", "champion"}
+MEDDIC_KEYS = {
+    "metrics",
+    "economic_buyer",
+    "decision_criteria",
+    "decision_process",
+    "identify_pain",
+    "champion",
+}
 
 
 def create_deal(
@@ -23,7 +30,15 @@ def create_deal(
                 """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (name, client_id, budget_range, timeline, meddic_init, budget_amount, budget_year),
+                (
+                    name,
+                    client_id,
+                    budget_range,
+                    timeline,
+                    meddic_init,
+                    budget_amount,
+                    budget_year,
+                ),
             )
             return row_to_dict(cur)
 
@@ -90,7 +105,19 @@ def get_deals_needing_push(threshold_days: int = 14) -> list[dict]:
 def update_deal(deal_id: int, **fields) -> dict | None:
     if not fields:
         return get_deal(deal_id)
-    allowed = {"name", "budget_range", "timeline", "meddic_json", "close_reason", "close_notes", "status", "stage", "budget_amount", "budget_year", "created_at"}
+    allowed = {
+        "name",
+        "budget_range",
+        "timeline",
+        "meddic_json",
+        "close_reason",
+        "close_notes",
+        "status",
+        "stage",
+        "budget_amount",
+        "budget_year",
+        "created_at",
+    }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_deal(deal_id)
@@ -193,13 +220,23 @@ def get_meddic_progress(deal_id: int) -> dict:
     deal = get_deal(deal_id)
     if not deal or not deal.get("meddic_json"):
         return {"completed": 0, "total": 6, "missing": list(MEDDIC_KEYS)}
-    meddic = deal["meddic_json"] if isinstance(deal["meddic_json"], dict) else json.loads(deal["meddic_json"])
+    meddic = (
+        deal["meddic_json"]
+        if isinstance(deal["meddic_json"], dict)
+        else json.loads(deal["meddic_json"])
+    )
     completed = [k for k in MEDDIC_KEYS if meddic.get(k)]
     missing = [k for k in MEDDIC_KEYS if not meddic.get(k)]
-    return {"completed": len(completed), "total": 6, "missing": missing, "details": meddic}
+    return {
+        "completed": len(completed),
+        "total": 6,
+        "missing": missing,
+        "details": meddic,
+    }
 
 
 # --- Deal-Partner M2M ---
+
 
 def add_partner_to_deal(deal_id: int, partner_id: int, role: str | None = None) -> dict:
     with get_connection() as conn:
@@ -237,6 +274,7 @@ def remove_partner_from_deal(deal_id: int, partner_id: int) -> bool:
 
 
 # --- Deal-Intel M2M ---
+
 
 def link_intel_to_deal(deal_id: int, intel_id: int) -> dict:
     with get_connection() as conn:

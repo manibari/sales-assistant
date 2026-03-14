@@ -7,6 +7,7 @@ AI processing queue.
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
+
 def create_task(raw_text: str) -> int:
     """
     Creates a new task in the AI queue with 'pending' status.
@@ -26,6 +27,7 @@ def create_task(raw_text: str) -> int:
             task_id = cur.fetchone()[0]
             return task_id
 
+
 def get_next_pending() -> dict | None:
     """
     Atomically fetches the oldest pending task and sets its status to 'processing'.
@@ -38,8 +40,7 @@ def get_next_pending() -> dict | None:
         with conn.cursor() as cur:
             # FOR UPDATE SKIP LOCKED ensures that we grab a task that isn't already
             # being processed by another worker instance.
-            cur.execute(
-                """
+            cur.execute("""
                 UPDATE ai_task_queue
                 SET status = 'processing', processed_at = NOW()
                 WHERE task_id = (
@@ -51,9 +52,9 @@ def get_next_pending() -> dict | None:
                     LIMIT 1
                 )
                 RETURNING *
-                """
-            )
+                """)
             return row_to_dict(cur)
+
 
 def get_recent_tasks(limit: int = 20) -> list[dict]:
     """
@@ -63,16 +64,13 @@ def get_recent_tasks(limit: int = 20) -> list[dict]:
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT * FROM ai_task_queue ORDER BY created_at DESC LIMIT %s",
-                (limit,)
+                (limit,),
             )
             return rows_to_dicts(cur)
 
 
 def update_task_status(
-    task_id: int,
-    status: str,
-    result_data: dict = None,
-    error_message: str = None
+    task_id: int, status: str, result_data: dict = None, error_message: str = None
 ):
     """
     Updates the status and result of a task in the queue.
@@ -96,5 +94,10 @@ def update_task_status(
                     processed_at = NOW()
                 WHERE task_id = %s
                 """,
-                (status, Json(result_data) if result_data else None, error_message, task_id),
+                (
+                    status,
+                    Json(result_data) if result_data else None,
+                    error_message,
+                    task_id,
+                ),
             )

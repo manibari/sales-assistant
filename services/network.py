@@ -16,8 +16,8 @@ Public API:
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
-
 # --- Stakeholder Relations ---
+
 
 def create_relation(
     from_contact_id: int,
@@ -58,24 +58,25 @@ def get_relations(contact_id: int) -> list[dict]:
 def get_all_relations() -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT sr.*,
+            cur.execute("""SELECT sr.*,
                           cf.name AS from_name, ct.name AS to_name
                    FROM stakeholder_relation sr
                    JOIN contact cf ON sr.from_contact_id = cf.contact_id
                    JOIN contact ct ON sr.to_contact_id = ct.contact_id
-                   ORDER BY sr.created_at DESC"""
-            )
+                   ORDER BY sr.created_at DESC""")
             return rows_to_dicts(cur)
 
 
 def delete_relation(relation_id: int) -> None:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM stakeholder_relation WHERE id = %s", (relation_id,))
+            cur.execute(
+                "DELETE FROM stakeholder_relation WHERE id = %s", (relation_id,)
+            )
 
 
 # --- Intel / Leverage ---
+
 
 def create_intel(
     title: str,
@@ -108,13 +109,11 @@ def get_all_intel() -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Get all intel with source contact name
-            cur.execute(
-                """SELECT i.*,
+            cur.execute("""SELECT i.*,
                           c.name AS source_contact_name
                    FROM intel i
                    LEFT JOIN contact c ON i.source_contact_id = c.contact_id
-                   ORDER BY i.created_at DESC"""
-            )
+                   ORDER BY i.created_at DESC""")
             items = rows_to_dicts(cur)
 
             # Attach linked orgs to each intel
@@ -127,8 +126,7 @@ def get_all_intel() -> list[dict]:
                     (item["id"],),
                 )
                 item["orgs"] = [
-                    {"crm_id": r[0], "company_name": r[1]}
-                    for r in cur.fetchall()
+                    {"crm_id": r[0], "company_name": r[1]} for r in cur.fetchall()
                 ]
             return items
 
@@ -175,6 +173,7 @@ def delete_intel(intel_id: int) -> None:
 
 # --- Graph Data (for visualization) ---
 
+
 def get_graph_data() -> dict:
     """
     Build nodes + edges for the relationship network graph.
@@ -189,97 +188,103 @@ def get_graph_data() -> dict:
             # Contacts as person nodes
             cur.execute("SELECT contact_id, name FROM contact")
             for row in cur.fetchall():
-                nodes.append({
-                    "id": f"contact_{row[0]}",
-                    "label": row[1],
-                    "type": "person",
-                })
+                nodes.append(
+                    {
+                        "id": f"contact_{row[0]}",
+                        "label": row[1],
+                        "type": "person",
+                    }
+                )
 
             # Organizations as org nodes
             cur.execute("SELECT client_id, company_name FROM crm")
             for row in cur.fetchall():
-                nodes.append({
-                    "id": f"org_{row[0]}",
-                    "label": row[1],
-                    "type": "org",
-                })
+                nodes.append(
+                    {
+                        "id": f"org_{row[0]}",
+                        "label": row[1],
+                        "type": "org",
+                    }
+                )
 
             # Projects as project nodes
-            cur.execute(
-                """SELECT project_id, project_name, status_code
+            cur.execute("""SELECT project_id, project_name, status_code
                    FROM project_list
-                   WHERE status_code NOT IN ('LOST', 'HOLD', 'P2')"""
-            )
+                   WHERE status_code NOT IN ('LOST', 'HOLD', 'P2')""")
             for row in cur.fetchall():
-                nodes.append({
-                    "id": f"project_{row[0]}",
-                    "label": row[1],
-                    "type": "project",
-                    "status": row[2],
-                })
+                nodes.append(
+                    {
+                        "id": f"project_{row[0]}",
+                        "label": row[1],
+                        "type": "project",
+                        "status": row[2],
+                    }
+                )
 
             # Contact → Org edges (via account_contact)
-            cur.execute(
-                """SELECT ac.contact_id, ac.client_id, ac.role
-                   FROM account_contact ac"""
-            )
+            cur.execute("""SELECT ac.contact_id, ac.client_id, ac.role
+                   FROM account_contact ac""")
             for row in cur.fetchall():
-                edges.append({
-                    "source": f"contact_{row[0]}",
-                    "target": f"org_{row[1]}",
-                    "type": "works_at",
-                    "label": row[2],
-                })
+                edges.append(
+                    {
+                        "source": f"contact_{row[0]}",
+                        "target": f"org_{row[1]}",
+                        "type": "works_at",
+                        "label": row[2],
+                    }
+                )
 
             # Contact → Project edges (via project_contact)
-            cur.execute(
-                """SELECT pc.contact_id, pc.project_id, pc.role
-                   FROM project_contact pc"""
-            )
+            cur.execute("""SELECT pc.contact_id, pc.project_id, pc.role
+                   FROM project_contact pc""")
             for row in cur.fetchall():
-                edges.append({
-                    "source": f"contact_{row[0]}",
-                    "target": f"project_{row[1]}",
-                    "type": "participates_in",
-                    "label": row[2],
-                })
+                edges.append(
+                    {
+                        "source": f"contact_{row[0]}",
+                        "target": f"project_{row[1]}",
+                        "type": "participates_in",
+                        "label": row[2],
+                    }
+                )
 
             # Stakeholder relations (contact → contact)
-            cur.execute(
-                """SELECT id, from_contact_id, to_contact_id,
+            cur.execute("""SELECT id, from_contact_id, to_contact_id,
                           relation_type, leverage_value
-                   FROM stakeholder_relation"""
-            )
+                   FROM stakeholder_relation""")
             for row in cur.fetchall():
-                edges.append({
-                    "source": f"contact_{row[1]}",
-                    "target": f"contact_{row[2]}",
-                    "type": row[3],
-                    "label": row[3],
-                    "leverage": row[4],
-                })
+                edges.append(
+                    {
+                        "source": f"contact_{row[1]}",
+                        "target": f"contact_{row[2]}",
+                        "type": row[3],
+                        "label": row[3],
+                        "leverage": row[4],
+                    }
+                )
 
             # Intel → Org edges
-            cur.execute(
-                """SELECT i.id, i.title, io.crm_id, i.leverage_value
+            cur.execute("""SELECT i.id, i.title, io.crm_id, i.leverage_value
                    FROM intel i
-                   JOIN intel_org io ON i.id = io.intel_id"""
-            )
+                   JOIN intel_org io ON i.id = io.intel_id""")
             for row in cur.fetchall():
                 intel_node_id = f"intel_{row[0]}"
                 # Add intel node if not already added
                 if not any(n["id"] == intel_node_id for n in nodes):
-                    nodes.append({
-                        "id": intel_node_id,
-                        "label": row[1],
-                        "type": "intel",
+                    nodes.append(
+                        {
+                            "id": intel_node_id,
+                            "label": row[1],
+                            "type": "intel",
+                            "leverage": row[3],
+                        }
+                    )
+                edges.append(
+                    {
+                        "source": intel_node_id,
+                        "target": f"org_{row[2]}",
+                        "type": "intel_leverage",
                         "leverage": row[3],
-                    })
-                edges.append({
-                    "source": intel_node_id,
-                    "target": f"org_{row[2]}",
-                    "type": "intel_leverage",
-                    "leverage": row[3],
-                })
+                    }
+                )
 
     return {"nodes": nodes, "edges": edges}

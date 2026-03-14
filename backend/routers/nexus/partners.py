@@ -4,8 +4,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.partners import (
-    create_partner, get_partner, get_all_partners, update_partner,
-    update_trust_level, delete_partner,
+    create_partner,
+    get_partner,
+    get_all_partners,
+    update_partner,
+    update_trust_level,
+    delete_partner,
 )
 from services.nexus.tags import get_entity_tags
 

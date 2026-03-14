@@ -2,8 +2,8 @@
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
-
 # --- Meetings ---
+
 
 def create_meeting(
     deal_id: int,
@@ -20,7 +20,15 @@ def create_meeting(
                 """INSERT INTO nx_meeting (deal_id, title, meeting_date, duration_minutes, participants_json, location, notes)
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, title, meeting_date, duration_minutes, participants_json, location, notes),
+                (
+                    deal_id,
+                    title,
+                    meeting_date,
+                    duration_minutes,
+                    participants_json,
+                    location,
+                    notes,
+                ),
             )
             return row_to_dict(cur)
 
@@ -101,7 +109,15 @@ def get_meetings_by_deal(deal_id: int) -> list[dict]:
 def update_meeting(meeting_id: int, **fields) -> dict | None:
     if not fields:
         return get_meeting(meeting_id)
-    allowed = {"title", "meeting_date", "duration_minutes", "participants_json", "location", "notes", "status"}
+    allowed = {
+        "title",
+        "meeting_date",
+        "duration_minutes",
+        "participants_json",
+        "location",
+        "notes",
+        "status",
+    }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_meeting(meeting_id)
@@ -128,6 +144,7 @@ def delete_meeting(meeting_id: int) -> bool:
 
 
 # --- Reminders ---
+
 
 def create_reminder(
     due_date: str,
@@ -191,11 +208,9 @@ def get_pending_reminders() -> list[dict]:
     """Get all unresolved reminders up to today."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """SELECT r.*, d.name AS deal_name
+            cur.execute("""SELECT r.*, d.name AS deal_name
                    FROM nx_reminder r
                    LEFT JOIN nx_deal d ON r.deal_id = d.id
                    WHERE r.resolved = FALSE AND r.due_date::DATE <= CURRENT_DATE
-                   ORDER BY r.due_date ASC"""
-            )
+                   ORDER BY r.due_date ASC""")
             return rows_to_dicts(cur)

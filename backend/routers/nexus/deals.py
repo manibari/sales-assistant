@@ -8,12 +8,24 @@ from pydantic import BaseModel
 
 from services.ai_provider import check_ai_available, generate_ai_response
 from services.nexus.deals import (
-    create_deal, get_deal, get_all_deals, get_deals_by_urgency,
-    get_deals_needing_push, get_deals_by_client, get_deals_by_partner,
-    update_deal, advance_stage, close_deal,
-    get_meddic_progress, add_partner_to_deal, get_deal_partners,
-    remove_partner_from_deal, link_intel_to_deal, get_deal_intel,
-    unlink_intel_from_deal, MEDDIC_KEYS,
+    create_deal,
+    get_deal,
+    get_all_deals,
+    get_deals_by_urgency,
+    get_deals_needing_push,
+    get_deals_by_client,
+    get_deals_by_partner,
+    update_deal,
+    advance_stage,
+    close_deal,
+    get_meddic_progress,
+    add_partner_to_deal,
+    get_deal_partners,
+    remove_partner_from_deal,
+    link_intel_to_deal,
+    get_deal_intel,
+    unlink_intel_from_deal,
+    MEDDIC_KEYS,
 )
 from services.nexus.tbd import get_open_tbds
 from services.nexus.documents import get_files_by_deal
@@ -132,6 +144,7 @@ def meddic(deal_id: int):
 
 # --- Deal-Partner M2M ---
 
+
 @router.get("/{deal_id}/partners")
 def list_deal_partners(deal_id: int):
     return get_deal_partners(deal_id)
@@ -149,6 +162,7 @@ def remove_partner(deal_id: int, partner_id: int):
 
 
 # --- Deal-Intel M2M ---
+
 
 @router.get("/{deal_id}/intel")
 def list_deal_intel(deal_id: int):
@@ -202,7 +216,11 @@ def ai_fill_meddic(deal_id: int):
         section = f"[情報 #{i.get('intel_id', i['id'])}] {i['raw_input']}"
         if i.get("parsed_json"):
             try:
-                parsed = json.loads(i["parsed_json"]) if isinstance(i["parsed_json"], str) else i["parsed_json"]
+                parsed = (
+                    json.loads(i["parsed_json"])
+                    if isinstance(i["parsed_json"], str)
+                    else i["parsed_json"]
+                )
                 section += f"\n解析欄位: {json.dumps(parsed, ensure_ascii=False)}"
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -241,4 +259,8 @@ def ai_fill_meddic(deal_id: int):
     if filled:
         update_deal(deal_id, meddic_json=json.dumps(meddic, ensure_ascii=False))
 
-    return {"meddic": meddic, "ai_filled": filled, "unchanged": [k for k in MEDDIC_KEYS if k not in filled]}
+    return {
+        "meddic": meddic,
+        "ai_filled": filled,
+        "unchanged": [k for k in MEDDIC_KEYS if k not in filled],
+    }

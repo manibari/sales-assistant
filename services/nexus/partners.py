@@ -2,7 +2,14 @@
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
-VALID_TRUST_LEVELS = {"unverified", "testing", "verified", "core_team", "si_backed", "demoted"}
+VALID_TRUST_LEVELS = {
+    "unverified",
+    "testing",
+    "verified",
+    "core_team",
+    "si_backed",
+    "demoted",
+}
 
 
 def create_partner(
@@ -62,7 +69,9 @@ def update_partner(partner_id: int, **fields) -> dict | None:
 
 def update_trust_level(partner_id: int, new_level: str) -> dict | None:
     if new_level not in VALID_TRUST_LEVELS:
-        raise ValueError(f"Invalid trust level: {new_level}. Must be one of {VALID_TRUST_LEVELS}")
+        raise ValueError(
+            f"Invalid trust level: {new_level}. Must be one of {VALID_TRUST_LEVELS}"
+        )
     return update_partner(partner_id, trust_level=new_level)
 
 

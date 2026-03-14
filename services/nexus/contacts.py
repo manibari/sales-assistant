@@ -52,7 +52,17 @@ def get_all_contacts() -> list[dict]:
 def update_contact(contact_id: int, **fields) -> dict | None:
     if not fields:
         return get_contact(contact_id)
-    allowed = {"name", "title", "phone", "email", "line_id", "org_type", "org_id", "role", "notes"}
+    allowed = {
+        "name",
+        "title",
+        "phone",
+        "email",
+        "line_id",
+        "org_type",
+        "org_id",
+        "role",
+        "notes",
+    }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_contact(contact_id)

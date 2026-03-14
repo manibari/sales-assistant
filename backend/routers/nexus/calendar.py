@@ -4,10 +4,20 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.nexus.calendar import (
-    create_meeting, get_meeting, get_meetings_by_date, get_meetings_by_month,
-    get_meetings_by_range, get_meetings_by_deal, update_meeting, complete_meeting,
-    delete_meeting, create_reminder, get_reminders_by_date, get_reminders_by_month,
-    resolve_reminder, get_pending_reminders,
+    create_meeting,
+    get_meeting,
+    get_meetings_by_date,
+    get_meetings_by_month,
+    get_meetings_by_range,
+    get_meetings_by_deal,
+    update_meeting,
+    complete_meeting,
+    delete_meeting,
+    create_reminder,
+    get_reminders_by_date,
+    get_reminders_by_month,
+    resolve_reminder,
+    get_pending_reminders,
 )
 
 router = APIRouter()
@@ -41,6 +51,7 @@ class ReminderCreate(BaseModel):
 
 
 # --- Meetings ---
+
 
 @router.get("/meetings")
 def list_meetings(date: str | None = None, deal_id: int | None = None):
@@ -98,6 +109,7 @@ def remove_meeting(meeting_id: int):
 
 
 # --- Reminders ---
+
 
 @router.get("/reminders")
 def list_reminders(date: str | None = None):

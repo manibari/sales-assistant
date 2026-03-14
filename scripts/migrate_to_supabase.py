@@ -13,6 +13,9 @@ import os
 import sqlite3
 import sys
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import psycopg2
 import psycopg2.extras
 
@@ -144,14 +147,15 @@ def convert_value(table: str, column: str, value):
     if value is None:
         return None
 
-    # JSONB columns: parse JSON string to dict/list for psycopg2 adapter
+    # JSONB columns: parse JSON string and wrap with psycopg2 Json adapter
     if column in JSONB_COLUMNS.get(table, set()):
         if isinstance(value, str):
             try:
-                return json.loads(value)
+                parsed = json.loads(value)
+                return psycopg2.extras.Json(parsed)
             except (json.JSONDecodeError, TypeError):
                 return value
-        return value
+        return psycopg2.extras.Json(value)
 
     # Boolean columns: SQLite INTEGER 0/1 -> Python bool
     if column in BOOLEAN_COLUMNS.get(table, set()):
@@ -200,20 +204,27 @@ def migrate_table(
         f"ON CONFLICT DO NOTHING"
     )
 
+    inserted = 0
+    skipped = 0
     with pg_conn.cursor() as pg_cur:
-        # Register JSONB adapter for dicts
-        psycopg2.extras.register_default_jsonb(pg_cur, globally=False)
         for row in converted_rows:
             try:
+                pg_cur.execute("SAVEPOINT row_sp")
                 pg_cur.execute(insert_sql, row)
+                pg_cur.execute("RELEASE SAVEPOINT row_sp")
+                inserted += 1
+            except psycopg2.errors.ForeignKeyViolation:
+                pg_cur.execute("ROLLBACK TO SAVEPOINT row_sp")
+                skipped += 1
             except Exception as e:
+                pg_cur.execute("ROLLBACK TO SAVEPOINT row_sp")
                 print(f"  [ERROR] {table} row: {e}")
-                pg_conn.rollback()
                 raise
 
     pg_conn.commit()
-    print(f"  [OK] {table}: {len(converted_rows)} rows")
-    return len(converted_rows)
+    skip_note = f" (skipped {skipped} orphan rows)" if skipped else ""
+    print(f"  [OK] {table}: {inserted} rows{skip_note}")
+    return inserted
 
 
 def sync_sequences(pg_conn):

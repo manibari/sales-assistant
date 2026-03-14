@@ -7,6 +7,9 @@ with auto-commit on success and rollback on error.
 import logging
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import psycopg2
 import psycopg2.extras
 from contextlib import contextmanager

@@ -28,7 +28,7 @@ After every Sprint **Retro** completes, re-read `docs/DEVELOPMENT_PLAN.md` and c
 
 - **Next.js** is the primary frontend (React 19 + TypeScript + Tailwind CSS)
 - **FastAPI** wraps existing `services/*.py` as REST API
-- **Streamlit** retained as internal admin only, no new Streamlit pages
+- **Streamlit** removed — archived to `_archive/streamlit/`
 - **D3.js / react-force-graph** for relationship network visualization
 - New tables: `stakeholder_relation`, `intel`, `intel_org`
 - iPhone dictation for voice input (Whisper deferred)

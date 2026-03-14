@@ -87,7 +87,7 @@ test("Deals list renders and has items", async ({ page }) => {
 
 test("Deal detail page loads with Gantt", async ({ page }) => {
   // Get a deal ID from the API
-  const res = await page.request.get("http://localhost:8000/api/nx/deals/");
+  const res = await page.request.get("http://localhost:8001/api/nx/deals/");
   const deals = await res.json();
   if (deals.length === 0) {
     test.skip();
@@ -107,7 +107,7 @@ test("Deal detail page loads with Gantt", async ({ page }) => {
 });
 
 test("Deal detail — edit sections toggle", async ({ page }) => {
-  const res = await page.request.get("http://localhost:8000/api/nx/deals/");
+  const res = await page.request.get("http://localhost:8001/api/nx/deals/");
   const deals = await res.json();
   if (deals.length === 0) {
     test.skip();
@@ -123,12 +123,12 @@ test("Deal detail — edit sections toggle", async ({ page }) => {
 });
 
 test("Deal detail — unlink intel button appears in edit mode", async ({ page }) => {
-  const res = await page.request.get("http://localhost:8000/api/nx/deals/");
+  const res = await page.request.get("http://localhost:8001/api/nx/deals/");
   const deals = await res.json();
   // Find a deal with intel
   let targetDeal = null;
   for (const d of deals) {
-    const dRes = await page.request.get(`http://localhost:8000/api/nx/deals/${d.id}`);
+    const dRes = await page.request.get(`http://localhost:8001/api/nx/deals/${d.id}`);
     const detail = await dRes.json();
     if (detail.intel && detail.intel.length > 0) {
       targetDeal = d;
@@ -211,13 +211,13 @@ test("Contacts page loads with tabs", async ({ page }) => {
 });
 
 test("Client detail page loads", async ({ page }) => {
-  const res = await page.request.get("http://localhost:8000/api/nx/contacts/?type=clients");
+  const res = await page.request.get("http://localhost:8001/api/nx/contacts/?type=clients");
   let clients: { id: number }[] = [];
   try {
     clients = await res.json();
   } catch {
     // try alternate endpoint
-    const r2 = await page.request.get("http://localhost:8000/api/nx/contacts/clients");
+    const r2 = await page.request.get("http://localhost:8001/api/nx/contacts/clients");
     clients = await r2.json();
   }
   if (clients.length === 0) {
@@ -242,7 +242,7 @@ test("Intel list page loads", async ({ page }) => {
 });
 
 test("Intel detail page loads", async ({ page }) => {
-  const res = await page.request.get("http://localhost:8000/api/nx/intel/");
+  const res = await page.request.get("http://localhost:8001/api/nx/intel/");
   const intels = await res.json();
   if (intels.length === 0) {
     test.skip();
@@ -276,7 +276,7 @@ test("Subsidies list page loads", async ({ page }) => {
 });
 
 test("Subsidy detail loads with deadlines", async ({ page }) => {
-  const res = await page.request.get("http://localhost:8000/api/nx/subsidies/");
+  const res = await page.request.get("http://localhost:8001/api/nx/subsidies/");
   const subs = await res.json();
   if (subs.length === 0) {
     test.skip();

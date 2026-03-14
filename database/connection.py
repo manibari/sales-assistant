@@ -1,7 +1,7 @@
 """Database connection layer — PostgreSQL via psycopg2 (Supabase).
 
-Reads DATABASE_URL from environment. Provides context-managed connections
-with auto-commit on success and rollback on error.
+Reads DATABASE_URL from environment. Uses a connection pool to avoid
+the ~800ms overhead of establishing a new TLS connection per request.
 """
 
 import logging
@@ -12,18 +12,32 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import psycopg2
-import psycopg2.extras
+import psycopg2.pool
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 
 _DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+# Connection pool: min 2, max 10 connections kept alive
+_pool: psycopg2.pool.ThreadedConnectionPool | None = None
+
+
+def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
+    global _pool
+    if _pool is None or _pool.closed:
+        _pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2, maxconn=10, dsn=_DATABASE_URL
+        )
+        logger.info("Connection pool created (2-10 connections)")
+    return _pool
+
 
 @contextmanager
 def get_connection():
-    """Get a PostgreSQL connection. Auto-commits on success, rolls back on error."""
-    conn = psycopg2.connect(_DATABASE_URL)
+    """Get a pooled PostgreSQL connection. Auto-commits on success, rolls back on error."""
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
         yield conn
         conn.commit()
@@ -31,7 +45,7 @@ def get_connection():
         conn.rollback()
         raise
     finally:
-        conn.close()
+        pool.putconn(conn)
 
 
 def read_sql_file(file_name: str) -> str:
@@ -63,7 +77,8 @@ def init_db():
     """Execute schema file to create all tables."""
     db_dir = os.path.dirname(__file__)
     schema_path = os.path.join(db_dir, "schema.sql")
-    conn = psycopg2.connect(_DATABASE_URL)
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
         with conn.cursor() as cur:
             with open(schema_path, "r") as f:
@@ -74,4 +89,4 @@ def init_db():
         conn.rollback()
         raise
     finally:
-        conn.close()
+        pool.putconn(conn)

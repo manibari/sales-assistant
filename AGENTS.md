@@ -12,8 +12,7 @@ Universal project specs for all AI-assisted tools (Claude Code, Cursor, Copilot,
 
 **Frontend**: Next.js (React 19) + TypeScript + Tailwind CSS + D3.js/react-force-graph (relationship network)
 **Backend**: FastAPI (Python) — REST API wrapping existing services layer
-**Database**: PostgreSQL (psycopg2, no ORM)
-**Legacy UI**: Streamlit — retained as internal admin/analytics tool
+**Database**: Supabase PostgreSQL (psycopg2 + connection pool, no ORM)
 **AI**: Gemini / Azure OpenAI / Anthropic (multi-provider, existing)
 **Voice Input**: iPhone built-in dictation → text (Whisper deferred)
 
@@ -40,27 +39,41 @@ A. 輸入層 (Capture)          B. 處理層 (Backend)          C. 呈現層 (Fr
 
 - **PostgreSQL 是單一事實來源**
 - **FastAPI** 同時服務 Next.js 前端 + 外部 webhook（iOS Shortcuts via Make.com）
-- **Streamlit** 降級為內部 admin/analytics，不再是主要 UI
+- **Streamlit** 已退役（archived）
+
+## Network Config
+
+All ports are defined here. Do NOT hardcode port numbers elsewhere — reference this section.
+
+| Service | Port | URL | Notes |
+|---------|------|-----|-------|
+| Next.js frontend | 3000 | `http://localhost:3000` | Dev server |
+| FastAPI backend | **8001** | `http://localhost:8001` | `next.config.ts` rewrites `/api/*` here |
+| Supabase PostgreSQL | 5432 | via `DATABASE_URL` in `.env` | Remote, no local DB |
+| Production frontend | 443 | `https://sales.phyra.uk` | Deployed |
+| Production backend | 443 | `https://api.phyra.uk` | Deployed |
+| Telegram webhook | — | `https://api.phyra.uk/api/nx/telegram/webhook` | Set via Telegram API |
+
+**Key rule**: Frontend proxies API calls via `next.config.ts` rewrite → `http://127.0.0.1:8001`. Backend CORS also allows direct access from `:3000` and `:3333`.
 
 ## Build & Run
 
 ```bash
-# --- Database ---
-docker-compose up -d
+# --- Database (Supabase, remote) ---
+# Set DATABASE_URL in .env (see .env.example)
 python -c "from database.connection import init_db; init_db()"
 
 # --- Backend (FastAPI) ---
-cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8001
 
 # --- Frontend (Next.js) ---
 cd frontend
 npm install
 npm run dev    # http://localhost:3000
 
-# --- Legacy Streamlit (internal admin) ---
-streamlit run app.py
+# --- Quick start (both servers) ---
+./scripts/start.sh
 
 # --- Async AI Worker ---
 python worker.py

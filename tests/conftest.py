@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 SCREENSHOTS_DIR = Path(__file__).resolve().parent / "screenshots"
 BASE_URL = "http://localhost:3000"
-API_URL = "http://localhost:8000"
+API_URL = "http://localhost:8001"
 
 
 @pytest.fixture(scope="session")

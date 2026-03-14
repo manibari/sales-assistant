@@ -26,7 +26,7 @@ echo -e "${YELLOW}[2/4] Starting servers...${NC}"
 
 # Start FastAPI
 cd "$PROJECT_ROOT"
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
+python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001 &
 API_PID=$!
 
 # Start Next.js
@@ -35,9 +35,9 @@ npx next dev --port 3000 &
 NEXT_PID=$!
 
 # Wait for servers to be ready
-echo "  Waiting for API (port 8000)..."
+echo "  Waiting for API (port 8001)..."
 for i in $(seq 1 30); do
-    if curl -s http://localhost:8000/api/health > /dev/null 2>&1; then
+    if curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
         echo "  API ready."
         break
     fi

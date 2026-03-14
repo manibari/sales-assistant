@@ -10,8 +10,8 @@ if ! lsof -iTCP:3000 -sTCP:LISTEN -t >/dev/null 2>&1; then
   disown
 fi
 
-# Backend (FastAPI uvicorn on port 8000) — must source .env for TELEGRAM_BOT_TOKEN etc.
-if ! lsof -iTCP:8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-  cd "$PROJECT_ROOT" && set -a && source .env 2>/dev/null && set +a && uvicorn backend.main:app --reload --port 8000 &>/tmp/nexus-backend.log &
+# Backend (FastAPI uvicorn on port 8001) — matches frontend next.config.ts rewrite
+if ! lsof -iTCP:8001 -sTCP:LISTEN -t >/dev/null 2>&1; then
+  cd "$PROJECT_ROOT" && set -a && source .env 2>/dev/null && set +a && uvicorn backend.main:app --reload --port 8001 &>/tmp/nexus-backend.log &
   disown
 fi

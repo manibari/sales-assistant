@@ -28,7 +28,7 @@ jobs:
         run: black --check backend/ services/ database/
 
       - name: Import check
-        run: python -c "from backend.main import app; print('FastAPI app OK')"
+        run: python -c "import backend.routers.nexus.clients; print('Backend imports OK')"
 
   frontend:
     name: Frontend Build

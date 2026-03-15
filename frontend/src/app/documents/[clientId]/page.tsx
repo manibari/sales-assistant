@@ -307,16 +307,21 @@ function ContractDocRow({
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileText
             size={16}
             className={`flex-shrink-0 ${
               isExpired ? "text-red-500" : isExpiring ? "text-amber-500" : "text-blue-500"
             }`}
           />
-          <div>
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">
               {doc.doc_type.toUpperCase()}
+              {doc.file_path && (
+                <span className="text-slate-400 font-normal ml-2">
+                  {doc.file_path.split("/").pop()}
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-2 mt-0.5">
               <span
@@ -338,39 +343,37 @@ function ContractDocRow({
                   <Clock size={10} /> {days} 天到期
                 </span>
               )}
+              {doc.sign_date && (
+                <span className="text-[11px] text-slate-400">簽署 {doc.sign_date}</span>
+              )}
+              {doc.expiry_date && (
+                <span className="text-[11px] text-slate-400">到期 {doc.expiry_date}</span>
+              )}
             </div>
           </div>
         </div>
-        <button
-          onClick={onUpload}
-          className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${
-            doc.file_path
-              ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
-              : "border-blue-500/30 text-blue-500 hover:bg-blue-500/10"
-          }`}
-        >
-          {doc.file_path ? (
-            <>
-              <CheckCircle size={12} />
-              更換
-            </>
-          ) : (
-            <>
-              <Upload size={12} />
-              上傳
-            </>
-          )}
-        </button>
-      </div>
-      <div className="mt-2 flex gap-4 text-xs text-slate-400">
-        {doc.sign_date && <span>簽署: {doc.sign_date}</span>}
-        {doc.expiry_date && <span>到期: {doc.expiry_date}</span>}
-        {doc.file_path && (
-          <span className="text-green-500 flex items-center gap-1">
-            <CheckCircle size={10} />
-            {doc.file_path.split("/").pop()}
-          </span>
-        )}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={onUpload}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${
+              doc.file_path
+                ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
+                : "border-blue-500/30 text-blue-500 hover:bg-blue-500/10"
+            }`}
+          >
+            {doc.file_path ? (
+              <>
+                <CheckCircle size={12} />
+                更換
+              </>
+            ) : (
+              <>
+                <Upload size={12} />
+                上傳
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

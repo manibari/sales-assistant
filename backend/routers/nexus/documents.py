@@ -26,6 +26,7 @@ from services.nexus.knowledge import (
     enqueue_parse,
     get_knowledge_by_file,
     get_knowledge_by_client,
+    list_all_knowledge,
     search_knowledge,
     delete_knowledge_by_file,
     PARSEABLE_EXTENSIONS,
@@ -256,6 +257,12 @@ def file_knowledge(file_id: int):
     if not f:
         raise HTTPException(404, "File not found")
     return get_knowledge_by_file(file_id)
+
+
+@router.get("/knowledge/all")
+def all_knowledge(limit: int = 100):
+    """Get all knowledge chunks across all clients."""
+    return list_all_knowledge(limit)
 
 
 @router.get("/knowledge/by-client/{client_id}")

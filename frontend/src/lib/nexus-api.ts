@@ -563,6 +563,8 @@ export const nxApi = {
     },
   },
   knowledge: {
+    all: (limit?: number) =>
+      fetchAPI<NxKnowledge[]>(`/documents/knowledge/all${limit ? `?limit=${limit}` : ""}`),
     byClient: (clientId: number) =>
       fetchAPI<NxKnowledge[]>(`/documents/knowledge/by-client/${clientId}`),
     search: (q: string, clientId?: number) => {

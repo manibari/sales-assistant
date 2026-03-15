@@ -139,6 +139,21 @@ def delete_knowledge_by_file(file_id: int) -> int:
             return cur.rowcount
 
 
+def list_all_knowledge(limit: int = 100) -> list[dict]:
+    """Get all knowledge chunks across all files."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT k.*, f.file_name
+                   FROM nx_knowledge k
+                   JOIN nx_file f ON k.file_id = f.id
+                   ORDER BY k.file_id, k.chunk_index
+                   LIMIT %s""",
+                (limit,),
+            )
+            return rows_to_dicts(cur)
+
+
 def search_knowledge(
     query: str, client_id: int | None = None
 ) -> list[dict]:

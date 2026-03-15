@@ -12,6 +12,7 @@ import {
   FileCheck,
   Search,
   Landmark,
+  Brain,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "補助案", href: "/subsidies", icon: Landmark },
   { label: "關係網", href: "/contacts", icon: BookUser },
   { label: "文件追蹤", href: "/documents", icon: FileCheck },
+  { label: "知識庫", href: "/knowledge", icon: Brain },
   { label: "搜尋", href: "/search", icon: Search },
   { label: "設定", href: "/settings", icon: Settings },
 ];

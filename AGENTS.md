@@ -47,14 +47,14 @@ All ports are defined here. Do NOT hardcode port numbers elsewhere — reference
 
 | Service | Port | URL | Notes |
 |---------|------|-----|-------|
-| Next.js frontend | **3001** | `http://localhost:3001` | Dev server |
-| FastAPI backend | **8001** | `http://localhost:8001` | `next.config.ts` rewrites `/api/*` here |
+| Next.js frontend | **3002** | `http://localhost:3002` | Dev server |
+| FastAPI backend | **8002** | `http://localhost:8002` | `next.config.ts` rewrites `/api/*` here |
 | Supabase PostgreSQL | 5432 | via `DATABASE_URL` in `.env` | Remote, no local DB |
 | Production frontend | 443 | `https://sales.phyra.uk` | Deployed |
 | Production backend | 443 | `https://api.phyra.uk` | Deployed |
 | Telegram webhook | — | `https://api.phyra.uk/api/nx/telegram/webhook` | Set via Telegram API |
 
-**Key rule**: Frontend proxies API calls via `next.config.ts` rewrite → `http://127.0.0.1:8001`. Backend CORS also allows direct access from `:3001` and `:3333`.
+**Key rule**: Frontend proxies API calls via `next.config.ts` rewrite → `http://127.0.0.1:8002`. Backend CORS also allows direct access from `:3002` and `:3333`.
 
 ## Build & Run
 
@@ -65,12 +65,12 @@ python -c "from database.connection import init_db; init_db()"
 
 # --- Backend (FastAPI) ---
 pip install -r requirements.txt
-uvicorn backend.main:app --reload --port 8001
+uvicorn backend.main:app --reload --port 8002
 
 # --- Frontend (Next.js) ---
 cd frontend
 npm install
-npm run dev    # http://localhost:3001
+npm run dev    # http://localhost:3002
 
 # --- Quick start (both servers) ---
 ./scripts/start.sh

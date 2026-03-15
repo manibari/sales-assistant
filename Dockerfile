@@ -36,11 +36,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # Copy startup script
 COPY <<'EOF' /app/start.sh
 #!/bin/sh
-cd /app/frontend && node_modules/.bin/next start -p 3001 &
-cd /app && uvicorn backend.main:app --host 0.0.0.0 --port 8001
+cd /app/frontend && node_modules/.bin/next start -p 3002 &
+cd /app && uvicorn backend.main:app --host 0.0.0.0 --port 8002
 EOF
 RUN chmod +x /app/start.sh
 
-EXPOSE 3001 8001
+EXPOSE 3002 8002
 
 CMD ["/app/start.sh"]

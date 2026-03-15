@@ -397,13 +397,14 @@ CREATE TABLE IF NOT EXISTS nx_deal_intel (
 -- 12. Meetings (calendar events linked to deals)
 CREATE TABLE IF NOT EXISTS nx_meeting (
     id              SERIAL PRIMARY KEY,
-    deal_id         INTEGER NOT NULL REFERENCES nx_deal(id),
+    deal_id         INTEGER REFERENCES nx_deal(id),
     title           TEXT NOT NULL,
     meeting_date    TIMESTAMPTZ NOT NULL,
     duration_minutes INTEGER NOT NULL DEFAULT 60,
     participants_json JSONB,
     location        TEXT,
     notes           TEXT,
+    outlook_event_id TEXT,
     status          TEXT NOT NULL DEFAULT 'scheduled',
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
@@ -565,3 +566,30 @@ CREATE TABLE IF NOT EXISTS nx_oauth_token (
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 24. Email threads (synced from Outlook / IMAP)
+CREATE TABLE IF NOT EXISTS nx_email_thread (
+    id              SERIAL PRIMARY KEY,
+    message_id      TEXT UNIQUE NOT NULL,
+    thread_id       TEXT,
+    conversation_id TEXT,
+    subject         TEXT,
+    from_addr       TEXT NOT NULL,
+    to_addrs        TEXT,
+    cc_addrs        TEXT,
+    body_preview    TEXT,
+    direction       TEXT NOT NULL,  -- 'inbound', 'outbound'
+    received_at     TIMESTAMPTZ,
+    client_id       INTEGER REFERENCES nx_client(id),
+    deal_id         INTEGER REFERENCES nx_deal(id),
+    contact_id      INTEGER REFERENCES nx_contact(id),
+    is_read         BOOLEAN DEFAULT FALSE,
+    importance      TEXT DEFAULT 'normal',
+    has_attachments BOOLEAN DEFAULT FALSE,
+    raw_json        JSONB,
+    synced_at       TIMESTAMPTZ DEFAULT NOW(),
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_email_thread_client ON nx_email_thread(client_id);
+CREATE INDEX IF NOT EXISTS idx_nx_email_thread_deal ON nx_email_thread(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_email_thread_received ON nx_email_thread(received_at DESC);

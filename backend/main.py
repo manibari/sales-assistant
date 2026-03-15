@@ -24,6 +24,8 @@ from backend.routers.nexus import (
     search as nx_search,
     telegram as nx_telegram,
     subsidies as nx_subsidies,
+    settings as nx_settings,
+    outlook as nx_outlook,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
@@ -61,6 +63,8 @@ app.include_router(nx_tbd.router, prefix="/api/nx/tbd", tags=["TBD"])
 app.include_router(nx_search.router, prefix="/api/nx/search", tags=["Search"])
 app.include_router(nx_telegram.router, prefix="/api/nx/telegram", tags=["Telegram"])
 app.include_router(nx_subsidies.router, prefix="/api/nx/subsidies", tags=["Subsidies"])
+app.include_router(nx_settings.router, prefix="/api/nx/settings", tags=["Settings"])
+app.include_router(nx_outlook.router, prefix="/api/nx/outlook", tags=["Outlook"])
 
 
 @app.on_event("startup")

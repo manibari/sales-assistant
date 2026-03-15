@@ -12,6 +12,7 @@ import {
   FileCheck,
   Search,
   Landmark,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "關係網", href: "/contacts", icon: BookUser },
   { label: "文件追蹤", href: "/documents", icon: FileCheck },
   { label: "搜尋", href: "/search", icon: Search },
+  { label: "設定", href: "/settings", icon: Settings },
 ];
 
 export function DesktopSidebar() {

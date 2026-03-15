@@ -286,7 +286,75 @@ export interface IntelEntity {
   created_at: string;
 }
 
+export interface NxEmailThread {
+  id: number;
+  message_id: string;
+  thread_id: string | null;
+  conversation_id: string | null;
+  subject: string | null;
+  from_addr: string;
+  to_addrs: string | null;
+  cc_addrs: string | null;
+  body_preview: string | null;
+  direction: string;
+  received_at: string | null;
+  client_id: number | null;
+  deal_id: number | null;
+  contact_id: number | null;
+  is_read: boolean;
+  importance: string;
+  has_attachments: boolean;
+  synced_at: string;
+  created_at: string;
+}
+
+export interface NxIntegrationConfig {
+  id: number;
+  provider: string;
+  enabled: boolean;
+  config_json: Record<string, unknown>;
+  status: string;
+  last_sync_at: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AISettings {
+  provider: string;
+  has_api_key: boolean;
+  status: string;
+  enabled: boolean;
+}
+
+export interface AITestResult {
+  success: boolean;
+  provider: string;
+  response?: string;
+  error?: string;
+}
+
+export interface NotificationPrefs {
+  email_enabled: boolean;
+  telegram_enabled: boolean;
+  frequency: string;
+  events: {
+    deal_stage_change: boolean;
+    meeting_reminder: boolean;
+    document_expiry: boolean;
+    intel_received: boolean;
+  };
+}
+
 // --- API ---
+
+async function putAPI<T>(path: string, body: unknown): Promise<T> {
+  return fetchAPI<T>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
 
 export interface SearchResults {
   deals: { id: number; name: string; stage: string; status: string; client_name: string }[];
@@ -513,4 +581,42 @@ export const nxApi = {
     fetchAPI<{ id: number; title: string | null; raw_input: string; status: string; created_at: string; field_key: string; field_value: string }[]>(
       `/search/intel-fields?key=${encodeURIComponent(key)}&value=${encodeURIComponent(value)}`
     ),
+  outlook: {
+    getAuthUrl: () => fetchAPI<{ url: string }>("/outlook/auth/url"),
+    disconnect: () => postAPI<{ status: string }>("/outlook/auth/disconnect", {}),
+    getStatus: () => fetchAPI<{ connected: boolean; provider: string; expires_at: string | null; scopes: string | null }>("/outlook/auth/status"),
+    listEmails: (limit?: number, offset?: number) => {
+      const params = new URLSearchParams();
+      if (limit) params.set("limit", String(limit));
+      if (offset) params.set("offset", String(offset));
+      const qs = params.toString();
+      return fetchAPI<NxEmailThread[]>(`/outlook/emails${qs ? `?${qs}` : ""}`);
+    },
+    getEmail: (id: number) => fetchAPI<NxEmailThread>(`/outlook/emails/${id}`),
+    emailsByClient: (clientId: number) => fetchAPI<NxEmailThread[]>(`/outlook/emails/by-client/${clientId}`),
+    emailsByDeal: (dealId: number) => fetchAPI<NxEmailThread[]>(`/outlook/emails/by-deal/${dealId}`),
+    sendEmail: (data: { to: string[]; subject: string; body: string }) =>
+      postAPI<{ status: string }>("/outlook/emails/send", data),
+    replyEmail: (messageId: string, body: string) =>
+      postAPI<{ status: string }>(`/outlook/emails/${messageId}/reply`, { body }),
+    syncEmails: () => postAPI<{ synced: number }>("/outlook/emails/sync", {}),
+    syncCalendar: () => postAPI<{ pushed_to_outlook: number; pulled_from_outlook: number }>("/outlook/calendar/sync", {}),
+    syncContacts: () => postAPI<{ pushed: number; pulled: number; matched: number }>("/outlook/contacts/sync", {}),
+  },
+  settings: {
+    listIntegrations: () => fetchAPI<NxIntegrationConfig[]>("/settings/integrations"),
+    getIntegration: (provider: string) =>
+      fetchAPI<NxIntegrationConfig>(`/settings/integrations/${provider}`),
+    updateIntegration: (provider: string, data: { enabled?: boolean; config_json?: Record<string, unknown> }) =>
+      putAPI<NxIntegrationConfig>(`/settings/integrations/${provider}`, data),
+    deleteIntegration: (provider: string) => deleteAPI(`/settings/integrations/${provider}`),
+    getNotifications: () => fetchAPI<NotificationPrefs>("/settings/notifications"),
+    updateNotifications: (prefs: Partial<NotificationPrefs>) =>
+      putAPI<NotificationPrefs>("/settings/notifications", prefs),
+    getAI: () => fetchAPI<AISettings>("/settings/ai"),
+    updateAI: (data: { provider: string; api_key?: string }) =>
+      putAPI<NxIntegrationConfig>("/settings/ai", data),
+    testAI: (data: { provider: string }) =>
+      postAPI<AITestResult>("/settings/ai/test", data),
+  },
 };

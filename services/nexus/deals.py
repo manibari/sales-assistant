@@ -282,7 +282,12 @@ def link_intel_to_deal(deal_id: int, intel_id: int) -> dict:
             cur.execute(
                 """INSERT INTO nx_deal_intel (deal_id, intel_id)
                    VALUES (%s, %s)
-                   RETURNING *""",
+                   ON CONFLICT (deal_id, intel_id) DO NOTHING""",
+                (deal_id, intel_id),
+            )
+            cur.execute(
+                """SELECT * FROM nx_deal_intel
+                   WHERE deal_id = %s AND intel_id = %s""",
                 (deal_id, intel_id),
             )
             result = row_to_dict(cur)

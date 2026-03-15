@@ -3,7 +3,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from services.ai_provider import check_ai_available, generate_ai_response
@@ -178,6 +178,21 @@ def link_intel(deal_id: int, body: DealIntelLink):
 def unlink_intel(deal_id: int, intel_id: int):
     if not unlink_intel_from_deal(deal_id, intel_id):
         raise HTTPException(404, "Intel not linked to this deal")
+
+
+@router.delete("/{deal_id}", status_code=204)
+def remove_deal(deal_id: int):
+    from database.connection import get_connection
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Cascade: delete related records first
+            cur.execute("DELETE FROM nx_deal_intel WHERE deal_id = %s", (deal_id,))
+            cur.execute("DELETE FROM nx_deal_partner WHERE deal_id = %s", (deal_id,))
+            cur.execute("DELETE FROM nx_meeting WHERE deal_id = %s", (deal_id,))
+            cur.execute("DELETE FROM nx_reminder WHERE deal_id = %s", (deal_id,))
+            cur.execute("DELETE FROM nx_deal WHERE id = %s", (deal_id,))
+    return Response(status_code=204)
 
 
 MEDDIC_AI_PROMPT = """你是 B2B 銷售方法論 MEDDIC 專家。根據以下情報內容，分析並填寫 MEDDIC 六個維度。

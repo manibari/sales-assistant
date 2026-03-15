@@ -189,10 +189,29 @@ def get_intel_entities(intel_id: int) -> list[dict]:
                             WHEN 'partner' THEN (SELECT name FROM nx_partner WHERE id = ie.entity_id)
                             WHEN 'contact' THEN (SELECT name FROM nx_contact WHERE id = ie.entity_id)
                             WHEN 'deal' THEN (SELECT name FROM nx_deal WHERE id = ie.entity_id)
+                            WHEN 'meeting' THEN (SELECT title FROM nx_meeting WHERE id = ie.entity_id)
                           END AS entity_name
                    FROM nx_intel_entity ie
                    WHERE ie.intel_id = %s
                    ORDER BY ie.entity_type, ie.entity_id""",
+                (intel_id,),
+            )
+            return rows_to_dicts(cur)
+
+
+def get_intel_linked_meetings(intel_id: int) -> list[dict]:
+    """Get meetings linked to an intel via nx_intel_entity."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT m.id, m.title, m.meeting_date, m.status, m.deal_id,
+                          d.name AS deal_name, c.name AS client_name
+                   FROM nx_intel_entity ie
+                   JOIN nx_meeting m ON ie.entity_id = m.id
+                   LEFT JOIN nx_deal d ON m.deal_id = d.id
+                   LEFT JOIN nx_client c ON d.client_id = c.id
+                   WHERE ie.intel_id = %s AND ie.entity_type = 'meeting'
+                   ORDER BY m.meeting_date DESC""",
                 (intel_id,),
             )
             return rows_to_dicts(cur)

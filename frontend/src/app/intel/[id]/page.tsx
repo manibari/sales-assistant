@@ -17,8 +17,9 @@ import {
   X,
   ExternalLink,
   Download,
+  Calendar,
 } from "lucide-react";
-import { nxApi, type NxIntel, type NxDeal } from "@/lib/nexus-api";
+import { nxApi, type NxIntel, type NxDeal, type NxMeeting } from "@/lib/nexus-api";
 import { getIntelDisplayTitle } from "@/lib/intel-display";
 
 const INPUT_ICONS: Record<string, typeof FileText> = {
@@ -101,6 +102,8 @@ export default function IntelDetailPage() {
   const [showLinkDeal, setShowLinkDeal] = useState(false);
   const [allDeals, setAllDeals] = useState<NxDeal[]>([]);
   const [linking, setLinking] = useState(false);
+  const [showLinkMeeting, setShowLinkMeeting] = useState(false);
+  const [allMeetings, setAllMeetings] = useState<NxMeeting[]>([]);
 
   const loadIntel = useCallback(() => {
     nxApi.intel
@@ -135,6 +138,40 @@ export default function IntelDetailPage() {
       loadIntel();
     } catch (err) {
       console.error("Failed to link deal:", err);
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const handleOpenLinkMeeting = async () => {
+    setShowLinkMeeting(true);
+    try {
+      // Load meetings from linked deals only
+      const linkedDeals = intel?.linked_deals || [];
+      if (linkedDeals.length === 0) {
+        setAllMeetings([]);
+        return;
+      }
+      const meetingsByDeal = await Promise.all(
+        linkedDeals.map((d) => nxApi.calendar.meetingsByDeal(d.deal_id ?? d.id)),
+      );
+      const allDealMeetings = meetingsByDeal.flat();
+      // Filter out already-linked meetings
+      const linkedIds = new Set((intel?.linked_meetings || []).map((m) => m.id));
+      setAllMeetings(allDealMeetings.filter((m) => !linkedIds.has(m.id)));
+    } catch (err) {
+      console.error("Failed to load meetings:", err);
+    }
+  };
+
+  const handleLinkMeeting = async (meetingId: number) => {
+    setLinking(true);
+    try {
+      await nxApi.intel.linkMeeting(intelId, meetingId);
+      setShowLinkMeeting(false);
+      loadIntel();
+    } catch (err) {
+      console.error("Failed to link meeting:", err);
     } finally {
       setLinking(false);
     }
@@ -455,6 +492,54 @@ export default function IntelDetailPage() {
           </div>
         </div>
 
+        {/* Linked meetings */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Calendar size={16} className="text-purple-500" />
+              <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                關聯會議
+              </span>
+              <span className="text-xs text-slate-400">
+                ({intel.linked_meetings?.length || 0})
+              </span>
+            </div>
+            <button
+              onClick={handleOpenLinkMeeting}
+              className="text-xs text-purple-500 cursor-pointer flex items-center gap-0.5"
+            >
+              <Plus size={12} /> 關聯
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {intel.linked_meetings && intel.linked_meetings.length > 0 ? (
+              intel.linked_meetings.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/calendar/meeting/${m.id}`}
+                  className="flex items-center justify-between py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-1 px-1 rounded transition-colors"
+                >
+                  <div>
+                    <span className="text-sm text-slate-700 dark:text-slate-300">
+                      {m.title}
+                    </span>
+                    <span className="text-[11px] text-slate-400 ml-2">
+                      {m.deal_name} · {m.client_name}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400">
+                    {new Date(m.meeting_date).toLocaleDateString("zh-TW")}
+                  </span>
+                </Link>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 py-2">
+                尚未關聯任何會議
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Action: go to Q&A if not confirmed */}
         {!isConfirmed && (
           <Link
@@ -510,6 +595,55 @@ export default function IntelDetailPage() {
               )}
               {allDeals.length > 0 && allDeals.filter((d) => !linkedDealIds.has(d.id)).length === 0 && (
                 <p className="text-sm text-slate-400 py-4 text-center">所有商機已關聯</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link meeting modal */}
+      {showLinkMeeting && (
+        <div className="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                關聯到會議
+              </h3>
+              <button
+                onClick={() => setShowLinkMeeting(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-72 overflow-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {allMeetings.length === 0 ? (
+                <p className="text-sm text-slate-400 py-4 text-center">
+                  {(intel?.linked_deals?.length || 0) === 0
+                    ? "請先關聯商機，再選擇該商機的會議"
+                    : "關聯商機底下沒有會議"}
+                </p>
+              ) : (
+                allMeetings.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => handleLinkMeeting(m.id)}
+                    disabled={linking}
+                    className="w-full flex items-center justify-between py-3 px-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded transition-colors cursor-pointer disabled:opacity-50 text-left"
+                  >
+                    <div>
+                      <span className="text-sm text-slate-900 dark:text-slate-50">
+                        {m.title}
+                      </span>
+                      <span className="text-[11px] text-slate-400 ml-2">
+                        {m.deal_name} · {m.client_name}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">
+                      {new Date(m.meeting_date).toLocaleDateString("zh-TW")}
+                    </span>
+                  </button>
+                ))
               )}
             </div>
           </div>

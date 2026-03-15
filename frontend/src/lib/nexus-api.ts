@@ -85,6 +85,7 @@ export interface NxIntel {
   file_count?: number;
   files?: NxFile[];
   linked_deals?: { id: number; name: string; stage: string; status: string; client_name: string }[];
+  linked_meetings?: { id: number; title: string; meeting_date: string; status: string; deal_id: number; deal_name: string; client_name: string }[];
 }
 
 export interface NxDeal {
@@ -352,6 +353,10 @@ export const nxApi = {
     delete: (id: number) => deleteAPI(`/intel/${id}`),
     bulkDelete: (ids: number[]) =>
       postAPI<void>("/intel/bulk-delete", { ids }),
+    linkMeeting: (intelId: number, meetingId: number) =>
+      postAPI<unknown>(`/intel/${intelId}/meetings`, { meeting_id: meetingId }),
+    unlinkMeeting: (intelId: number, meetingId: number) =>
+      deleteAPI(`/intel/${intelId}/meetings/${meetingId}`),
     parse: (id: number) =>
       postAPI<{ parsed: Record<string, unknown>; ai_reply: string }>(`/intel/${id}/parse`, {}),
     chat: (id: number, message: string, currentParsed: Record<string, unknown>) =>
@@ -387,6 +392,7 @@ export const nxApi = {
       postAPI<unknown>(`/deals/${dealId}/intel`, { intel_id: intelId }),
     unlinkIntel: (dealId: number, intelId: number) =>
       deleteAPI(`/deals/${dealId}/intel/${intelId}`),
+    delete: (id: number) => deleteAPI(`/deals/${id}`),
     aiFillMeddic: (dealId: number) =>
       postAPI<{ meddic: Record<string, string | null>; ai_filled: string[]; unchanged: string[] }>(
         `/deals/${dealId}/meddic/ai-fill`,

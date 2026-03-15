@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Download,
   Users,
+  Trash2,
 } from "lucide-react";
 import { nxApi, type NxDeal, type NxPartner, type NxIntel, type NxContact, type MeddicProgress } from "@/lib/nexus-api";
 import { getIntelDisplayTitle } from "@/lib/intel-display";
@@ -318,7 +319,9 @@ export default function DealDetailPage() {
   }
 
   const meddic: Record<string, string | null> = deal.meddic_json
-    ? JSON.parse(deal.meddic_json)
+    ? typeof deal.meddic_json === "string"
+      ? JSON.parse(deal.meddic_json)
+      : deal.meddic_json
     : {};
   const progress: MeddicProgress = deal.meddic_progress || {
     completed: 0,
@@ -326,6 +329,17 @@ export default function DealDetailPage() {
     missing: [],
   };
   const isClosed = deal.status === "closed";
+
+  const handleDeleteDeal = async () => {
+    if (!confirm(`確定要刪除商機「${deal.name}」？此操作無法復原，會議、提醒等關聯資料也會一併刪除。`)) return;
+    try {
+      await nxApi.deals.delete(deal.id);
+      router.push("/deals");
+    } catch (err) {
+      console.error(err);
+      alert("刪除失敗");
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -504,6 +518,13 @@ export default function DealDetailPage() {
                 className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 min-h-[44px] cursor-pointer transition-colors"
               >
                 關閉案件
+              </button>
+              <button
+                onClick={handleDeleteDeal}
+                className="w-full px-4 py-2.5 rounded-lg text-sm font-medium text-red-500 hover:bg-red-500/10 border border-red-500/20 min-h-[44px] cursor-pointer transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                刪除商機
               </button>
             </div>
           )}

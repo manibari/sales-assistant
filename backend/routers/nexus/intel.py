@@ -22,7 +22,7 @@ from services.nexus.clients import find_client_by_name
 from services.nexus.contacts import get_contacts_by_org
 from services.nexus.deals import get_deals_by_client
 from services.nexus.documents import get_files_by_intel
-from services.nexus.intel import get_intel_linked_deals
+from services.nexus.intel import get_intel_linked_deals, get_intel_linked_meetings, link_intel_entity
 from services.nexus.materialize import materialize_intel, _normalize_company_name
 from services.nexus.partners import find_partner_by_name
 
@@ -203,6 +203,7 @@ def read_intel(intel_id: int):
         raise HTTPException(404, "Intel not found")
     intel["files"] = get_files_by_intel(intel_id)
     intel["linked_deals"] = get_intel_linked_deals(intel_id)
+    intel["linked_meetings"] = get_intel_linked_meetings(intel_id)
     return intel
 
 
@@ -244,6 +245,28 @@ def entities(intel_id: int):
     if not intel:
         raise HTTPException(404, "Intel not found")
     return get_intel_entities(intel_id)
+
+
+class LinkMeetingBody(BaseModel):
+    meeting_id: int
+
+
+@router.post("/{intel_id}/meetings")
+def link_meeting(intel_id: int, body: LinkMeetingBody):
+    return link_intel_entity(intel_id, "meeting", body.meeting_id, "linked")
+
+
+@router.delete("/{intel_id}/meetings/{meeting_id}", status_code=204)
+def unlink_meeting(intel_id: int, meeting_id: int):
+    from services.nexus.intel import get_connection
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """DELETE FROM nx_intel_entity
+                   WHERE intel_id = %s AND entity_type = 'meeting' AND entity_id = %s""",
+                (intel_id, meeting_id),
+            )
+    return Response(status_code=204)
 
 
 @router.post("/{intel_id}/parse")

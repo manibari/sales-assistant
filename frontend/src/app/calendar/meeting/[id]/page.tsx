@@ -11,12 +11,16 @@ import {
   Lightbulb,
   Zap,
   Loader2,
+  Plus,
+  Link2,
+  X,
 } from "lucide-react";
 import {
   nxApi,
   type NxMeeting,
   type NxDeal,
   type NxTbdItem,
+  type NxIntel,
   type MeddicProgress,
 } from "@/lib/nexus-api";
 import { getIntelDisplayTitle } from "@/lib/intel-display";
@@ -51,6 +55,10 @@ export default function MeetingPrepPage() {
   const [deal, setDeal] = useState<NxDeal | null>(null);
   const [tbds, setTbds] = useState<NxTbdItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [linkedIntel, setLinkedIntel] = useState<NxIntel[]>([]);
+  const [showLinkIntel, setShowLinkIntel] = useState(false);
+  const [dealIntel, setDealIntel] = useState<NxIntel[]>([]);
+  const [creating, setCreating] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -59,6 +67,9 @@ export default function MeetingPrepPage() {
       const fullDeal = await nxApi.deals.get(m.deal_id);
       setDeal(fullDeal);
       setTbds(fullDeal.tbds || []);
+      // Load intel linked to this meeting
+      const meetingIntel = await nxApi.intel.byEntity("meeting", meetingId);
+      setLinkedIntel(meetingIntel);
     } catch (err) {
       console.error("Failed to load meeting:", err);
     } finally {
@@ -69,6 +80,55 @@ export default function MeetingPrepPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  const handleNewMeetingNote = async () => {
+    if (creating || !meeting) return;
+    setCreating(true);
+    try {
+      const title = `${meeting.title} — 會議紀錄`;
+      const newIntel = await nxApi.intel.create({
+        raw_input: "",
+        input_type: "text",
+        title,
+      });
+      // Link to this meeting
+      await nxApi.intel.linkMeeting(newIntel.id, meetingId);
+      // Also link to the deal
+      if (deal) {
+        await nxApi.deals.linkIntel(deal.id, newIntel.id);
+      }
+      router.push(`/intel/${newIntel.id}`);
+    } catch (err) {
+      console.error("Failed to create meeting note:", err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleOpenLinkIntel = async () => {
+    setShowLinkIntel(true);
+    if (!deal) return;
+    try {
+      const intels = await nxApi.intel.list();
+      const linkedIds = new Set(linkedIntel.map((i) => i.id));
+      setDealIntel(intels.filter((i) => !linkedIds.has(i.id)));
+    } catch (err) {
+      console.error("Failed to load intel:", err);
+    }
+  };
+
+  const handleLinkExistingIntel = async (intelId: number) => {
+    try {
+      await nxApi.intel.linkMeeting(intelId, meetingId);
+      if (deal) {
+        await nxApi.deals.linkIntel(deal.id, intelId);
+      }
+      setShowLinkIntel(false);
+      loadData();
+    } catch (err) {
+      console.error("Failed to link intel:", err);
+    }
+  };
 
   if (loading) {
     return (
@@ -241,14 +301,95 @@ export default function MeetingPrepPage() {
           </div>
         )}
 
-        {/* Post-meeting action */}
-        <Link
-          href="/capture"
-          className="block w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg min-h-[44px] text-center active:scale-[0.98] transition-all cursor-pointer"
-        >
-          記錄會議結果
-        </Link>
+        {/* Meeting-linked intel */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap size={16} className="text-cyan-500" />
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              會議情報
+            </span>
+            <span className="text-xs text-slate-400">({linkedIntel.length})</span>
+          </div>
+          {linkedIntel.length > 0 ? (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {linkedIntel.map((i) => (
+                <Link
+                  key={i.id}
+                  href={`/intel/${i.id}`}
+                  className="flex items-center justify-between py-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-1 px-1 rounded transition-colors"
+                >
+                  <span className="text-sm text-slate-700 dark:text-slate-300 line-clamp-1">
+                    {getIntelDisplayTitle(i, 60)}
+                  </span>
+                  <span className="text-[11px] text-slate-400 flex-shrink-0 ml-2">
+                    {new Date(i.created_at).toLocaleDateString("zh-TW")}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">尚無會議紀錄</p>
+          )}
+        </div>
+
+        {/* Post-meeting actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleNewMeetingNote}
+            disabled={creating}
+            className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+          >
+            <Plus size={16} />
+            {creating ? "建立中..." : "新增會議紀錄"}
+          </button>
+          <button
+            onClick={handleOpenLinkIntel}
+            className="flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium px-4 py-3 rounded-lg min-h-[44px] active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Link2 size={16} />
+            關聯情報
+          </button>
+        </div>
       </div>
+
+      {/* Link intel modal */}
+      {showLinkIntel && (
+        <div className="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50">
+                關聯到情報
+              </h3>
+              <button
+                onClick={() => setShowLinkIntel(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="max-h-72 overflow-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {dealIntel.length === 0 ? (
+                <p className="text-sm text-slate-400 py-4 text-center">沒有可關聯的情報</p>
+              ) : (
+                dealIntel.map((i) => (
+                  <button
+                    key={i.id}
+                    onClick={() => handleLinkExistingIntel(i.id)}
+                    className="w-full flex items-center justify-between py-3 px-1 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded transition-colors cursor-pointer text-left"
+                  >
+                    <span className="text-sm text-slate-900 dark:text-slate-50 line-clamp-1">
+                      {getIntelDisplayTitle(i, 60)}
+                    </span>
+                    <span className="text-[11px] text-slate-400 flex-shrink-0 ml-2">
+                      {new Date(i.created_at).toLocaleDateString("zh-TW")}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

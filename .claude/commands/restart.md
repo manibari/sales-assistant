@@ -2,31 +2,34 @@ Restart dev servers (frontend + backend). Verify ports are listening before repo
 
 Steps:
 
-1. Kill any process on port 3000 and port 8001:
+1. Read `AGENTS.md` → Network Config table. Extract:
+   - `FRONTEND_PORT`: the port number for "Next.js frontend"
+   - `BACKEND_PORT`: the port number for "FastAPI backend"
+2. Kill any process on those ports:
    ```
-   lsof -ti:3000 | xargs kill -9 2>/dev/null
-   lsof -ti:8001 | xargs kill -9 2>/dev/null
+   lsof -ti:$FRONTEND_PORT | xargs kill -9 2>/dev/null
+   lsof -ti:$BACKEND_PORT | xargs kill -9 2>/dev/null
    ```
-2. Wait 1 second.
-3. Start frontend:
+3. Wait 1 second.
+4. Start frontend:
    ```
    cd frontend && npm run dev &>/tmp/nexus-frontend.log &
    ```
-4. Start backend (MUST source .env first):
+5. Start backend (MUST source .env first):
    ```
-   set -a && source .env 2>/dev/null && set +a && uvicorn backend.main:app --reload --port 8001 &>/tmp/nexus-backend.log &
+   set -a && source .env 2>/dev/null && set +a && uvicorn backend.main:app --reload --port $BACKEND_PORT &>/tmp/nexus-backend.log &
    ```
-5. Wait 5 seconds for servers to start.
-6. Verify frontend: `lsof -iTCP:3000 -sTCP:LISTEN -t`
-7. Verify backend: `curl -s http://localhost:8001/api/nx/clients/ | head -20`
-8. Report status table:
+6. Wait 5 seconds for servers to start.
+7. Verify frontend: `lsof -iTCP:$FRONTEND_PORT -sTCP:LISTEN -t`
+8. Verify backend: `curl -s http://localhost:$BACKEND_PORT/api/nx/clients/ | head -20`
+9. Report status table (use actual port numbers from step 1):
 
 | Service | Port | Status |
 |---------|------|--------|
-| Frontend (Next.js) | 3000 | ✅ / ❌ |
-| Backend (FastAPI) | 8001 | ✅ / ❌ |
+| Frontend (Next.js) | $FRONTEND_PORT | ✅ / ❌ |
+| Backend (FastAPI) | $BACKEND_PORT | ✅ / ❌ |
 
-9. If backend failed, show last 10 lines of `/tmp/nexus-backend.log`.
-10. If frontend failed, show last 10 lines of `/tmp/nexus-frontend.log`.
+10. If backend failed, show last 10 lines of `/tmp/nexus-backend.log`.
+11. If frontend failed, show last 10 lines of `/tmp/nexus-frontend.log`.
 
-Port reference: AGENTS.md → Network Config section.
+IMPORTANT: Always read ports from AGENTS.md. Never hardcode port numbers.

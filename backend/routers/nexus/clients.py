@@ -9,6 +9,7 @@ from services.nexus.clients import (
     get_all_clients,
     update_client,
     delete_client,
+    merge_clients,
 )
 from services.nexus.documents import get_documents_by_client
 from services.nexus.tags import get_entity_tags
@@ -64,3 +65,17 @@ def patch_client(client_id: int, body: ClientUpdate):
 def remove_client(client_id: int):
     if not delete_client(client_id):
         raise HTTPException(404, "Client not found")
+
+
+class MergeRequest(BaseModel):
+    target_id: int
+    source_ids: list[int]
+
+
+@router.post("/merge")
+def merge(body: MergeRequest):
+    """Merge source clients into target. Moves all related data, deletes sources."""
+    result = merge_clients(body.target_id, body.source_ids)
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result

@@ -332,7 +332,7 @@ Return ONLY a JSON object. Do NOT wrap in markdown code fences.
 Omit any field you cannot read clearly — never guess.
 
 Extract these fields:
-contact_name: person's full name (use original language, e.g. Chinese characters)
+contact_name: person's full name — if the card shows BOTH Chinese and English names, combine them as "中文名 English Name" (e.g. "張曉華 Eva Chang"). Always include both if visible.
 contact_title: job title / position
 contact_email: email address
 contact_phone: phone number(s) — if multiple, use the mobile one
@@ -351,7 +351,7 @@ industry: best-fit from "food" | "petrochemical" | "semiconductor" | "manufactur
 Do NOT include "role" — the user will classify this contact as client or partner later.
 
 Example output:
-{"contact_name":"王大明","contact_title":"業務經理","company_name":"台灣積體電路製造股份有限公司","contact_phone":"0912-345-678","contact_email":"dm.wang@tsmc.com","industry":"semiconductor"}
+{"contact_name":"王大明 David Wang","contact_title":"業務經理","company_name":"台灣積體電路製造股份有限公司","contact_phone":"0912-345-678","contact_email":"dm.wang@tsmc.com","industry":"semiconductor"}
 """
 
 
@@ -369,6 +369,25 @@ async def _auto_parse(raw_input: str) -> dict | None:
     except Exception as e:
         logger.error("AI parse failed: %s", e)
         return None
+
+
+# OCR correction map for commonly misrecognized characters/names
+_OCR_CORRECTIONS: dict[str, str] = {
+    "聖暘": "聖暉",
+    "先鋒資訊系統": "先啟資訊系統",
+}
+
+
+def _apply_ocr_corrections(card: dict) -> dict:
+    """Fix known OCR misrecognitions in parsed card fields."""
+    for field in ("company_name", "contact_name", "department", "notes"):
+        val = card.get(field)
+        if val:
+            for wrong, correct in _OCR_CORRECTIONS.items():
+                if wrong in val:
+                    card[field] = val.replace(wrong, correct)
+                    val = card[field]
+    return card
 
 
 async def _parse_business_card(image_bytes: bytes, caption: str = "") -> list[dict]:
@@ -392,9 +411,9 @@ async def _parse_business_card(image_bytes: bytes, caption: str = "") -> list[di
         )
         result = json.loads(_strip_json_fences(response))
         if isinstance(result, list):
-            return result
+            return [_apply_ocr_corrections(c) for c in result]
         if isinstance(result, dict):
-            return [result]
+            return [_apply_ocr_corrections(result)]
         return []
     except Exception as e:
         logger.error("Business card parse failed: %s", e)
@@ -610,12 +629,39 @@ def _format_initial_reply(intel_id: int, parsed: dict | None, has_missing: bool)
 # ---------------------------------------------------------------------------
 
 
-async def _save_attachment(file_id: str, file_name: str | None, intel_id: int) -> None:
-    """Download file from Telegram and save to uploads/ + DB."""
+def _sanitize_filename(s: str) -> str:
+    """Remove characters that are unsafe for filenames."""
+    import re
+    return re.sub(r'[\\/:*?"<>|\s]+', '_', s).strip('_')[:50]
+
+
+async def _save_attachment(
+    file_id: str,
+    file_name: str | None,
+    intel_id: int,
+    company_name: str | None = None,
+    contact_name: str | None = None,
+) -> str:
+    """Download file from Telegram and save to uploads/ + DB. Returns local path."""
     tg_path, content = await _tg_get_file(file_id)
-    name = file_name or Path(tg_path).name
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    local_path = UPLOADS_DIR / f"{intel_id}_{name}"
+    ext = Path(tg_path).suffix or ".jpg"
+
+    # Build descriptive filename: company_contact_intelID.ext
+    parts = []
+    if company_name:
+        parts.append(_sanitize_filename(company_name))
+    if contact_name:
+        parts.append(_sanitize_filename(contact_name))
+    parts.append(str(intel_id))
+    name = "_".join(parts) + ext
+
+    # Organize by company subfolder
+    if company_name:
+        save_dir = UPLOADS_DIR / _sanitize_filename(company_name)
+    else:
+        save_dir = UPLOADS_DIR
+    save_dir.mkdir(parents=True, exist_ok=True)
+    local_path = save_dir / name
     local_path.write_bytes(content)
 
     await asyncio.to_thread(
@@ -627,6 +673,7 @@ async def _save_attachment(file_id: str, file_name: str | None, intel_id: int) -
         file_size=len(content),
     )
     logger.info("Saved attachment %s for intel #%d", name, intel_id)
+    return str(local_path)
 
 
 # ---------------------------------------------------------------------------
@@ -677,13 +724,19 @@ async def _auto_create_deal(
         return None
 
 
-async def _handle_done(chat_id: int) -> None:
-    """Finalize the active conversation."""
+async def _handle_done(chat_id: int, silent: bool = False) -> None:
+    """Finalize the active conversation.
+
+    Args:
+        silent: If True, send a brief summary instead of full details.
+                Used during auto-done (e.g. sending next photo).
+    """
     from services.nexus.materialize import materialize_intel
 
     conv = _conversations.pop(chat_id, None)
     if not conv:
-        await _send_reply(chat_id, "目前沒有進行中的情報，傳訊息開始新的紀錄！")
+        if not silent:
+            await _send_reply(chat_id, "目前沒有進行中的情報，傳訊息開始新的紀錄！")
         return
 
     intel_id = conv["intel_id"]
@@ -795,7 +848,25 @@ async def _handle_done(chat_id: int) -> None:
         lines.append("")
         lines.append("傳新訊息可開始下一筆情報")
 
-    await _send_reply(chat_id, "\n".join(line for line in lines if line or line == ""))
+    if silent:
+        # Brief summary for auto-done
+        contact = parsed.get("contact_name", "")
+        company = parsed.get("company_name", "")
+        parts = [f"✅ #{intel_id}"]
+        if contact:
+            parts.append(contact)
+        if company:
+            parts.append(f"({company})")
+        client_info = mat_result.get("client")
+        if client_info:
+            action = "建立" if client_info["action"] == "created" else "匹配"
+            parts.append(f"→ {action}客戶")
+        contacts_created = mat_result.get("contacts", [])
+        if contacts_created:
+            parts.append(f"+ {len(contacts_created)} 聯絡人")
+        await _send_reply(chat_id, " ".join(parts))
+    else:
+        await _send_reply(chat_id, "\n".join(line for line in lines if line or line == ""))
 
 
 async def _handle_deal_response(chat_id: int, text: str) -> bool:
@@ -898,12 +969,12 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
 
     # Handle attachments + vision parse for photos
     image_bytes: bytes | None = None
+    photo_file_id: str | None = None
     if photos := message.get("photo"):
-        file_id = photos[-1]["file_id"]
-        await _save_attachment(file_id, None, intel_id)
-        # Download image for vision parsing
+        photo_file_id = photos[-1]["file_id"]
+        # Download image for vision parsing (save after parse for better naming)
         try:
-            _, image_bytes = await _tg_get_file(file_id)
+            _, image_bytes = await _tg_get_file(photo_file_id)
         except Exception as e:
             logger.error("Failed to download photo for vision: %s", e)
     elif doc := message.get("document"):
@@ -968,6 +1039,18 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
 
     elif text:
         parsed = await _auto_parse(text) or {}
+
+    # Apply OCR corrections to all parsed results
+    if parsed:
+        _apply_ocr_corrections(parsed)
+
+    # Save photo with descriptive name (after parse so we have company/contact info)
+    if photo_file_id:
+        await _save_attachment(
+            photo_file_id, None, intel_id,
+            company_name=parsed.get("company_name"),
+            contact_name=parsed.get("contact_name"),
+        )
 
     # Save to DB (as draft with partial parsed_json)
     if parsed:
@@ -1052,9 +1135,8 @@ async def _handle_followup(chat_id: int, text: str) -> None:
             await _send_reply(chat_id, reply)
             return
         else:
-            # Not a recognized role — remind user
-            await _send_reply(chat_id, "請回覆：客戶 / 夥伴 / 其他")
-            return
+            # Not a recognized role — treat as a field correction, keep role pending
+            pass  # Fall through to normal followup parse below
 
     # --- Handle pending industry confirmation ---
     if conv.get("pending_industry_confirm"):
@@ -1118,8 +1200,9 @@ async def _handle_followup(chat_id: int, text: str) -> None:
     conv["chat_history"].append({"role": "user", "text": text})
     conv["chat_history"].append({"role": "ai", "text": reply_text})
 
-    # Merge new fields
+    # Merge new fields and apply OCR corrections
     if new_fields:
+        _apply_ocr_corrections(new_fields)
         for k, v in new_fields.items():
             conv["parsed"][k] = v
 
@@ -1148,6 +1231,9 @@ async def _handle_followup(chat_id: int, text: str) -> None:
         lines.append(f"\n📋 目前：{_format_summary(conv['parsed'])}")
     if industry_prompt:
         lines.append("\n" + industry_prompt)
+    # Remind about pending role if still unset
+    if conv.get("pending_role_confirm"):
+        lines.append("\n請問這位是「客戶」還是「夥伴」？（客戶 / 夥伴 / 其他）")
     await _send_reply(chat_id, "\n".join(lines))
 
 
@@ -1246,16 +1332,26 @@ async def telegram_webhook(
         if chat_id in _conversations:
             if text:
                 await _handle_followup(chat_id, text)
-            elif message.get("photo") or message.get("document"):
-                # Attachment in follow-up — save to existing intel
+            elif message.get("photo"):
+                # Photo in active conversation — auto-done current, start new intel
+                # Default role to "client" if not set (most common for business cards)
+                conv = _conversations.get(chat_id)
+                if conv and "role" not in conv.get("parsed", {}):
+                    conv["parsed"]["role"] = "client"
+                    conv["pending_role_confirm"] = False
+                await _handle_done(chat_id, silent=True)
+                await _handle_new_intel(chat_id, text, message)
+            elif message.get("document"):
+                # Document in follow-up — save to existing intel
                 conv = _conversations[chat_id]
                 intel_id = conv["intel_id"]
-                if photos := message.get("photo"):
-                    await _save_attachment(photos[-1]["file_id"], None, intel_id)
-                elif doc := message.get("document"):
-                    await _save_attachment(
-                        doc["file_id"], doc.get("file_name"), intel_id
-                    )
+                doc = message["document"]
+                parsed = conv.get("parsed", {})
+                await _save_attachment(
+                    doc["file_id"], doc.get("file_name"), intel_id,
+                    company_name=parsed.get("company_name"),
+                    contact_name=parsed.get("contact_name"),
+                )
                 await _send_reply(chat_id, f"📎 檔案已加到情報 #{intel_id}")
             return {"ok": True}
 

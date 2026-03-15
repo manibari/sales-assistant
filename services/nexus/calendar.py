@@ -1,5 +1,9 @@
 """Nexus calendar service — meetings and reminders."""
 
+import json
+
+from psycopg2.extras import Json
+
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 # --- Meetings ---
@@ -25,7 +29,7 @@ def create_meeting(
                     title,
                     meeting_date,
                     duration_minutes,
-                    participants_json,
+                    Json(json.loads(participants_json)) if participants_json else None,
                     location,
                     notes,
                 ),

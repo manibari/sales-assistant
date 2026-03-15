@@ -28,14 +28,24 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _COMPANY_SUFFIXES = re.compile(
-    r"(股份有限公司|有限公司|股份公司|集團|Corporation|Corp\.?|Incorporated|Inc\.?|Limited|Ltd\.?|Co\.?,?\s*Ltd\.?|LLC|L\.L\.C\.)\s*$",
+    r"(股份有限公司|有限公司|股份公司|\(股\)公司|集團|Corporation|Corp\.?|Incorporated|Inc\.?|Limited|Ltd\.?|Co\.?,?\s*Ltd\.?|LLC|L\.L\.C\.)\s*",
     re.IGNORECASE,
 )
 
 
 def _normalize_company_name(name: str) -> str:
-    """Strip common corporate suffixes for matching."""
+    """Strip common corporate suffixes and English full names for matching."""
     name = name.strip()
+    # Remove everything after common separators (keep Chinese core)
+    for sep in [" / ", " - ", "（", "("]:
+        if sep in name:
+            parts = name.split(sep, 1)
+            # Keep the part with CJK characters
+            if re.search(r"[\u4e00-\u9fff]", parts[0]):
+                name = parts[0].strip()
+    # Remove English company name that follows Chinese name
+    name = re.sub(r"\s+[A-Z][A-Za-z\s&.,]+$", "", name).strip()
+    # Remove suffixes
     name = _COMPANY_SUFFIXES.sub("", name).strip()
     return name
 

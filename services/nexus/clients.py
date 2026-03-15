@@ -101,7 +101,12 @@ def update_client(client_id: int, **fields) -> dict | None:
 
 
 def find_client_by_name(name: str) -> list[dict]:
-    """Fuzzy match client by name or aliases. Returns candidate list sorted by match quality."""
+    """Fuzzy match client by name or aliases. Bidirectional substring matching.
+
+    Matches if:
+    - DB name contains search name (e.g. DB "先啟資訊系統股份有限公司" matches search "先啟資訊")
+    - Search name contains DB name (e.g. search "先啟資訊系統(股)公司 SABRE..." matches DB "先啟資訊")
+    """
     with get_connection() as conn:
         with conn.cursor() as cur:
             q = f"%{name}%"
@@ -109,14 +114,17 @@ def find_client_by_name(name: str) -> list[dict]:
                 """SELECT id, name, industry, status, aliases
                    FROM nx_client
                    WHERE name LIKE %s OR aliases LIKE %s
+                      OR %s LIKE '%%' || name || '%%'
+                      OR %s LIKE '%%' || aliases || '%%'
                    ORDER BY
                      CASE
                        WHEN LOWER(name) = LOWER(%s) THEN 0
                        WHEN LOWER(name) LIKE LOWER(%s) THEN 1
-                       ELSE 2
+                       WHEN %s LIKE '%%' || LOWER(name) || '%%' THEN 2
+                       ELSE 3
                      END,
                      updated_at DESC""",
-                (q, q, name, q),
+                (q, q, name, name, name, q, name.lower()),
             )
             return rows_to_dicts(cur)
 
@@ -126,3 +134,95 @@ def delete_client(client_id: int) -> bool:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_client WHERE id = %s", (client_id,))
             return cur.rowcount > 0
+
+
+def merge_clients(target_id: int, source_ids: list[int]) -> dict:
+    """Merge source clients into target. Moves all FK references, dedup NDA/MOU, deletes sources."""
+    if target_id in source_ids:
+        return {"error": "target_id cannot be in source_ids"}
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Verify target exists
+            cur.execute("SELECT id, name FROM nx_client WHERE id = %s", (target_id,))
+            target = cur.fetchone()
+            if not target:
+                return {"error": f"Target client {target_id} not found"}
+
+            placeholders = ",".join(["%s"] * len(source_ids))
+            src_tuple = tuple(source_ids)
+
+            # Move contacts (dedup by email)
+            cur.execute(
+                f"""UPDATE nx_contact SET org_id = %s
+                    WHERE org_type = 'client' AND org_id IN ({placeholders})
+                    AND (email IS NULL OR email NOT IN (
+                        SELECT email FROM nx_contact WHERE org_type = 'client' AND org_id = %s AND email IS NOT NULL
+                    ))""",
+                (target_id, *src_tuple, target_id),
+            )
+            contacts_moved = cur.rowcount
+            # Delete remaining duplicate contacts
+            cur.execute(
+                f"DELETE FROM nx_contact WHERE org_type = 'client' AND org_id IN ({placeholders})",
+                src_tuple,
+            )
+
+            # Move documents (keep only 1 NDA + 1 MOU for target)
+            cur.execute(
+                f"DELETE FROM nx_document WHERE client_id IN ({placeholders})",
+                src_tuple,
+            )
+
+            # Move deals
+            cur.execute(
+                f"UPDATE nx_deal SET client_id = %s WHERE client_id IN ({placeholders})",
+                (target_id, *src_tuple),
+            )
+            deals_moved = cur.rowcount
+
+            # Move intel entity links (avoid duplicates)
+            cur.execute(
+                f"""INSERT INTO nx_intel_entity (intel_id, entity_type, entity_id)
+                    SELECT intel_id, 'client', %s FROM nx_intel_entity
+                    WHERE entity_type = 'client' AND entity_id IN ({placeholders})
+                    AND intel_id NOT IN (
+                        SELECT intel_id FROM nx_intel_entity WHERE entity_type = 'client' AND entity_id = %s
+                    )
+                    ON CONFLICT DO NOTHING""",
+                (target_id, *src_tuple, target_id),
+            )
+            cur.execute(
+                f"DELETE FROM nx_intel_entity WHERE entity_type = 'client' AND entity_id IN ({placeholders})",
+                src_tuple,
+            )
+
+            # Move tags (avoid duplicates)
+            cur.execute(
+                f"""INSERT INTO nx_entity_tag (entity_type, entity_id, tag_id)
+                    SELECT 'client', %s, tag_id FROM nx_entity_tag
+                    WHERE entity_type = 'client' AND entity_id IN ({placeholders})
+                    ON CONFLICT DO NOTHING""",
+                (target_id, *src_tuple),
+            )
+            cur.execute(
+                f"DELETE FROM nx_entity_tag WHERE entity_type = 'client' AND entity_id IN ({placeholders})",
+                src_tuple,
+            )
+
+            # Delete source clients
+            cur.execute(
+                f"DELETE FROM nx_client WHERE id IN ({placeholders})",
+                src_tuple,
+            )
+            deleted = cur.rowcount
+
+        conn.commit()
+
+    return {
+        "target_id": target_id,
+        "target_name": target[1],
+        "merged": deleted,
+        "contacts_moved": contacts_moved,
+        "deals_moved": deals_moved,
+    }

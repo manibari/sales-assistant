@@ -305,6 +305,10 @@ export const nxApi = {
     update: (id: number, data: Partial<NxClient>) =>
       patchAPI<NxClient>(`/clients/${id}`, data),
     delete: (id: number) => deleteAPI(`/clients/${id}`),
+    merge: (targetId: number, sourceIds: number[]) =>
+      postAPI<{ target_id: number; target_name: string; merged: number; contacts_moved: number; deals_moved: number }>(
+        "/clients/merge", { target_id: targetId, source_ids: sourceIds }
+      ),
   },
   partners: {
     list: (trustLevel?: string) => fetchAPI<NxPartner[]>(`/partners/${trustLevel ? `?trust_level=${trustLevel}` : ""}`),

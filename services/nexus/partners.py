@@ -76,7 +76,7 @@ def update_trust_level(partner_id: int, new_level: str) -> dict | None:
 
 
 def find_partner_by_name(name: str) -> list[dict]:
-    """Fuzzy match partner by name or aliases. Returns candidate list."""
+    """Fuzzy match partner by name or aliases. Bidirectional substring matching."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             q = f"%{name}%"
@@ -84,10 +84,17 @@ def find_partner_by_name(name: str) -> list[dict]:
                 """SELECT id, name, trust_level, team_size, aliases
                    FROM nx_partner
                    WHERE name LIKE %s OR aliases LIKE %s
+                      OR %s LIKE '%%' || name || '%%'
+                      OR %s LIKE '%%' || aliases || '%%'
                    ORDER BY
-                     CASE WHEN LOWER(name) = LOWER(%s) THEN 0 ELSE 1 END,
+                     CASE
+                       WHEN LOWER(name) = LOWER(%s) THEN 0
+                       WHEN LOWER(name) LIKE LOWER(%s) THEN 1
+                       WHEN %s LIKE '%%' || LOWER(name) || '%%' THEN 2
+                       ELSE 3
+                     END,
                      updated_at DESC""",
-                (q, q, name),
+                (q, q, name, name, name, q, name.lower()),
             )
             return rows_to_dicts(cur)
 

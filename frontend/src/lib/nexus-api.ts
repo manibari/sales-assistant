@@ -245,6 +245,19 @@ export interface NxSubsidyDeadline {
   updated_at: string;
 }
 
+export interface NxKnowledge {
+  id: number;
+  file_id: number;
+  client_id: number | null;
+  chunk_index: number;
+  content: string;
+  summary: string | null;
+  tags: string[];
+  metadata: Record<string, unknown> | null;
+  file_name?: string;
+  created_at: string;
+}
+
 export interface MeddicProgress {
   completed: number;
   total: number;
@@ -461,6 +474,19 @@ export const nxApi = {
   files: {
     update: (fileId: number, data: { file_name?: string; file_type?: string }) =>
       patchAPI<NxFile>(`/documents/files/${fileId}`, data),
+    knowledge: (fileId: number) =>
+      fetchAPI<NxKnowledge[]>(`/documents/files/${fileId}/knowledge`),
+    reparse: (fileId: number) =>
+      postAPI<{ status: string; file_id: number }>(`/documents/files/${fileId}/reparse`, {}),
+  },
+  knowledge: {
+    byClient: (clientId: number) =>
+      fetchAPI<NxKnowledge[]>(`/documents/knowledge/by-client/${clientId}`),
+    search: (q: string, clientId?: number) => {
+      const params = new URLSearchParams({ q });
+      if (clientId) params.set("client_id", String(clientId));
+      return fetchAPI<NxKnowledge[]>(`/documents/knowledge/search?${params}`);
+    },
   },
   documents: {
     listAll: () => fetchAPI<(NxDocument & { client_name?: string })[]>("/documents/nda-mou"),

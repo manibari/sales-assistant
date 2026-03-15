@@ -22,6 +22,15 @@ from services.nexus.documents import (
     get_file,
     delete_file,
 )
+from services.nexus.knowledge import (
+    enqueue_parse,
+    get_knowledge_by_file,
+    get_knowledge_by_client,
+    search_knowledge,
+    delete_knowledge_by_file,
+    PARSEABLE_EXTENSIONS,
+    _get_file_extension,
+)
 
 UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
@@ -205,7 +214,7 @@ async def upload_file(
     contents = await file.read()
     dest.write_bytes(contents)
     # Create DB record
-    return create_file(
+    result = create_file(
         deal_id=deal_id,
         intel_id=intel_id,
         client_id=client_id,
@@ -214,6 +223,53 @@ async def upload_file(
         file_path=str(dest.name),
         file_size=len(contents),
     )
+    # Auto-enqueue parseable files
+    ext = _get_file_extension(file.filename or "")
+    if ext in PARSEABLE_EXTENSIONS:
+        try:
+            enqueue_parse(result["id"])
+        except Exception:
+            pass  # non-blocking — worker will pick it up or user can reparse
+    return result
+
+
+# --- Knowledge endpoints ---
+
+
+@router.post("/files/{file_id}/reparse", status_code=202)
+def reparse_file(file_id: int):
+    """Manually trigger a re-parse of a file."""
+    f = get_file(file_id)
+    if not f:
+        raise HTTPException(404, "File not found")
+    ext = _get_file_extension(f["file_name"])
+    if ext not in PARSEABLE_EXTENSIONS:
+        raise HTTPException(400, f"File type {ext} is not parseable")
+    enqueue_parse(file_id)
+    return {"status": "queued", "file_id": file_id}
+
+
+@router.get("/files/{file_id}/knowledge")
+def file_knowledge(file_id: int):
+    """Get knowledge chunks for a file."""
+    f = get_file(file_id)
+    if not f:
+        raise HTTPException(404, "File not found")
+    return get_knowledge_by_file(file_id)
+
+
+@router.get("/knowledge/by-client/{client_id}")
+def client_knowledge(client_id: int):
+    """Get aggregated knowledge chunks for a client."""
+    return get_knowledge_by_client(client_id)
+
+
+@router.get("/knowledge/search")
+def knowledge_search(q: str, client_id: int | None = None):
+    """Search knowledge chunks by text."""
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(400, "Query must be at least 2 characters")
+    return search_knowledge(q.strip(), client_id)
 
 
 @router.delete("/files/{file_id}", status_code=204)

@@ -11,6 +11,17 @@ PyYAML
 fastapi
 uvicorn[standard]
 
+# Document parsing
+pdfplumber
+python-pptx
+python-docx
+
+# Encryption
+cryptography
+
+# HTTP client
+httpx
+
 # Development and code quality
 pre-commit
 black

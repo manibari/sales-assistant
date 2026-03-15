@@ -511,3 +511,57 @@ CREATE TABLE IF NOT EXISTS nx_subsidy_deal (
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(subsidy_id, deal_id)
 );
+
+-- 20. Knowledge chunks (parsed file content for RAG)
+CREATE TABLE IF NOT EXISTS nx_knowledge (
+    id          SERIAL PRIMARY KEY,
+    file_id     INTEGER NOT NULL REFERENCES nx_file(id) ON DELETE CASCADE,
+    client_id   INTEGER REFERENCES nx_client(id),
+    chunk_index INTEGER NOT NULL,
+    content     TEXT NOT NULL,
+    summary     TEXT,
+    tags        TEXT[],
+    embedding   TEXT,          -- placeholder, future VECTOR(1536)
+    metadata    JSONB,         -- page_number, slide_number, section_title
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_knowledge_file ON nx_knowledge(file_id);
+CREATE INDEX IF NOT EXISTS idx_nx_knowledge_client ON nx_knowledge(client_id);
+CREATE INDEX IF NOT EXISTS idx_nx_knowledge_tags ON nx_knowledge USING GIN(tags);
+
+-- 21. Knowledge parse queue
+CREATE TABLE IF NOT EXISTS knowledge_parse_queue (
+    id            SERIAL PRIMARY KEY,
+    file_id       INTEGER NOT NULL REFERENCES nx_file(id) ON DELETE CASCADE,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    processed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_kpq_status ON knowledge_parse_queue(status);
+
+-- 22. Integration config (non-secret settings)
+CREATE TABLE IF NOT EXISTS nx_integration_config (
+    id              SERIAL PRIMARY KEY,
+    provider        TEXT NOT NULL UNIQUE,  -- 'microsoft_graph', 'imap_smtp', 'google_drive', 'telegram', 'ai'
+    enabled         BOOLEAN NOT NULL DEFAULT FALSE,
+    config_json     JSONB NOT NULL DEFAULT '{}',
+    status          TEXT NOT NULL DEFAULT 'disconnected',
+    last_sync_at    TIMESTAMPTZ,
+    error_message   TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 23. OAuth tokens (encrypted)
+CREATE TABLE IF NOT EXISTS nx_oauth_token (
+    id              SERIAL PRIMARY KEY,
+    provider        TEXT NOT NULL UNIQUE,
+    access_token    TEXT NOT NULL,      -- Fernet encrypted
+    refresh_token   TEXT,               -- Fernet encrypted
+    token_type      TEXT DEFAULT 'Bearer',
+    expires_at      TIMESTAMPTZ,
+    scopes          TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);

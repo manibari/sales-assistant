@@ -20,6 +20,7 @@ import {
   Brain,
   XCircle,
   Search,
+  Trash2,
 } from "lucide-react";
 import { KnowledgePanel } from "@/components/knowledge-panel";
 import {
@@ -305,6 +306,16 @@ function ProjectFileRow({ file, onRenamed }: { file: NxFile; onRenamed?: () => v
   const [name, setName] = useState(file.file_name);
   const [saving, setSaving] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const handleDelete = async () => {
+    try {
+      await nxApi.files.delete(file.id);
+      onRenamed?.();
+    } catch (err) {
+      console.error("Delete failed:", err);
+    }
+  };
 
   const isParseable = /\.(pdf|pptx|docx)$/i.test(file.file_name);
   const canExpand = isParseable && (file.parse_status === "done" || file.parse_status === "partial" || file.parse_status === "failed");
@@ -393,6 +404,30 @@ function ProjectFileRow({ file, onRenamed }: { file: NxFile; onRenamed?: () => v
               >
                 <ExternalLink size={14} />
               </a>
+            )}
+            {confirmDelete ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleDelete}
+                  className="text-[10px] px-2 py-0.5 rounded bg-red-500 text-white cursor-pointer hover:bg-red-600 transition-colors"
+                >
+                  確認刪除
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="text-[10px] px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer hover:bg-slate-300 transition-colors"
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="text-slate-300 dark:text-slate-600 hover:text-red-500 dark:hover:text-red-500 cursor-pointer transition-colors"
+                title="刪除檔案"
+              >
+                <Trash2 size={14} />
+              </button>
             )}
           </div>
         </div>

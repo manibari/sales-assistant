@@ -542,6 +542,7 @@ export const nxApi = {
   files: {
     update: (fileId: number, data: { file_name?: string; file_type?: string }) =>
       patchAPI<NxFile>(`/documents/files/${fileId}`, data),
+    delete: (fileId: number) => deleteAPI(`/documents/files/${fileId}`),
     knowledge: (fileId: number) =>
       fetchAPI<NxKnowledge[]>(`/documents/files/${fileId}/knowledge`),
     reparse: (fileId: number) =>

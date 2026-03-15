@@ -68,11 +68,7 @@ export function DropUploadModal({ files: initialFiles, clientId, onClose, onUplo
         formData.append("file_type", resolvedFileType);
         if (dealId) formData.append("deal_id", String(dealId));
 
-        const res = await fetch("/api/nx/documents/files/upload", {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) throw new Error(`Failed to upload ${file.name}`);
+        await nxApi.files.upload(formData);
         setProgress(i + 1);
       }
       onUploaded();

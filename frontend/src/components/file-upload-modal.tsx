@@ -77,11 +77,7 @@ export function FileUploadModal({ dealId, clientId, onClose, onUploaded }: FileU
       if (dealId) formData.append("deal_id", String(dealId));
       if (clientId) formData.append("client_id", String(clientId));
       formData.append("file_type", fileType);
-      const res = await fetch("/api/nx/documents/files/upload", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) throw new Error("Failed to upload");
+      await nxApi.files.upload(formData);
       onUploaded();
       onClose();
     } catch {

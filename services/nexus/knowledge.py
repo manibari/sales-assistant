@@ -10,7 +10,7 @@ from services.ai_provider import generate_ai_response, check_ai_available
 
 logger = logging.getLogger(__name__)
 
-UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "uploads"
+UPLOADS_DIR = Path(__file__).resolve().parent.parent.parent / "backend" / "uploads"
 
 # ---------------------------------------------------------------------------
 # Parse queue management

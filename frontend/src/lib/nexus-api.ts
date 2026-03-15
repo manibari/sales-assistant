@@ -1,5 +1,11 @@
 const API_BASE = "/api/nx";
 
+// Direct backend URL for file uploads (bypasses Next.js rewrite proxy size limit)
+const UPLOAD_BASE =
+  typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? "/api/nx"  // production: same-origin proxy
+    : "http://127.0.0.1:8002/api/nx";  // dev: direct to backend
+
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, options);
   if (!res.ok) {
@@ -547,6 +553,14 @@ export const nxApi = {
       fetchAPI<NxKnowledge[]>(`/documents/files/${fileId}/knowledge`),
     reparse: (fileId: number) =>
       postAPI<{ status: string; file_id: number }>(`/documents/files/${fileId}/reparse`, {}),
+    upload: async (formData: FormData) => {
+      const res = await fetch(`${UPLOAD_BASE}/documents/files/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return res.json() as Promise<NxFile>;
+    },
   },
   knowledge: {
     byClient: (clientId: number) =>

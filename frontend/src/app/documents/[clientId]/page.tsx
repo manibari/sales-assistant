@@ -174,7 +174,7 @@ export default function ClientDocumentsPage() {
                 <EmptyState message="尚無專案文件，拖拉檔案或點擊新增" />
               ) : (
                 projectFiles.map((file) => (
-                  <ProjectFileRow key={file.id} file={file} />
+                  <ProjectFileRow key={file.id} file={file} onRenamed={loadData} />
                 ))
               )}
             </div>
@@ -195,7 +195,7 @@ export default function ClientDocumentsPage() {
                     />
                   ))}
                   {contractFiles.map((file) => (
-                    <ProjectFileRow key={`file-${file.id}`} file={file} />
+                    <ProjectFileRow key={`file-${file.id}`} file={file} onRenamed={loadData} />
                   ))}
                 </>
               )}
@@ -245,8 +245,31 @@ export default function ClientDocumentsPage() {
   );
 }
 
-function ProjectFileRow({ file }: { file: NxFile }) {
+function ProjectFileRow({ file, onRenamed }: { file: NxFile; onRenamed?: () => void }) {
   const isLink = file.source_url || file.file_path.startsWith("link://");
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(file.file_name);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === file.file_name) {
+      setName(file.file_name);
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    try {
+      await nxApi.files.update(file.id, { file_name: trimmed });
+      setEditing(false);
+      onRenamed?.();
+    } catch {
+      setName(file.file_name);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
@@ -254,9 +277,28 @@ function ProjectFileRow({ file }: { file: NxFile }) {
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <FileText size={16} className="text-blue-500 flex-shrink-0" />
           <div className="min-w-0">
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">
-              {file.file_name}
-            </p>
+            {editing ? (
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={handleSave}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSave();
+                  if (e.key === "Escape") { setName(file.file_name); setEditing(false); }
+                }}
+                disabled={saving}
+                autoFocus
+                className="text-sm font-medium text-slate-900 dark:text-slate-50 bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded px-2 py-0.5 w-full focus:outline-none"
+              />
+            ) : (
+              <p
+                className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate cursor-pointer hover:text-blue-500 transition-colors"
+                onClick={() => setEditing(true)}
+                title="點擊改名"
+              >
+                {file.file_name}
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">
                 {FILE_TYPE_LABELS[file.file_type] || file.file_type}

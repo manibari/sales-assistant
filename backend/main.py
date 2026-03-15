@@ -1,6 +1,9 @@
 """FastAPI entry point — wraps existing services layer as REST API."""
 
+import logging
 import sys
+import threading
+import time
 from pathlib import Path
 
 # Add project root to sys.path so we can import services/database
@@ -67,14 +70,103 @@ app.include_router(nx_settings.router, prefix="/api/nx/settings", tags=["Setting
 app.include_router(nx_outlook.router, prefix="/api/nx/outlook", tags=["Outlook"])
 
 
+_logger = logging.getLogger(__name__)
+
+
+def _knowledge_worker_loop():
+    """Background thread: poll knowledge_parse_queue every 10s."""
+    from services.nexus.knowledge import (
+        get_next_parse_task,
+        update_parse_status,
+        update_file_parse_status,
+        delete_knowledge_by_file,
+        extract_text_from_file,
+        summarize_chunk,
+        create_knowledge_chunk,
+        PARSEABLE_EXTENSIONS,
+        _get_file_extension,
+    )
+    from services.nexus.documents import get_file
+
+    _logger.info("Knowledge worker thread started.")
+    while True:
+        try:
+            task = get_next_parse_task()
+            if not task:
+                time.sleep(10)
+                continue
+
+            queue_id = task["id"]
+            file_id = task["file_id"]
+            _logger.info("Knowledge worker: processing file #%d", file_id)
+
+            file_record = get_file(file_id)
+            if not file_record:
+                update_parse_status(queue_id, "failed", "File record not found")
+                continue
+
+            ext = _get_file_extension(file_record["file_name"])
+            if ext not in PARSEABLE_EXTENSIONS:
+                update_parse_status(queue_id, "skipped", f"Unsupported: {ext}")
+                update_file_parse_status(file_id, "skipped")
+                continue
+
+            update_file_parse_status(file_id, "parsing")
+            delete_knowledge_by_file(file_id)
+
+            try:
+                chunks = extract_text_from_file(
+                    file_record["file_path"], file_record["file_name"]
+                )
+            except FileNotFoundError as e:
+                update_parse_status(queue_id, "failed", str(e))
+                update_file_parse_status(file_id, "failed")
+                continue
+
+            if not chunks:
+                update_parse_status(queue_id, "done", "Empty file")
+                update_file_parse_status(file_id, "empty")
+                continue
+
+            ai_failures = 0
+            for i, chunk in enumerate(chunks):
+                ai_result = summarize_chunk(chunk["content"])
+                if ai_result["summary"] is None:
+                    ai_failures += 1
+                create_knowledge_chunk(
+                    file_id=file_id,
+                    client_id=file_record.get("client_id"),
+                    chunk_index=i,
+                    content=chunk["content"],
+                    summary=ai_result["summary"],
+                    tags=ai_result["tags"],
+                    metadata=chunk.get("metadata"),
+                )
+
+            final = "done" if ai_failures == 0 else "partial"
+            update_parse_status(queue_id, "done")
+            update_file_parse_status(file_id, final)
+            _logger.info(
+                "Knowledge worker: file #%d done (%d chunks, %d AI failures)",
+                file_id, len(chunks), ai_failures,
+            )
+
+        except Exception as e:
+            _logger.error("Knowledge worker error: %s", e)
+            time.sleep(10)
+
+
 @app.on_event("startup")
 def startup():
     try:
         init_db()
     except Exception as e:
-        import logging
+        _logger.warning("DB init skipped: %s", e)
 
-        logging.getLogger(__name__).warning("DB init skipped: %s", e)
+    # Start knowledge worker as daemon thread
+    t = threading.Thread(target=_knowledge_worker_loop, daemon=True)
+    t.start()
+    _logger.info("Knowledge worker thread launched.")
 
 
 @app.get("/api/health")

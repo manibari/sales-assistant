@@ -50,6 +50,12 @@ Solutions use YAML frontmatter with: name, category, target_industry, typical_du
 
 See `materials/README.md` for full documentation.
 
+## Customer Intel Reports
+
+`reports/customer-intel/` contains B2B customer intelligence reports (SSOT).
+Auto-synced to Nexus Intel API. Cross-referenced by `materials/clients/` and `sales-material` skill.
+See `reports/customer-intel/INDEX.md` for the report index.
+
 ## Frontend Development Rules
 
 - Always design UI/UX before coding (wireframe → component tree → implementation)

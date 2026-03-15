@@ -8,6 +8,13 @@ data/
 # Database
 database/*.db
 
+# Root node_modules (playwright etc)
+node_modules/
+package-lock.json
+
+# Telegram session data
+.telegram_chats.json
+
 # Frontend
 frontend/node_modules/
 frontend/.next/

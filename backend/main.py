@@ -6,9 +6,8 @@ from pathlib import Path
 # Add project root to sys.path so we can import services/database
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from database.connection import init_db
 from backend.routers import crm, projects, network
@@ -27,24 +26,7 @@ from backend.routers.nexus import (
     subsidies as nx_subsidies,
 )
 
-app = FastAPI(title="Project Nexus API", version="0.2.0", redirect_slashes=False)
-
-
-class TrailingSlashMiddleware(BaseHTTPMiddleware):
-    """Internally add trailing slash so routes match without 307 redirect."""
-
-    async def dispatch(self, request: Request, call_next):
-        path = request.scope["path"]
-        if (
-            path.startswith("/api/")
-            and not path.endswith("/")
-            and "." not in path.split("/")[-1]
-        ):
-            request.scope["path"] = path + "/"
-        return await call_next(request)
-
-
-app.add_middleware(TrailingSlashMiddleware)
+app = FastAPI(title="Project Nexus API", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,

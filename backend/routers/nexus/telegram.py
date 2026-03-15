@@ -158,13 +158,15 @@ Think like a sales manager debriefing a rep after a meeting — ask practical, a
 Current intel so far:
 {current_json}
 
+{chat_history_section}
+
 The user just said: "{user_msg}"
 
 Do TWO things in your response, separated by exactly "---" on its own line:
 
 PART 1 (above ---): A short, natural reply in Traditional Chinese (2-4 sentences).
-- Acknowledge what the user shared
-- Ask ONE practical follow-up question based on context. Prioritize questions like:
+- Acknowledge what the user shared BRIEFLY (1 sentence max). Do NOT parrot back what they said.
+- Ask ONE practical follow-up question about a DIFFERENT topic than what was just discussed. Prioritize questions like:
   • 對方的聯絡人是誰？有拿到名片嗎？（contact_name, contact_title, contact_email, contact_phone）
   • 有約下次會議嗎？大概什麼時候？（next_meeting）
   • 他們的痛點或需求具體是什麼？
@@ -173,6 +175,8 @@ PART 1 (above ---): A short, natural reply in Traditional Chinese (2-4 sentences
   • 時程急不急？他們希望什麼時候開始？（timeline）
   • NDA/MOU 狀態？
 - Pick the most natural next question based on what's already known and what's missing
+- If the user says "不知道", "尚未確定", "沒有", or similar vague answers, do NOT repeat or rephrase the same question. Accept the answer, mark the field as unknown, and move on to a DIFFERENT topic.
+- Never ask more than 3 questions total about the same topic area.
 - If the info seems pretty complete, say so and suggest /done
 
 PART 2 (below ---): A JSON object with ANY new or updated fields from the user's message.
@@ -397,15 +401,30 @@ async def _parse_business_card(image_bytes: bytes, caption: str = "") -> list[di
         return []
 
 
-async def _followup_parse(current_parsed: dict, user_msg: str) -> tuple[str, dict]:
+async def _followup_parse(
+    current_parsed: dict, user_msg: str, chat_history: list | None = None
+) -> tuple[str, dict]:
     """Follow-up parse — returns (reply_text, new_fields)."""
     available, info = check_ai_available()
     if not available:
         return "⚠️ AI 暫時不可用，請稍後再試", {}
 
+    chat_history_section = ""
+    if chat_history:
+        recent = chat_history[-6:]
+        lines = []
+        for msg in recent:
+            role = "User" if msg.get("role") == "user" else "AI"
+            lines.append(f"{role}: {msg.get('text', '')}")
+        chat_history_section = (
+            "Previous conversation (DO NOT repeat questions already asked):\n"
+            + "\n".join(lines)
+        )
+
     prompt = FOLLOWUP_PROMPT.format(
         current_json=json.dumps(current_parsed, ensure_ascii=False, indent=2),
         user_msg=user_msg,
+        chat_history_section=chat_history_section or "(First message.)",
     )
     try:
         response = await asyncio.to_thread(
@@ -1083,13 +1102,21 @@ async def _handle_followup(chat_id: int, text: str) -> None:
             return
 
     conv["raw_history"].append(text)
+    if "chat_history" not in conv:
+        conv["chat_history"] = []
 
     # Append to raw_input in DB
     full_raw = "\n---\n".join(conv["raw_history"])
     await asyncio.to_thread(update_intel, intel_id, raw_input=full_raw)
 
     # AI follow-up parse
-    reply_text, new_fields = await _followup_parse(conv["parsed"], text)
+    reply_text, new_fields = await _followup_parse(
+        conv["parsed"], text, chat_history=conv["chat_history"]
+    )
+
+    # Track conversation history so AI knows what was already asked
+    conv["chat_history"].append({"role": "user", "text": text})
+    conv["chat_history"].append({"role": "ai", "text": reply_text})
 
     # Merge new fields
     if new_fields:

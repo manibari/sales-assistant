@@ -283,6 +283,7 @@ def initial_parse(intel_id: int):
     greeting_prompt = FOLLOWUP_PROMPT.format(
         current_json=json.dumps(parsed, ensure_ascii=False, indent=2),
         user_msg=f"（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）{extra_context}",
+        chat_history_section="(This is the first message, no prior conversation.)",
     )
     greeting_raw = generate_ai_response(
         "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
@@ -325,9 +326,32 @@ def chat_followup(intel_id: int, body: ChatMessage):
     # Enrich current parsed with DB data before sending to AI
     enriched_before, _ = _enrich_from_db(current)
 
+    # Build chat history section for context
+    chat_history_section = ""
+    if intel.get("chat_history"):
+        try:
+            history = (
+                json.loads(intel["chat_history"])
+                if isinstance(intel["chat_history"], str)
+                else intel["chat_history"]
+            )
+            # Include last 6 messages max to avoid token bloat
+            recent = history[-6:]
+            lines = []
+            for msg in recent:
+                role = "User" if msg["role"] == "user" else "AI"
+                lines.append(f"{role}: {msg['text']}")
+            chat_history_section = (
+                "Previous conversation (DO NOT repeat questions already asked):\n"
+                + "\n".join(lines)
+            )
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     prompt = FOLLOWUP_PROMPT.format(
         current_json=json.dumps(enriched_before, ensure_ascii=False, indent=2),
         user_msg=body.message,
+        chat_history_section=chat_history_section,
     )
     ai_raw = generate_ai_response(
         "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
@@ -357,7 +381,8 @@ def chat_followup(intel_id: int, body: ChatMessage):
             merged[k] = v
 
     # Enrich again after merge (new company_name may have been added)
-    merged, db_context = _enrich_from_db(merged)
+    _, db_context_before = _enrich_from_db(enriched_before)
+    merged, db_context_after = _enrich_from_db(merged)
 
     # Save to intel
     # Append to chat history
@@ -372,9 +397,13 @@ def chat_followup(intel_id: int, body: ChatMessage):
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # Prepend DB enrichment info if new entities were found
-    if db_context:
-        system_note = db_context.replace("[系統] ", "✅ ")
+    # Only show DB enrichment if NEW entities were found (not already shown before)
+    new_db_lines = set((db_context_after or "").split("\n")) - set(
+        (db_context_before or "").split("\n")
+    )
+    new_db_context = "\n".join(line for line in new_db_lines if line.strip())
+    if new_db_context:
+        system_note = new_db_context.replace("[系統] ", "✅ ")
         ai_reply = f"{system_note}\n\n{ai_reply}"
 
     existing_history.append({"role": "user", "text": body.message})
@@ -387,6 +416,17 @@ def chat_followup(intel_id: int, body: ChatMessage):
     )
 
     return {"ai_reply": ai_reply, "new_fields": new_fields, "parsed": merged}
+
+
+class BulkDeleteRequest(BaseModel):
+    ids: list[int]
+
+
+@router.post("/bulk-delete", status_code=204)
+def bulk_delete(body: BulkDeleteRequest):
+    for intel_id in body.ids:
+        delete_intel(intel_id)
+    return Response(status_code=204)
 
 
 @router.delete("/{intel_id}", status_code=204)

@@ -5,6 +5,7 @@ async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
 }
 
@@ -349,6 +350,8 @@ export const nxApi = {
     byEntity: (entityType: string, entityId: number) =>
       fetchAPI<NxIntel[]>(`/intel/by-entity/${entityType}/${entityId}`),
     delete: (id: number) => deleteAPI(`/intel/${id}`),
+    bulkDelete: (ids: number[]) =>
+      postAPI<void>("/intel/bulk-delete", { ids }),
     parse: (id: number) =>
       postAPI<{ parsed: Record<string, unknown>; ai_reply: string }>(`/intel/${id}/parse`, {}),
     chat: (id: number, message: string, currentParsed: Record<string, unknown>) =>

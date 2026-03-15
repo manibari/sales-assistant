@@ -1,26 +1,34 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, Copy, Check, Save } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Loader2, Copy, Check, Merge } from "lucide-react";
 import { nxApi } from "@/lib/nexus-api";
 
 interface IntelSummaryModalProps {
   intelIds: number[];
   onClose: () => void;
-  onSaveAsIntel?: (summary: string) => void;
+  onMerged?: () => void;
 }
 
-export function IntelSummaryModal({ intelIds, onClose, onSaveAsIntel }: IntelSummaryModalProps) {
+export function IntelSummaryModal({ intelIds, onClose, onMerged }: IntelSummaryModalProps) {
+  const router = useRouter();
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [title, setTitle] = useState("");
 
   useEffect(() => {
     nxApi.intel
       .summarize(intelIds)
-      .then((res) => setSummary(res.summary))
+      .then((res) => {
+        setSummary(res.summary);
+        // Extract first line as suggested title
+        const firstLine = res.summary.split("\n")[0].replace(/^[#\-*\s]+/, "").slice(0, 60);
+        setTitle(firstLine);
+      })
       .catch((err) => setError(err.message || "AI 彙整失敗"))
       .finally(() => setLoading(false));
   }, [intelIds]);
@@ -31,16 +39,26 @@ export function IntelSummaryModal({ intelIds, onClose, onSaveAsIntel }: IntelSum
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleSave = async () => {
-    if (!onSaveAsIntel || saving) return;
-    setSaving(true);
+  const handleMerge = async () => {
+    if (merging) return;
+    setMerging(true);
     try {
-      await onSaveAsIntel(summary);
+      // 1. Create new merged intel
+      const newIntel = await nxApi.intel.create({
+        raw_input: summary,
+        input_type: "text",
+        title: title || "AI 彙整",
+      });
+      // 2. Delete original intels
+      await nxApi.intel.bulkDelete(intelIds);
+      // 3. Notify parent
+      onMerged?.();
       onClose();
+      // 4. Navigate to new intel detail page
+      router.push(`/intel/${newIntel.id}`);
     } catch {
-      setError("儲存失敗");
-    } finally {
-      setSaving(false);
+      setError("合併失敗");
+      setMerging(false);
     }
   };
 
@@ -66,7 +84,7 @@ export function IntelSummaryModal({ intelIds, onClose, onSaveAsIntel }: IntelSum
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-auto px-4 py-4">
+        <div className="flex-1 overflow-auto px-4 py-4 space-y-4">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3">
               <Loader2 size={24} className="animate-spin text-cyan-500" />
@@ -77,15 +95,43 @@ export function IntelSummaryModal({ intelIds, onClose, onSaveAsIntel }: IntelSum
               <p className="text-sm text-red-400">{error}</p>
             </div>
           ) : (
-            <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-              {summary}
-            </div>
+            <>
+              {/* Title input */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">
+                  情報標題
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="為合併後的情報命名"
+                  className="mt-1 w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                />
+              </div>
+
+              {/* Summary preview */}
+              <div>
+                <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">
+                  彙整內容預覽
+                </label>
+                <div className="mt-1 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed max-h-60 overflow-auto">
+                  {summary}
+                </div>
+              </div>
+
+              {/* Info */}
+              <p className="text-[11px] text-slate-400">
+                確認合併後，原始 {intelIds.length} 筆情報將被刪除，並建立一筆新的彙整情報。
+                你可以在詳情頁連結商機、編輯標題等。
+              </p>
+            </>
           )}
         </div>
 
         {/* Footer */}
         {!loading && !error && (
-          <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700">
             <button
               onClick={handleCopy}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
@@ -93,16 +139,14 @@ export function IntelSummaryModal({ intelIds, onClose, onSaveAsIntel }: IntelSum
               {copied ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
               {copied ? "已複製" : "複製"}
             </button>
-            {onSaveAsIntel && (
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50 transition-colors"
-              >
-                <Save size={13} />
-                {saving ? "儲存中..." : "儲存為新情報"}
-              </button>
-            )}
+            <button
+              onClick={handleMerge}
+              disabled={merging || !title.trim()}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              <Merge size={13} />
+              {merging ? "合併中..." : "確認合併"}
+            </button>
           </div>
         )}
       </div>

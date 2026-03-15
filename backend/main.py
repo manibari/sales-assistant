@@ -156,12 +156,45 @@ def _knowledge_worker_loop():
             time.sleep(10)
 
 
+def _backfill_parse_queue():
+    """Enqueue parseable files that were uploaded before auto-enqueue existed."""
+    from database.connection import get_connection
+    from services.nexus.knowledge import enqueue_parse
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT f.id FROM nx_file f
+                    WHERE f.parse_status = 'pending'
+                      AND (f.file_name ILIKE '%.pdf'
+                        OR f.file_name ILIKE '%.pptx'
+                        OR f.file_name ILIKE '%.docx')
+                      AND f.file_path NOT LIKE 'link://%%'
+                      AND NOT EXISTS (
+                          SELECT 1 FROM knowledge_parse_queue q
+                          WHERE q.file_id = f.id
+                      )
+                """)
+                rows = cur.fetchall()
+        for (file_id,) in rows:
+            enqueue_parse(file_id)
+            _logger.info("Backfilled parse queue: file #%d", file_id)
+        if rows:
+            _logger.info("Backfill complete: %d files enqueued.", len(rows))
+    except Exception as e:
+        _logger.warning("Backfill parse queue failed: %s", e)
+
+
 @app.on_event("startup")
 def startup():
     try:
         init_db()
     except Exception as e:
         _logger.warning("DB init skipped: %s", e)
+
+    # Backfill any parseable files missing from queue
+    _backfill_parse_queue()
 
     # Start knowledge worker as daemon thread
     t = threading.Thread(target=_knowledge_worker_loop, daemon=True)

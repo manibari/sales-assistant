@@ -19,6 +19,7 @@ package-lock.json
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+*.tsbuildinfo
 
 # Test screenshots
 tests/screenshots/

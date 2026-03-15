@@ -618,5 +618,41 @@ export const nxApi = {
       putAPI<NxIntegrationConfig>("/settings/ai", data),
     testAI: (data: { provider: string }) =>
       postAPI<AITestResult>("/settings/ai/test", data),
+    // IMAP/SMTP
+    getImapSmtp: () =>
+      fetchAPI<{
+        configured: boolean;
+        imap_host: string;
+        imap_port: number;
+        smtp_host: string;
+        smtp_port: number;
+        username: string;
+        has_password: boolean;
+        imap_ssl: boolean;
+        smtp_tls: boolean;
+        status: string;
+      }>("/settings/imap-smtp"),
+    saveImapSmtp: (data: {
+      imap_host: string;
+      imap_port: number;
+      smtp_host: string;
+      smtp_port: number;
+      username: string;
+      password: string;
+      imap_ssl: boolean;
+      smtp_tls: boolean;
+    }) => putAPI<NxIntegrationConfig>("/settings/imap-smtp", data),
+    testImapSmtp: (data: {
+      protocol: string;
+      host: string;
+      port: number;
+      username: string;
+      password: string;
+      use_ssl: boolean;
+    }) => postAPI<{ success: boolean; protocol: string; error?: string }>("/settings/imap-smtp/test", data),
+    fetchImapEmails: (days?: number) =>
+      postAPI<{ fetched: number; new: number }>(`/settings/imap-smtp/fetch${days ? `?days=${days}` : ""}`, {}),
+    sendSmtpEmail: (data: { to: string; subject: string; body: string }) =>
+      postAPI<{ status: string }>("/settings/imap-smtp/send", data),
   },
 };

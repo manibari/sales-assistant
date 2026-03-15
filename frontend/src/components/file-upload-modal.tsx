@@ -5,12 +5,13 @@ import { X, Link2, Upload, Loader2, FileCheck } from "lucide-react";
 import { nxApi } from "@/lib/nexus-api";
 
 interface FileUploadModalProps {
-  dealId: number;
+  dealId?: number;
+  clientId?: number;
   onClose: () => void;
   onUploaded: () => void;
 }
 
-export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModalProps) {
+export function FileUploadModal({ dealId, clientId, onClose, onUploaded }: FileUploadModalProps) {
   const [tab, setTab] = useState<"link" | "file">("link");
   const [url, setUrl] = useState("");
   const [fileName, setFileName] = useState("");
@@ -21,6 +22,7 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
 
   const FILE_TYPES = [
     { label: "簡報/方案", value: "proposal" },
+    { label: "簡報", value: "presentation" },
     { label: "合約 (NDA/MOU)", value: "contract" },
     { label: "其他附件", value: "attachment" },
   ];
@@ -32,12 +34,13 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
     try {
       const resolvedName = fileName.trim()
         || (url.includes("drive.google.com") ? "Google Drive 文件" : url.split("/").pop() || "連結文件");
-      await nxApi.deals.update(dealId, {}); // touch deal
+      if (dealId) await nxApi.deals.update(dealId, {}); // touch deal
       const res = await fetch("/api/nx/documents/files", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          deal_id: dealId,
+          deal_id: dealId || null,
+          client_id: clientId || null,
           file_type: fileType,
           file_name: resolvedName,
           file_path: `link://${url}`,
@@ -71,7 +74,8 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
         : selectedFile;
       const formData = new FormData();
       formData.append("file", renamedFile);
-      formData.append("deal_id", String(dealId));
+      if (dealId) formData.append("deal_id", String(dealId));
+      if (clientId) formData.append("client_id", String(clientId));
       formData.append("file_type", fileType);
       const res = await fetch("/api/nx/documents/files/upload", {
         method: "POST",
@@ -107,7 +111,7 @@ export function FileUploadModal({ dealId, onClose, onUploaded }: FileUploadModal
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
             文件類型
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {FILE_TYPES.map((ft) => (
               <button
                 key={ft.value}

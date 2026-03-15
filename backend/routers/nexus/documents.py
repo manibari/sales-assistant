@@ -15,6 +15,8 @@ from services.nexus.documents import (
     create_file,
     get_files_by_deal,
     get_files_by_intel,
+    get_files_by_client,
+    get_clients_with_doc_summary,
     update_file,
     update_file_parse,
     get_file,
@@ -38,6 +40,7 @@ class DocumentUpdate(BaseModel):
 class FileCreate(BaseModel):
     deal_id: int | None = None
     intel_id: int | None = None
+    client_id: int | None = None
     file_type: str
     file_name: str
     file_path: str
@@ -53,6 +56,48 @@ class FileUpdate(BaseModel):
 class FileParse(BaseModel):
     parsed_json: str
     parse_status: str = "parsed"
+
+
+# --- Client-centric document views ---
+
+
+@router.get("/clients-summary")
+def clients_doc_summary():
+    return get_clients_with_doc_summary()
+
+
+@router.get("/by-client/{client_id}")
+def files_by_client(client_id: int):
+    files = get_files_by_client(client_id)
+    docs = get_documents_by_client(client_id)
+    project_files = [f for f in files if f.get("file_type") != "contract"]
+    contract_files = [f for f in files if f.get("file_type") == "contract"]
+    return {
+        "project_files": project_files,
+        "contract_files": contract_files,
+        "contract_docs": docs,
+    }
+
+
+@router.post("/nda-mou/{doc_id}/upload", status_code=201)
+async def upload_contract_file(
+    doc_id: int,
+    file: UploadFile = File(...),
+):
+    """Upload an actual file for an NDA/MOU document record."""
+    safe_name = os.path.basename(file.filename or "contract")
+    dest = UPLOADS_DIR / safe_name
+    counter = 1
+    while dest.exists():
+        stem, ext = os.path.splitext(safe_name)
+        dest = UPLOADS_DIR / f"{stem}_{counter}{ext}"
+        counter += 1
+    contents = await file.read()
+    dest.write_bytes(contents)
+    result = update_document(doc_id, file_path=str(dest.name))
+    if not result:
+        raise HTTPException(404, "Document not found")
+    return result
 
 
 # --- NDA/MOU Documents ---
@@ -145,6 +190,7 @@ async def upload_file(
     file: UploadFile = File(...),
     deal_id: int | None = Form(None),
     intel_id: int | None = Form(None),
+    client_id: int | None = Form(None),
     file_type: str = Form("attachment"),
 ):
     # Save to uploads/
@@ -162,6 +208,7 @@ async def upload_file(
     return create_file(
         deal_id=deal_id,
         intel_id=intel_id,
+        client_id=client_id,
         file_type=file_type,
         file_name=file.filename or "upload",
         file_path=str(dest.name),

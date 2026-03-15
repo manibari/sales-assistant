@@ -176,6 +176,7 @@ export interface NxFile {
   id: number;
   deal_id: number | null;
   intel_id: number | null;
+  client_id: number | null;
   file_type: string;
   file_name: string;
   file_path: string;
@@ -183,6 +184,25 @@ export interface NxFile {
   source_url: string | null;
   parsed_json: string | null;
   parse_status: string;
+  deal_name?: string;
+  created_at?: string;
+}
+
+export interface ClientDocSummary {
+  id: number;
+  name: string;
+  industry: string | null;
+  file_count: number;
+  contract_count: number;
+  nda_status: string | null;
+  mou_status: string | null;
+  earliest_expiry: string | null;
+}
+
+export interface ClientDocDetail {
+  project_files: NxFile[];
+  contract_files: NxFile[];
+  contract_docs: NxDocument[];
 }
 
 export interface NxSubsidy {
@@ -449,6 +469,18 @@ export const nxApi = {
       fetchAPI<(NxDocument & { client_name?: string })[]>(`/documents/nda-mou/expiring?within_days=${withinDays || 30}`),
     update: (docId: number, data: Partial<NxDocument>) =>
       patchAPI<NxDocument>(`/documents/nda-mou/${docId}`, data),
+    clientsSummary: () => fetchAPI<ClientDocSummary[]>("/documents/clients-summary"),
+    byClient: (clientId: number) => fetchAPI<ClientDocDetail>(`/documents/by-client/${clientId}`),
+    uploadContractFile: async (docId: number, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/documents/nda-mou/${docId}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return res.json() as Promise<NxDocument>;
+    },
   },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
   searchIntelFields: (key: string, value: string) =>

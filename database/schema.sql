@@ -429,6 +429,7 @@ CREATE TABLE IF NOT EXISTS nx_file (
     id              SERIAL PRIMARY KEY,
     deal_id         INTEGER REFERENCES nx_deal(id),
     intel_id        INTEGER REFERENCES nx_intel(id),
+    client_id       INTEGER REFERENCES nx_client(id),
     file_type       TEXT NOT NULL,
     file_name       TEXT NOT NULL,
     file_path       TEXT NOT NULL,
@@ -440,6 +441,7 @@ CREATE TABLE IF NOT EXISTS nx_file (
 );
 CREATE INDEX IF NOT EXISTS idx_nx_file_deal ON nx_file(deal_id);
 CREATE INDEX IF NOT EXISTS idx_nx_file_intel ON nx_file(intel_id);
+CREATE INDEX IF NOT EXISTS idx_nx_file_client ON nx_file(client_id);
 
 -- 15. Intel <-> Entity M2M (auto-materialized links)
 CREATE TABLE IF NOT EXISTS nx_intel_entity (

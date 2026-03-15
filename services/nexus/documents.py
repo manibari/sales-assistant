@@ -80,16 +80,18 @@ def create_file(
     file_size: int | None = None,
     source_url: str | None = None,
     intel_id: int | None = None,
+    client_id: int | None = None,
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_file (deal_id, intel_id, file_type, file_name, file_path, file_size, source_url)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_file (deal_id, intel_id, client_id, file_type, file_name, file_path, file_size, source_url)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (
                     deal_id,
                     intel_id,
+                    client_id,
                     file_type,
                     file_name,
                     file_path,
@@ -163,3 +165,67 @@ def delete_file(file_id: int) -> bool:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM nx_file WHERE id = %s", (file_id,))
             return cur.rowcount > 0
+
+
+# --- Client-centric document queries ---
+
+
+def get_files_by_client(client_id: int) -> list[dict]:
+    """Get all files for a client: direct client_id + via deal.client_id."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT f.*, d.name AS deal_name
+                   FROM nx_file f
+                   LEFT JOIN nx_deal d ON f.deal_id = d.id
+                   WHERE f.client_id = %s
+                      OR (f.deal_id IS NOT NULL AND d.client_id = %s)
+                   ORDER BY f.created_at DESC""",
+                (client_id, client_id),
+            )
+            return rows_to_dicts(cur)
+
+
+def get_clients_with_doc_summary() -> list[dict]:
+    """Return all clients that have files or documents, with summary stats."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    c.id, c.name, c.industry,
+                    -- project file count (direct + via deal)
+                    (SELECT COUNT(*) FROM nx_file f
+                     LEFT JOIN nx_deal d2 ON f.deal_id = d2.id
+                     WHERE f.client_id = c.id OR d2.client_id = c.id
+                    ) AS file_count,
+                    -- contract doc count
+                    (SELECT COUNT(*) FROM nx_document doc WHERE doc.client_id = c.id
+                    ) AS contract_count,
+                    -- NDA status
+                    (SELECT doc.status FROM nx_document doc
+                     WHERE doc.client_id = c.id AND doc.doc_type = 'nda'
+                     ORDER BY doc.sign_date DESC NULLS LAST LIMIT 1
+                    ) AS nda_status,
+                    -- MOU status
+                    (SELECT doc.status FROM nx_document doc
+                     WHERE doc.client_id = c.id AND doc.doc_type = 'mou'
+                     ORDER BY doc.sign_date DESC NULLS LAST LIMIT 1
+                    ) AS mou_status,
+                    -- earliest expiring contract
+                    (SELECT MIN(doc.expiry_date) FROM nx_document doc
+                     WHERE doc.client_id = c.id
+                       AND doc.status = 'signed'
+                       AND doc.expiry_date IS NOT NULL
+                    ) AS earliest_expiry
+                FROM nx_client c
+                WHERE c.status = 'active'
+                  AND (
+                    EXISTS (SELECT 1 FROM nx_file f
+                            LEFT JOIN nx_deal d2 ON f.deal_id = d2.id
+                            WHERE f.client_id = c.id OR d2.client_id = c.id)
+                    OR EXISTS (SELECT 1 FROM nx_document doc WHERE doc.client_id = c.id)
+                    OR EXISTS (SELECT 1 FROM nx_deal d3 WHERE d3.client_id = c.id)
+                  )
+                ORDER BY c.name
+            """)
+            return rows_to_dicts(cur)

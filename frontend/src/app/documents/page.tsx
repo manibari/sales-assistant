@@ -4,23 +4,18 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { TopBar } from "@/components/top-bar";
 import Link from "next/link";
 import {
-  FileCheck,
+  Building2,
+  FileText,
   AlertTriangle,
   Clock,
   Loader2,
-  Upload,
+  Search,
   CheckCircle,
-  List,
-  Building2,
-  ChevronDown,
   ChevronRight,
+  ShieldCheck,
+  FolderOpen,
 } from "lucide-react";
-import { nxApi, type NxDocument } from "@/lib/nexus-api";
-import { DocUploadModal } from "@/components/doc-upload-modal";
-
-type DocWithClient = NxDocument & { client_name?: string };
-
-type ViewMode = "flat" | "grouped";
+import { nxApi, type ClientDocSummary } from "@/lib/nexus-api";
 
 function daysUntilExpiry(expiryDate: string | null): number | null {
   if (!expiryDate) return null;
@@ -28,95 +23,14 @@ function daysUntilExpiry(expiryDate: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function ExpiryBadge({ days }: { days: number | null }) {
-  if (days === null) return <span className="text-xs text-slate-400">--</span>;
-  if (days < 0)
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded-full">
-        <AlertTriangle size={12} /> 已過期
-      </span>
-    );
-  if (days <= 30)
-    return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full">
-        <Clock size={12} /> {days} 天後到期
-      </span>
-    );
-  return (
-    <span className="text-xs text-green-600 dark:text-green-400">
-      {days} 天後到期
-    </span>
-  );
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  draft: "草稿",
-  sent: "已送出",
-  signed: "已簽署",
-  expired: "已過期",
-  terminated: "已終止",
-};
-
-interface ClientGroup {
-  clientId: number;
-  clientName: string;
-  docs: DocWithClient[];
-  hasNda: boolean;
-  hasMou: boolean;
-  ndaSigned: boolean;
-  mouSigned: boolean;
-  hasExpiring: boolean;
-  hasExpired: boolean;
-}
-
-function buildClientGroups(docs: DocWithClient[]): ClientGroup[] {
-  const map = new Map<number, DocWithClient[]>();
-  for (const doc of docs) {
-    const list = map.get(doc.client_id) || [];
-    list.push(doc);
-    map.set(doc.client_id, list);
-  }
-  const groups: ClientGroup[] = [];
-  for (const [clientId, clientDocs] of map) {
-    const ndaDocs = clientDocs.filter((d) => d.doc_type === "nda");
-    const mouDocs = clientDocs.filter((d) => d.doc_type === "mou");
-    const hasExpiring = clientDocs.some((d) => {
-      const days = daysUntilExpiry(d.expiry_date);
-      return days !== null && days >= 0 && days <= 30;
-    });
-    const hasExpired = clientDocs.some((d) => {
-      const days = daysUntilExpiry(d.expiry_date);
-      return days !== null && days < 0;
-    });
-    groups.push({
-      clientId,
-      clientName: clientDocs[0].client_name || `客戶 #${clientId}`,
-      docs: clientDocs,
-      hasNda: ndaDocs.length > 0,
-      hasMou: mouDocs.length > 0,
-      ndaSigned: ndaDocs.some((d) => d.status === "signed"),
-      mouSigned: mouDocs.some((d) => d.status === "signed"),
-      hasExpiring,
-      hasExpired,
-    });
-  }
-  // Sort: problems first (expired > expiring > normal), then alphabetical
-  groups.sort((a, b) => {
-    if (a.hasExpired !== b.hasExpired) return a.hasExpired ? -1 : 1;
-    if (a.hasExpiring !== b.hasExpiring) return a.hasExpiring ? -1 : 1;
-    return a.clientName.localeCompare(b.clientName);
-  });
-  return groups;
-}
-
-function DocStatusChip({ label, signed, exists }: { label: string; signed: boolean; exists: boolean }) {
-  if (!exists)
+function DocStatusChip({ label, status }: { label: string; status: string | null }) {
+  if (!status)
     return (
       <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400">
-        {label} ✗
+        {label} --
       </span>
     );
-  if (signed)
+  if (status === "signed")
     return (
       <span className="text-[11px] px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">
         {label} ✓
@@ -130,46 +44,46 @@ function DocStatusChip({ label, signed, exists }: { label: string; signed: boole
 }
 
 export default function DocumentsPage() {
-  const [docs, setDocs] = useState<DocWithClient[]>([]);
+  const [clients, setClients] = useState<ClientDocSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [uploadDocId, setUploadDocId] = useState<number | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("grouped");
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState("");
 
-  const loadDocs = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
-      const all = await nxApi.documents.listAll();
-      setDocs(all);
+      const data = await nxApi.documents.clientsSummary();
+      setClients(data);
     } catch (err) {
-      console.error("Failed to load documents:", err);
+      console.error("Failed to load document summary:", err);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadDocs();
-  }, [loadDocs]);
+    loadData();
+  }, [loadData]);
 
-  const groups = useMemo(() => buildClientGroups(docs), [docs]);
+  const filtered = useMemo(() => {
+    if (!search.trim()) return clients;
+    const q = search.toLowerCase();
+    return clients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.industry && c.industry.toLowerCase().includes(q)),
+    );
+  }, [clients, search]);
 
-  const toggleCollapse = (clientId: number) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
-      return next;
-    });
-  };
-
-  const uploadDoc = uploadDocId !== null ? docs.find((d) => d.id === uploadDocId) : null;
-
-  const signedCount = docs.filter((d) => d.status === "signed").length;
-  const warningCount = docs.filter((d) => {
-    const days = daysUntilExpiry(d.expiry_date);
-    return days !== null && days <= 30;
+  const totalClients = clients.length;
+  const signedContracts = clients.filter(
+    (c) => c.nda_status === "signed" || c.mou_status === "signed",
+  ).length;
+  const expiringCount = clients.filter((c) => {
+    const days = daysUntilExpiry(c.earliest_expiry);
+    return days !== null && days >= 0 && days <= 30;
   }).length;
-  const missingClients = groups.filter((g) => !g.ndaSigned && !g.mouSigned).length;
+  const missingDocs = clients.filter(
+    (c) => !c.nda_status && !c.mou_status,
+  ).length;
 
   if (loading) {
     return (
@@ -181,205 +95,136 @@ export default function DocumentsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <TopBar title="文件追蹤" />
+      <TopBar title="文件中心" />
 
       <div className="flex-1 px-4 py-4 overflow-auto max-w-2xl lg:max-w-4xl mx-auto w-full space-y-3">
-        {/* Summary */}
+        {/* Summary cards */}
         <div className="grid grid-cols-4 gap-3">
-          <SummaryCard label="全部" value={docs.length} color="text-slate-700 dark:text-slate-200" />
-          <SummaryCard label="已簽署" value={signedCount} color="text-green-600 dark:text-green-400" />
-          <SummaryCard label="需注意" value={warningCount} color="text-amber-600 dark:text-amber-400" />
-          <SummaryCard label="缺件客戶" value={missingClients} color="text-red-600 dark:text-red-400" />
+          <SummaryCard
+            icon={<Building2 size={16} />}
+            label="公司數"
+            value={totalClients}
+            color="text-slate-700 dark:text-slate-200"
+          />
+          <SummaryCard
+            icon={<ShieldCheck size={16} />}
+            label="已簽合約"
+            value={signedContracts}
+            color="text-green-600 dark:text-green-400"
+          />
+          <SummaryCard
+            icon={<Clock size={16} />}
+            label="即將到期"
+            value={expiringCount}
+            color="text-amber-600 dark:text-amber-400"
+          />
+          <SummaryCard
+            icon={<AlertTriangle size={16} />}
+            label="缺 NDA/MOU"
+            value={missingDocs}
+            color="text-red-600 dark:text-red-400"
+          />
         </div>
 
-        {/* View toggle */}
-        <div className="flex items-center justify-end gap-1">
-          <button
-            onClick={() => setViewMode("flat")}
-            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-              viewMode === "flat"
-                ? "bg-blue-500/10 text-blue-500"
-                : "text-slate-400 hover:text-slate-300"
-            }`}
-            title="全部列表"
-          >
-            <List size={16} />
-          </button>
-          <button
-            onClick={() => setViewMode("grouped")}
-            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-              viewMode === "grouped"
-                ? "bg-blue-500/10 text-blue-500"
-                : "text-slate-400 hover:text-slate-300"
-            }`}
-            title="按客戶分組"
-          >
-            <Building2 size={16} />
-          </button>
+        {/* Search */}
+        <div className="relative">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜尋公司名稱或產業..."
+            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          />
         </div>
 
-        {/* Document list */}
-        {docs.length === 0 ? (
+        {/* Client list */}
+        {filtered.length === 0 ? (
           <div className="text-center py-12 text-slate-400 text-sm">
-            尚無 NDA/MOU 文件
-          </div>
-        ) : viewMode === "flat" ? (
-          <div className="space-y-2">
-            {docs.map((doc) => (
-              <DocRow key={doc.id} doc={doc} onUpload={() => setUploadDocId(doc.id)} />
-            ))}
+            {search ? "沒有符合的公司" : "尚無文件資料"}
           </div>
         ) : (
           <div className="space-y-2">
-            {groups.map((group) => {
-              const isCollapsed = collapsed.has(group.clientId);
-              return (
-                <div
-                  key={group.clientId}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden"
-                >
-                  {/* Group header */}
-                  <button
-                    onClick={() => toggleCollapse(group.clientId)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      {isCollapsed ? (
-                        <ChevronRight size={16} className="text-slate-400 flex-shrink-0" />
-                      ) : (
-                        <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
-                      )}
-                      <Link
-                        href={`/contacts/clients/${group.clientId}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-sm font-semibold text-slate-900 dark:text-slate-50 hover:text-blue-500 transition-colors"
-                      >
-                        {group.clientName}
-                      </Link>
-                      <span className="text-xs text-slate-400">({group.docs.length})</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <DocStatusChip label="NDA" exists={group.hasNda} signed={group.ndaSigned} />
-                      <DocStatusChip label="MOU" exists={group.hasMou} signed={group.mouSigned} />
-                      {group.hasExpired && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium">
-                          已過期
-                        </span>
-                      )}
-                      {!group.hasExpired && group.hasExpiring && (
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-medium">
-                          即將到期
-                        </span>
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Group body */}
-                  {!isCollapsed && (
-                    <div className="border-t border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
-                      {group.docs.map((doc) => (
-                        <DocRow key={doc.id} doc={doc} onUpload={() => setUploadDocId(doc.id)} compact />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {filtered.map((client) => (
+              <ClientRow key={client.id} client={client} />
+            ))}
           </div>
         )}
       </div>
-
-      {/* Upload modal */}
-      {uploadDocId !== null && uploadDoc && (
-        <DocUploadModal
-          docId={uploadDocId}
-          currentPath={uploadDoc.file_path}
-          onClose={() => setUploadDocId(null)}
-          onUploaded={() => {
-            setUploadDocId(null);
-            loadDocs();
-          }}
-        />
-      )}
     </div>
   );
 }
 
-function DocRow({
-  doc,
-  onUpload,
-  compact,
-}: {
-  doc: DocWithClient;
-  onUpload: () => void;
-  compact?: boolean;
-}) {
-  const days = daysUntilExpiry(doc.expiry_date);
+function ClientRow({ client }: { client: ClientDocSummary }) {
+  const days = daysUntilExpiry(client.earliest_expiry);
+  const hasExpiry = days !== null && days >= 0 && days <= 30;
+  const isExpired = days !== null && days < 0;
+
   return (
-    <div className={compact ? "px-4 py-3" : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4"}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <FileCheck size={16} className="text-blue-500 flex-shrink-0 mt-0.5" />
-          <div>
-            {!compact && (
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
-                {doc.client_name || `客戶 #${doc.client_id}`}
-              </p>
-            )}
-            <p className={`text-xs text-slate-500 ${compact ? "" : "mt-0.5"}`}>
-              {doc.doc_type.toUpperCase()} · {STATUS_LABELS[doc.status] || doc.status}
+    <Link
+      href={`/documents/${client.id}`}
+      className="block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:border-blue-500/50 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-50 truncate">
+              {client.name}
             </p>
+            {client.industry && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 flex-shrink-0">
+                {client.industry}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            <DocStatusChip label="NDA" status={client.nda_status} />
+            <DocStatusChip label="MOU" status={client.mou_status} />
+            {isExpired && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 font-medium">
+                已過期
+              </span>
+            )}
+            {!isExpired && hasExpiry && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-medium">
+                {days} 天到期
+              </span>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <ExpiryBadge days={days} />
-          <button
-            onClick={onUpload}
-            className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border cursor-pointer transition-colors ${
-              doc.file_path
-                ? "border-green-500/30 text-green-500 hover:bg-green-500/10"
-                : "border-blue-500/30 text-blue-500 hover:bg-blue-500/10"
-            }`}
-          >
-            {doc.file_path ? (
-              <>
-                <CheckCircle size={12} />
-                更換
-              </>
-            ) : (
-              <>
-                <Upload size={12} />
-                上傳
-              </>
-            )}
-          </button>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <FolderOpen size={14} />
+            <span>{client.file_count}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <FileText size={14} />
+            <span>{client.contract_count}</span>
+          </div>
+          <ChevronRight size={16} className="text-slate-300" />
         </div>
       </div>
-      <div className="mt-2 flex gap-4 text-xs text-slate-400">
-        {doc.sign_date && <span>簽署: {doc.sign_date}</span>}
-        {doc.expiry_date && <span>到期: {doc.expiry_date}</span>}
-        {doc.file_path && (
-          <span className="text-green-500 flex items-center gap-1">
-            <CheckCircle size={10} />
-            {doc.file_path.split("/").pop()}
-          </span>
-        )}
-      </div>
-    </div>
+    </Link>
   );
 }
 
 function SummaryCard({
+  icon,
   label,
   value,
   color,
 }: {
+  icon: React.ReactNode;
   label: string;
   value: number;
   color: string;
 }) {
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center">
+      <div className={`flex justify-center mb-1 ${color}`}>{icon}</div>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
       <p className="text-xs text-slate-500 mt-0.5">{label}</p>
     </div>

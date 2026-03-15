@@ -153,7 +153,7 @@ export default function IntelDetailPage() {
         return;
       }
       const meetingsByDeal = await Promise.all(
-        linkedDeals.map((d) => nxApi.calendar.meetingsByDeal(d.deal_id ?? d.id)),
+        linkedDeals.map((d) => nxApi.calendar.meetingsByDeal(d.id)),
       );
       const allDealMeetings = meetingsByDeal.flat();
       // Filter out already-linked meetings

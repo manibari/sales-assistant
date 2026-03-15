@@ -9,9 +9,10 @@ interface IntelSummaryModalProps {
   intelIds: number[];
   onClose: () => void;
   onMerged?: () => void;
+  onSaveAsIntel?: (summary: string) => Promise<void>;
 }
 
-export function IntelSummaryModal({ intelIds, onClose, onMerged }: IntelSummaryModalProps) {
+export function IntelSummaryModal({ intelIds, onClose, onMerged, onSaveAsIntel }: IntelSummaryModalProps) {
   const router = useRouter();
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,12 @@ export function IntelSummaryModal({ intelIds, onClose, onMerged }: IntelSummaryM
     if (merging) return;
     setMerging(true);
     try {
+      if (onSaveAsIntel) {
+        // Custom save logic (e.g. link to deal)
+        await onSaveAsIntel(summary);
+        onClose();
+        return;
+      }
       // 1. Create new merged intel
       const newIntel = await nxApi.intel.create({
         raw_input: summary,

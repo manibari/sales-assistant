@@ -281,6 +281,41 @@ export interface NxTender {
   contact_phone: string | null;
   contact_email: string | null;
   file_path: string;
+  has_notice?: boolean;
+  body_md?: string;
+}
+
+export interface NxMemory {
+  path: string;
+  title: string;
+  type: string;
+  scope: string;
+  status?: string;
+  category?: string;
+  client?: string;
+  client_id?: number;
+  deal_id?: number;
+  tags: string[];
+  source: string;
+  source_type?: string;
+  source_id?: number;
+  promoted_from?: string;
+  related?: string[];
+  created: string;
+  updated: string;
+  snippet?: string;
+  _body?: string;
+}
+
+export interface NxMemoryCategory {
+  name: string;
+  count: number;
+}
+
+export interface NxMemoryTemplate {
+  name: string;
+  title: string;
+  description: string;
 }
 
 export interface MeddicProgress {
@@ -642,6 +677,45 @@ export const nxApi = {
     expiring: (days?: number) =>
       fetchAPI<NxTender[]>(`/tenders/expiring${days ? `?within_days=${days}` : ""}`),
     get: (jobNumber: string) => fetchAPI<NxTender>(`/tenders/${encodeURIComponent(jobNumber)}`),
+    enrich: (jobNumber: string) =>
+      postAPI<{ status: string; job_number: string; sections_added: number; page_text_len: number; notice_doc_len: number }>(
+        `/tenders/${encodeURIComponent(jobNumber)}/enrich`, {}
+      ),
+    enrichAll: () =>
+      postAPI<{ results: { job_number: string; status: string; sections_added?: number; error?: string }[] }>(
+        "/tenders/enrich-all", {}
+      ),
+  },
+  memory: {
+    list: (params?: { scope?: string; client_id?: number; deal_id?: number; type?: string; status?: string; category?: string; zone?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.scope) sp.set("scope", params.scope);
+      if (params?.client_id) sp.set("client_id", String(params.client_id));
+      if (params?.deal_id) sp.set("deal_id", String(params.deal_id));
+      if (params?.type) sp.set("type", params.type);
+      if (params?.status) sp.set("status", params.status);
+      if (params?.category) sp.set("category", params.category);
+      if (params?.zone) sp.set("zone", params.zone);
+      const qs = sp.toString();
+      return fetchAPI<NxMemory[]>(`/memory/${qs ? `?${qs}` : ""}`);
+    },
+    get: (path: string) => fetchAPI<NxMemory>(`/memory/file?path=${encodeURIComponent(path)}`),
+    create: (data: { title: string; type?: string; scope?: string; client?: string; client_id?: number; deal_id?: number; tags?: string[]; body?: string; folder?: string }) =>
+      postAPI<NxMemory>("/memory/", data),
+    update: (path: string, data: { title?: string; type?: string; scope?: string; client?: string; client_id?: number; deal_id?: number; tags?: string[]; body?: string }) =>
+      putAPI<NxMemory>(`/memory/file?path=${encodeURIComponent(path)}`, data),
+    delete: (path: string) => deleteAPI(`/memory/file?path=${encodeURIComponent(path)}`),
+    search: (q: string) => fetchAPI<NxMemory[]>(`/memory/search?q=${encodeURIComponent(q)}`),
+    syncAll: () => postAPI<{ status: string; clients: number; deals: number; intel: number; meetings: number; files: number }>("/memory/sync-all", {}),
+    promote: (data: { source_path: string; target_zone: string; category: string; new_title: string; new_body: string; tags?: string[] }) =>
+      postAPI<NxMemory>("/memory/promote", data),
+    updateStatus: (path: string, status: string) =>
+      patchAPI<{ path: string; status: string }>("/memory/status", { path, status }),
+    categories: () => fetchAPI<NxMemoryCategory[]>("/memory/categories"),
+    templates: () => fetchAPI<NxMemoryTemplate[]>("/memory/templates"),
+    fromTemplate: (data: { template_name: string; target_zone: string; category: string; title: string }) =>
+      postAPI<NxMemory>("/memory/from-template", data),
+    migrate: () => postAPI<{ status: string; moved: number; skipped: number; errors: number }>("/memory/migrate", {}),
   },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
   searchIntelFields: (key: string, value: string) =>

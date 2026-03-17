@@ -593,6 +593,23 @@ export const nxApi = {
       return res.json() as Promise<NxDocument>;
     },
   },
+  outreach: {
+    industries: () => fetchAPI<{ industry: string; case_studies: number; solutions: number }[]>("/outreach/industries"),
+    caseStudies: (industry?: string) =>
+      fetchAPI<Record<string, unknown>[]>(`/outreach/case-studies${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`),
+    solutions: (industry?: string) =>
+      fetchAPI<Record<string, unknown>[]>(`/outreach/solutions${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`),
+    targets: (industry?: string) =>
+      fetchAPI<{ id: number; name: string; industry: string | null; status: string; deal_count: number; contact_count: number }[]>(
+        `/outreach/targets${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`
+      ),
+    contacts: (clientId: number) =>
+      fetchAPI<{ id: number; name: string; title: string | null; phone: string | null; email: string | null; line_id: string | null; role: string | null }[]>(
+        `/outreach/targets/${clientId}/contacts`
+      ),
+    generatePitch: (data: { target_company: string; target_industry: string; case_study_industries?: string[]; include_knowledge?: boolean }) =>
+      postAPI<{ pitch: string | null; error: string | null }>("/outreach/generate-pitch", data),
+  },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
   searchIntelFields: (key: string, value: string) =>
     fetchAPI<{ id: number; title: string | null; raw_input: string; status: string; created_at: string; field_key: string; field_value: string }[]>(

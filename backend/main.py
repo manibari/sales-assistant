@@ -29,6 +29,7 @@ from backend.routers.nexus import (
     subsidies as nx_subsidies,
     settings as nx_settings,
     outlook as nx_outlook,
+    outreach as nx_outreach,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
@@ -68,6 +69,7 @@ app.include_router(nx_telegram.router, prefix="/api/nx/telegram", tags=["Telegra
 app.include_router(nx_subsidies.router, prefix="/api/nx/subsidies", tags=["Subsidies"])
 app.include_router(nx_settings.router, prefix="/api/nx/settings", tags=["Settings"])
 app.include_router(nx_outlook.router, prefix="/api/nx/outlook", tags=["Outlook"])
+app.include_router(nx_outreach.router, prefix="/api/nx/outreach", tags=["Outreach"])
 
 
 _logger = logging.getLogger(__name__)

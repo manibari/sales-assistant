@@ -264,6 +264,25 @@ export interface NxKnowledge {
   created_at: string;
 }
 
+export interface NxTender {
+  job_number: string;
+  name: string;
+  agency: string;
+  category: string;
+  category_detail: string;
+  tender_type: string;
+  deadline: string | null;
+  budget_amount: string | null;
+  reference_url: string;
+  days_left: number | null;
+  status: string;
+  tags: string[];
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  file_path: string;
+}
+
 export interface MeddicProgress {
   completed: number;
   total: number;
@@ -614,6 +633,15 @@ export const nxApi = {
       ),
     generatePitch: (data: { target_company: string; target_industry: string; case_study_industries?: string[]; include_knowledge?: boolean }) =>
       postAPI<{ pitch: string | null; error: string | null }>("/outreach/generate-pitch", data),
+  },
+  tenders: {
+    list: (category?: string) => {
+      const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+      return fetchAPI<NxTender[]>(`/tenders/${qs}`);
+    },
+    expiring: (days?: number) =>
+      fetchAPI<NxTender[]>(`/tenders/expiring${days ? `?within_days=${days}` : ""}`),
+    get: (jobNumber: string) => fetchAPI<NxTender>(`/tenders/${encodeURIComponent(jobNumber)}`),
   },
   search: (q: string) => fetchAPI<SearchResults>(`/search/?q=${encodeURIComponent(q)}`),
   searchIntelFields: (key: string, value: string) =>

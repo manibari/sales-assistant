@@ -9,12 +9,13 @@ import {
   ChevronRight,
   CircleDot,
   DollarSign,
+  Gavel,
   Landmark,
   Loader2,
   Search,
   TrendingUp,
 } from "lucide-react";
-import { nxApi, type NxDeal, type NxReminder, type NxMeeting, type NxTbdItem, type NxSubsidy } from "@/lib/nexus-api";
+import { nxApi, type NxDeal, type NxReminder, type NxMeeting, type NxTbdItem, type NxSubsidy, type NxTender } from "@/lib/nexus-api";
 import { formatBudget } from "@/lib/options";
 import Link from "next/link";
 
@@ -45,18 +46,20 @@ export default function DashboardPage() {
   const [meetings, setMeetings] = useState<NxMeeting[]>([]);
   const [staleTbds, setStaleTbds] = useState<NxTbdItem[]>([]);
   const [expiringSubsidies, setExpiringSubsidies] = useState<NxSubsidy[]>([]);
+  const [expiringTenders, setExpiringTenders] = useState<NxTender[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     try {
       const today = new Date().toISOString().split("T")[0];
-      const [all, push, rems, mtgs, tbds, expSubs] = await Promise.all([
+      const [all, push, rems, mtgs, tbds, expSubs, expTenders] = await Promise.all([
         nxApi.deals.list(),
         nxApi.deals.needsPush(7),
         nxApi.calendar.pendingReminders(),
         nxApi.calendar.meetingsByDate(today),
         nxApi.tbd.list(),
         nxApi.subsidies.expiring(60),
+        nxApi.tenders.expiring(14).catch(() => [] as NxTender[]),
       ]);
       setAllDeals(all);
       setPushDeals(push);
@@ -64,6 +67,7 @@ export default function DashboardPage() {
       setMeetings(mtgs);
       setStaleTbds(tbds.filter((t) => !t.resolved));
       setExpiringSubsidies(expSubs);
+      setExpiringTenders(expTenders);
     } catch (err) {
       console.error("Dashboard load failed:", err);
     } finally {
@@ -361,6 +365,50 @@ export default function DashboardPage() {
                         {s.days_left != null ? `${s.days_left}天` : s.deadline}
                       </span>
                     </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Expiring tenders */}
+            {expiringTenders.length > 0 && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Gavel size={16} className="text-orange-500" />
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+                    等標期內標案
+                  </span>
+                  <span className="text-xs text-slate-400">({expiringTenders.length})</span>
+                  <Link
+                    href="/tenders"
+                    className="ml-auto text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                  >
+                    全部
+                  </Link>
+                </div>
+                <div className="space-y-2">
+                  {expiringTenders.map((t) => (
+                    <a
+                      key={t.job_number}
+                      href={t.reference_url || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer group transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate group-hover:text-blue-500 transition-colors">
+                          {t.name}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {t.agency}
+                        </p>
+                      </div>
+                      <span className={`text-xs flex-shrink-0 ml-2 font-medium ${
+                        (t.days_left ?? 99) <= 7 ? "text-red-400" : "text-orange-400"
+                      }`}>
+                        {t.days_left != null ? `${t.days_left}天` : "—"}
+                      </span>
+                    </a>
                   ))}
                 </div>
               </div>

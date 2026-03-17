@@ -188,12 +188,39 @@ def _backfill_parse_queue():
         _logger.warning("Backfill parse queue failed: %s", e)
 
 
+def _auto_close_expired_subsidies():
+    """Auto-close subsidies whose deadline has passed."""
+    from database.connection import get_connection
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE nx_subsidy
+                    SET status = 'closed', updated_at = NOW()
+                    WHERE status = 'active'
+                      AND deadline_date IS NOT NULL
+                      AND deadline_date < CURRENT_DATE
+                    RETURNING id, name
+                """)
+                rows = cur.fetchall()
+        if rows:
+            for row in rows:
+                _logger.info("Auto-closed expired subsidy #%d: %s", row[0], row[1])
+            _logger.info("Auto-closed %d expired subsidies.", len(rows))
+    except Exception as e:
+        _logger.warning("Auto-close expired subsidies failed: %s", e)
+
+
 @app.on_event("startup")
 def startup():
     try:
         init_db()
     except Exception as e:
         _logger.warning("DB init skipped: %s", e)
+
+    # Auto-close expired subsidies
+    _auto_close_expired_subsidies()
 
     # Backfill any parseable files missing from queue
     _backfill_parse_queue()

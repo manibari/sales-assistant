@@ -74,6 +74,14 @@ def _parse_case(path: Path) -> dict | None:
     else:
         top_category = "其他"
 
+    # Build human-readable URL (g0v frontend, not API JSON)
+    unit_id = str(fm.get("unit_id", ""))
+    job_num = str(fm.get("job_number", ""))
+    if unit_id and job_num:
+        reference_url = f"https://pcc.g0v.ronny.tw/tender/{unit_id}:{job_num}"
+    else:
+        reference_url = fm.get("source_url", "")
+
     return {
         "job_number": str(fm["job_number"]),
         "name": fm.get("title", ""),
@@ -83,7 +91,7 @@ def _parse_case(path: Path) -> dict | None:
         "tender_type": fm.get("type", ""),
         "deadline": str(deadline_str) if deadline_str else None,
         "budget_amount": budget_amount,
-        "reference_url": fm.get("source_url", ""),
+        "reference_url": reference_url,
         "days_left": days_left,
         "status": fm.get("status", "active"),
         "tags": fm.get("tags", []),

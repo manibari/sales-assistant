@@ -80,6 +80,21 @@ class SubsidyDealLink(BaseModel):
     deal_id: int
 
 
+class SubsidyFromUrl(BaseModel):
+    url: str
+
+
+@router.post("/from-url")
+def parse_from_url(body: SubsidyFromUrl):
+    """Fetch a URL and extract subsidy program fields (preview, no DB write)."""
+    from services.nexus.subsidy_parser import parse_subsidy_url
+
+    try:
+        return parse_subsidy_url(body.url)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Failed to parse URL: {e}")
+
+
 @router.get("/")
 def list_subsidies(
     status: str = "active",

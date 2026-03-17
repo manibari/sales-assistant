@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxSubsidy } from "@/lib/nexus-api";
-import { AlertTriangle, Building2, Calendar, ChevronDown, ChevronRight, ChevronRightCircle, Clock, Handshake, Plus } from "lucide-react";
+import { AlertTriangle, Building2, Calendar, ChevronDown, ChevronRight, ChevronRightCircle, Clock, Globe, Handshake, PenLine, Plus } from "lucide-react";
 import Link from "next/link";
+import { SubsidyUrlModal } from "@/components/subsidy-url-modal";
 
 const STAGE_ORDER = [
   "executing", "approved", "under_review", "applying",
@@ -66,6 +67,9 @@ export default function SubsidiesPage() {
   const [filter, setFilter] = useState<"all" | "urgent" | "upcoming" | "nodate">("all");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showUrlModal, setShowUrlModal] = useState(false);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     nxApi.subsidies
@@ -74,6 +78,16 @@ export default function SubsidiesPage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [view]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false);
+      }
+    };
+    if (showAddMenu) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAddMenu]);
 
   const toggleCollapse = (key: string) => {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -129,12 +143,33 @@ export default function SubsidiesPage() {
   return (
     <div className="flex flex-col h-full">
       <TopBar title="補助案">
-        <Link
-          href="/subsidies/new"
-          className="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors"
-        >
-          <Plus size={20} />
-        </Link>
+        <div className="relative" ref={addMenuRef}>
+          <button
+            onClick={() => setShowAddMenu(!showAddMenu)}
+            className="p-2 rounded-lg text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors"
+          >
+            <Plus size={20} />
+          </button>
+          {showAddMenu && (
+            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-50">
+              <Link
+                href="/subsidies/new"
+                onClick={() => setShowAddMenu(false)}
+                className="flex items-center gap-2.5 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <PenLine size={16} className="text-slate-400" />
+                手動新增
+              </Link>
+              <button
+                onClick={() => { setShowAddMenu(false); setShowUrlModal(true); }}
+                className="flex items-center gap-2.5 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors w-full text-left cursor-pointer"
+              >
+                <Globe size={16} className="text-blue-500" />
+                從網址匯入
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => {
             const idx = VIEW_ORDER.indexOf(view);
@@ -256,6 +291,8 @@ export default function SubsidiesPage() {
           </div>
         )}
       </div>
+
+      <SubsidyUrlModal open={showUrlModal} onClose={() => setShowUrlModal(false)} />
     </div>
   );
 }

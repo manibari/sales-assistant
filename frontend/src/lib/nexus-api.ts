@@ -385,6 +385,11 @@ export const nxApi = {
     get: (id: number) => fetchAPI<NxSubsidy>(`/subsidies/${id}`),
     create: (data: Partial<NxSubsidy> & { name: string }) =>
       postAPI<NxSubsidy>("/subsidies/", data),
+    parseUrl: (url: string) =>
+      postAPI<{
+        name: string; agency: string; deadline: string; deadline_date: string | null;
+        funding_amount: string; eligibility: string; scope: string; reference_url: string; raw_text: string;
+      }>("/subsidies/from-url", { url }),
     update: (id: number, data: Partial<NxSubsidy>) =>
       patchAPI<NxSubsidy>(`/subsidies/${id}`, data),
     advance: (id: number, stage: string) =>

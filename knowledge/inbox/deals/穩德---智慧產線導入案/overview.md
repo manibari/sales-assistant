@@ -9,8 +9,8 @@ source_id: 14
 source_type: nx_deal
 status: inbox
 tags:
-- L0
 - active
+- L0
 title: 穩德 - 智慧產線導入案
 type: deal-overview
 updated: '2026-03-18'

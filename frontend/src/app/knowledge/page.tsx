@@ -642,8 +642,8 @@ function InboxList({
           </div>
           {mem.tags && mem.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
-              {mem.tags.slice(0, 5).map((tag) => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
+              {mem.tags.slice(0, 5).map((tag, i) => (
+                <span key={`${tag}-${i}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
                   <Tag size={8} className="inline mr-0.5" />
                   {tag}
                 </span>

@@ -1,0 +1,28 @@
+{
+  "agents": {
+    "crm-projection": {
+      "type": "claude",
+      "description": "每日 CRM 預測：查詢活躍客戶、交叉比對情蒐報告、更新客戶索引",
+      "script": "scripts/crm-projection.sh",
+      "schedule": { "type": "daily", "hour": 7, "minute": 0 }
+    },
+    "subsidy-scraper": {
+      "type": "claude",
+      "description": "週一/四爬取政府補助（SBIR/SIIR/grants.nat.gov.tw）、去重、更新索引",
+      "script": "scripts/subsidy-scraper.sh",
+      "schedule": { "type": "calendar", "weekdays": [1, 4], "hour": 8, "minute": 0 }
+    },
+    "material-health": {
+      "type": "claude",
+      "description": "週日檢查銷售素材健康度：缺漏 frontmatter、過期補助、過時公司資訊",
+      "script": "scripts/material-health.sh",
+      "schedule": { "type": "weekly", "weekday": 0, "hour": 9, "minute": 0 }
+    },
+    "tender-scraper": {
+      "type": "claude",
+      "description": "每日爬取政府標案（g0v API / web.pcc.gov.tw）、篩選公開徵求、歸檔過期案件、更新索引",
+      "script": "scripts/tender-scraper.sh",
+      "schedule": { "type": "daily", "hour": 8, "minute": 30 }
+    }
+  }
+}

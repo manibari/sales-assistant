@@ -9,8 +9,8 @@ source_id: 13
 source_type: nx_deal
 status: inbox
 tags:
-- L0
 - active
+- L0
 title: 奇美食品 - 智慧產線導入案
 type: deal-overview
 updated: '2026-03-18'

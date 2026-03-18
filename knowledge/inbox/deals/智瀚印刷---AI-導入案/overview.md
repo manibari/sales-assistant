@@ -10,7 +10,6 @@ source_type: nx_deal
 status: inbox
 tags:
 - closed
-- closed
 title: 智瀚印刷 - AI 導入案
 type: deal-overview
 updated: '2026-03-18'

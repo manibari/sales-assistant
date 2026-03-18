@@ -9,16 +9,16 @@ source_id: 35
 source_type: nx_knowledge
 status: inbox
 tags:
-- 臺灣人工智慧
-- 專案管理
-- 資料庫
-- 產業創新
-- AI導入
+- 效率優化
+- AutoML
 - AI 教育
-- 庫存優化
-- 科技應用
-- ESG
-- 智慧工安
+- 詠鋐智慧
+- 快速部署
+- 設備預知保養
+- 平台化分工
+- 產業創新
+- 知識圖譜
+- 植物肉研發
 title: 文件摘要：食品業 AI 應用.pdf
 type: file-summary
 updated: '2026-03-18'

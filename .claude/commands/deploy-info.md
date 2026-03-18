@@ -22,15 +22,15 @@ cd frontend && npm install && cd ..
 # 3. 設定 .env（加入以下內容）
 DATABASE_URL=postgresql://postgres:****@db.nmccywkhrvlevryqusvs.supabase.co:5432/postgres
 
-# 4. 啟動 backend（port 8001）
+# 4. 啟動 backend（port 8002）
 set -a && source .env && set +a
-uvicorn backend.main:app --host 0.0.0.0 --port 8001 &
+uvicorn backend.main:app --host 0.0.0.0 --port 8002 &
 
-# 5. 啟動 frontend（port 3000）
+# 5. 啟動 frontend（port 3002）
 cd frontend && npm run dev &
 
 # 6. 驗證
-curl -s http://localhost:8001/api/nx/clients/ | head -5
+curl -s http://localhost:8002/api/nx/clients/ | head -5
 ```
 
 5. Also output the full (unmasked) DATABASE_URL separately so the user can copy it.

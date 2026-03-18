@@ -512,7 +512,7 @@ def sync_from_deal(deal_id: int) -> str | None:
         "client": deal.get("client_name"),
         "client_id": deal["client_id"],
         "deal_id": deal["id"],
-        "tags": [deal.get("stage", ""), deal.get("status", "")],
+        "tags": list({t for t in [deal.get("stage"), deal.get("status")] if t}),
         "source": "auto",
         "source_type": "nx_deal",
         "source_id": deal["id"],

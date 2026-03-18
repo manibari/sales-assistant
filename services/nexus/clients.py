@@ -20,6 +20,12 @@ def create_client(
             client = row_to_dict(cur)
     # Auto-create NDA + MOU tracking entries
     _auto_create_documents(client["id"])
+    # Auto-sync to memory md
+    try:
+        from services.nexus.memory import sync_from_client
+        sync_from_client(client["id"])
+    except Exception:
+        pass
     return client
 
 

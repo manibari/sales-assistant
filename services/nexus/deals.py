@@ -40,7 +40,14 @@ def create_deal(
                     budget_year,
                 ),
             )
-            return row_to_dict(cur)
+            deal = row_to_dict(cur)
+    # Auto-sync to memory md
+    try:
+        from services.nexus.memory import sync_from_deal
+        sync_from_deal(deal["id"])
+    except Exception:
+        pass
+    return deal
 
 
 def get_deal(deal_id: int) -> dict | None:
@@ -129,7 +136,15 @@ def update_deal(deal_id: int, **fields) -> dict | None:
                 f"UPDATE nx_deal SET {set_clause}, updated_at = NOW() WHERE id = %s RETURNING *",
                 values,
             )
-            return row_to_dict(cur)
+            result = row_to_dict(cur)
+    # Auto-sync to memory md
+    if result:
+        try:
+            from services.nexus.memory import sync_from_deal
+            sync_from_deal(deal_id)
+        except Exception:
+            pass
+    return result
 
 
 def advance_stage(deal_id: int, new_stage: str) -> dict | None:

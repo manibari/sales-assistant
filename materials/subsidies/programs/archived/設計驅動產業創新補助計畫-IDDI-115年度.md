@@ -21,7 +21,7 @@ company_size: all
 reference_url: "https://www.tdri.org.tw/iddi/"
 source_id: "IDDI"
 last_scraped: "2026-03-16"
-status: active
+status: expired
 ---
 
 # 設計驅動產業創新補助計畫 (IDDI) — 115年度

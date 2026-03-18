@@ -9,16 +9,16 @@ source_id: 35
 source_type: nx_knowledge
 status: inbox
 tags:
-- RTSP協定
-- PoC
-- 食品業AI
-- 設備維修
+- 臺灣人工智慧
+- 專案管理
 - 資料庫
+- 產業創新
+- AI導入
 - AI 教育
-- 業務決策
-- 效益模板
-- 工業數據化
-- 食品業
+- 庫存優化
+- 科技應用
+- ESG
+- 智慧工安
 title: 文件摘要：食品業 AI 應用.pdf
 type: file-summary
 updated: '2026-03-18'

@@ -16,6 +16,7 @@ echo "Project: ${PROJECT_DIR}"
 claude -p "Run the crm-projection skill: query all active clients from nx_client, get their deal pipeline data, cross-reference with reports/customer-intel/INDEX.md, and regenerate materials/clients/INDEX.md. Output a summary when done." \
   --dangerously-skip-permissions \
   --output-format stream-json \
+  --verbose \
   --max-turns 15 \
   2>"${PROJECT_DIR}/materials/clients/projection-stderr-${DATE}.log" | \
   tee "${PROJECT_DIR}/materials/clients/projection-${DATE}.jsonl"

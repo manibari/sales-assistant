@@ -86,7 +86,7 @@ export default function IntelPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <TopBar title="情報 Feed" />
+      <TopBar title="情報紀錄" />
       <div className="flex-1 px-4 py-4 overflow-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20 text-slate-400">

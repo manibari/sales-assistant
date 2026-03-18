@@ -31,6 +31,7 @@ from backend.routers.nexus import (
     outlook as nx_outlook,
     outreach as nx_outreach,
     tenders as nx_tenders,
+    memory as nx_memory,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
@@ -72,6 +73,7 @@ app.include_router(nx_settings.router, prefix="/api/nx/settings", tags=["Setting
 app.include_router(nx_outlook.router, prefix="/api/nx/outlook", tags=["Outlook"])
 app.include_router(nx_outreach.router, prefix="/api/nx/outreach", tags=["Outreach"])
 app.include_router(nx_tenders.router, prefix="/api/nx/tenders", tags=["Tenders"])
+app.include_router(nx_memory.router, prefix="/api/nx/memory", tags=["Memory"])
 
 
 _logger = logging.getLogger(__name__)
@@ -155,6 +157,13 @@ def _knowledge_worker_loop():
                 file_id, len(chunks), ai_failures,
             )
 
+            # Auto-sync to memory md
+            try:
+                from services.nexus.memory import sync_from_file_knowledge
+                sync_from_file_knowledge(file_id)
+            except Exception as e:
+                _logger.warning("Memory sync for file #%d failed: %s", file_id, e)
+
         except Exception as e:
             _logger.error("Knowledge worker error: %s", e)
             time.sleep(10)
@@ -223,6 +232,14 @@ def startup():
 
     # Auto-close expired subsidies
     _auto_close_expired_subsidies()
+
+    # Initial memory sync (generate missing md files)
+    try:
+        from services.nexus.memory import sync_all as memory_sync_all
+        stats = memory_sync_all()
+        _logger.info("Memory sync on startup: %s", stats)
+    except Exception as e:
+        _logger.warning("Memory sync on startup failed: %s", e)
 
     # Backfill any parseable files missing from queue
     _backfill_parse_queue()

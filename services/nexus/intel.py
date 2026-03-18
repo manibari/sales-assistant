@@ -88,7 +88,15 @@ def confirm_intel(intel_id: int, parsed_json: str | None = None) -> dict | None:
                        updated_at = NOW() WHERE id = %s RETURNING *""",
                     (intel_id,),
                 )
-            return row_to_dict(cur)
+            result = row_to_dict(cur)
+    # Auto-sync to memory md
+    if result:
+        try:
+            from services.nexus.memory import sync_from_intel
+            sync_from_intel(intel_id)
+        except Exception:
+            pass
+    return result
 
 
 def update_intel(intel_id: int, **fields) -> dict | None:

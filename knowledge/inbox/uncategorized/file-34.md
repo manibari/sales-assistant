@@ -4,18 +4,18 @@ scope: short-term
 source: auto
 source_id: 34
 source_type: nx_knowledge
-status: archived
+status: inbox
 tags:
-- 硬體建置
 - 影像擷取
-- SOP
-- 產品質檢
-- AI模型訓練
-- 管理流程
+- 品質檢測
+- 質檢測試
+- 稽核便利性
+- 肉乾產品
 - 資信通信
-- ERP整合
+- 實時監控
+- 導入規劃
 - 分公司
-- 機器學習
+- 包材管理
 title: 文件摘要：20260224_智慧產線導入規劃_金軒揚.pdf
 type: file-summary
 updated: '2026-03-18'
@@ -197,3 +197,4 @@ updated: '2026-03-18'
 出貨流程紀錄
 與管理
 ```
+

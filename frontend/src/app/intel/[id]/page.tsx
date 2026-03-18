@@ -394,7 +394,7 @@ export default function IntelDetailPage() {
               </span>
             </div>
             <p className="text-xs text-slate-400">
-              尚未分類 — 從情報 Feed 進入問答流程即可分類
+              尚未分類 — 從情報紀錄進入問答流程即可分類
             </p>
           </div>
         )}

@@ -25,7 +25,7 @@ company_size: all
 reference_url: "https://market.meettaiwan.com/imdp/?action=about&id=5"
 source_id: "IMDP"
 last_scraped: "2026-03-16"
-status: active
+status: expired
 ---
 
 # 補助業界開發國際市場計畫 (IMDP) — 114年度

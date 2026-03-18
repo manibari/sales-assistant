@@ -4,7 +4,7 @@ agency: "主辦單位 經濟部中小及新創企業署 執行單位 中華民�
 program_type: government
 category: "數位轉型"
 deadline: ""
-deadline_text: "自公告起至額滿止（115年度尚未公告）"
+deadline_text: "115年度已開放受理申請（自公告日起至額滿為止）"
 funding_amount: "1. 協助中小微企業完成能量診斷，盤點實際痛點與應用潛力。
 2. 協助產業制定產業公版教案，並提供配套課程與資源，全面推動產業AI應用的發展。
 3. 協助中小微企業導入應用適切之數位解決方案。"
@@ -16,7 +16,7 @@ industry_tags: [製造業, 科技業, 服務業, 全產業]
 company_size: sme
 reference_url: "https://www.sme.gov.tw/drsme/drsme/Plan/plan_more?id=176a4cbd88b840358f46314988b1c408"
 source_id: "DRSME"
-last_scraped: "2026-03-16"
+last_scraped: "2026-03-17"
 status: active
 ---
 

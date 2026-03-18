@@ -3,10 +3,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxTender } from "@/lib/nexus-api";
-import { Calendar, ExternalLink, Gavel } from "lucide-react";
+import Link from "next/link";
+import { Calendar, FileText, Gavel } from "lucide-react";
 
-const CATEGORY_FILTERS = ["全部", "勞務", "財物", "工程", "其他"] as const;
-type CategoryFilter = (typeof CATEGORY_FILTERS)[number];
+const CLASS_FILTERS = ["全部", "招標公告", "公開徵求", "公開閱覽", "採購預告"] as const;
+type ClassFilter = (typeof CLASS_FILTERS)[number];
+
+const CLASS_COLORS: Record<string, string> = {
+  招標公告: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  公開徵求: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
+  公開閱覽: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  採購預告: "bg-slate-200/60 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400",
+};
 
 function urgencyColor(days: number | null): string {
   if (days === null) return "border-l-slate-300 dark:border-l-slate-600";
@@ -33,7 +41,7 @@ function daysLeftBadge(days: number | null) {
 
 export default function TendersPage() {
   const [tenders, setTenders] = useState<NxTender[]>([]);
-  const [filter, setFilter] = useState<CategoryFilter>("全部");
+  const [filter, setFilter] = useState<ClassFilter>("全部");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,13 +54,14 @@ export default function TendersPage() {
 
   const filtered = useMemo(() => {
     if (filter === "全部") return tenders;
-    return tenders.filter((t) => t.category === filter);
+    return tenders.filter((t) => t.tender_class === filter);
   }, [tenders, filter]);
 
-  const categoryCounts = useMemo(() => {
+  const classCounts = useMemo(() => {
     const counts: Record<string, number> = { 全部: tenders.length };
     for (const t of tenders) {
-      counts[t.category] = (counts[t.category] || 0) + 1;
+      const cls = t.tender_class || "招標公告";
+      counts[cls] = (counts[cls] || 0) + 1;
     }
     return counts;
   }, [tenders]);
@@ -80,21 +89,21 @@ export default function TendersPage() {
           <div className="max-w-2xl lg:max-w-4xl mx-auto">
             {/* Filter chips */}
             <div className="flex gap-2 mb-4 flex-wrap">
-              {CATEGORY_FILTERS.map((cat) => {
-                const count = categoryCounts[cat] || 0;
-                if (cat !== "全部" && count === 0) return null;
-                const active = filter === cat;
+              {CLASS_FILTERS.map((cls) => {
+                const count = classCounts[cls] || 0;
+                if (cls !== "全部" && count === 0) return null;
+                const active = filter === cls;
                 return (
                   <button
-                    key={cat}
-                    onClick={() => setFilter(cat)}
+                    key={cls}
+                    onClick={() => setFilter(cls)}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer border ${
                       active
                         ? "bg-blue-500/10 border-blue-500/30 text-blue-500 font-semibold"
                         : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-500/50"
                     }`}
                   >
-                    {cat}
+                    {cls}
                     <span
                       className={`font-bold ${active ? "text-blue-500" : "text-slate-900 dark:text-slate-50"}`}
                     >
@@ -105,14 +114,12 @@ export default function TendersPage() {
               })}
             </div>
 
-            {/* Tender cards */}
+            {/* Tender cards grouped by class */}
             <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
               {filtered.map((t) => (
-                <a
+                <Link
                   key={t.job_number}
-                  href={t.reference_url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/tenders/${encodeURIComponent(t.job_number)}`}
                   className={`block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 hover:border-slate-300 dark:hover:border-slate-600 border-l-4 ${urgencyColor(t.days_left)} cursor-pointer group`}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -125,19 +132,25 @@ export default function TendersPage() {
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
-                        {t.category}
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                          CLASS_COLORS[t.tender_class || "招標公告"] || CLASS_COLORS["招標公告"]
+                        }`}
+                      >
+                        {t.tender_class || "招標公告"}
                       </span>
-                      <ExternalLink
-                        size={12}
-                        className="text-slate-300 dark:text-slate-600 group-hover:text-blue-400 transition-colors"
-                      />
+                      {t.has_notice && (
+                        <FileText size={12} className="text-green-500" />
+                      )}
                     </div>
                   </div>
 
-                  {/* Deadline + budget row */}
+                  {/* Meta row: category + deadline + budget */}
                   <div className="mt-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
+                        {t.category}
+                      </span>
                       {t.deadline && (
                         <>
                           <Calendar
@@ -188,7 +201,7 @@ export default function TendersPage() {
                       ))}
                     </div>
                   )}
-                </a>
+                </Link>
               ))}
             </div>
           </div>

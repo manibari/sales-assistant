@@ -271,6 +271,7 @@ export interface NxTender {
   category: string;
   category_detail: string;
   tender_type: string;
+  tender_class: string;
   deadline: string | null;
   budget_amount: string | null;
   reference_url: string;

@@ -90,9 +90,11 @@ def fetch_tenders_by_date(target_date: date) -> list[dict]:
             break
 
         all_tenders.extend(records)
+        logger.info("[fetch] page %d → %d records (total: %d)", page, len(records), len(all_tenders))
         page += 1
 
         if page >= 20:  # safety limit
+            logger.warning("[fetch] hit page limit (20)")
             break
 
     logger.info("Fetched %d tenders for %s", len(all_tenders), date_str)
@@ -390,9 +392,11 @@ def run(days: int = 1, do_enrich: bool = True):
     logger.info("Existing cases: %d", len(existing))
 
     # Step 1: Fetch tender listings
+    logger.info("[step 1/5] Fetching tender listings (days=%d)...", days)
     new_tenders = []
     for i in range(days):
         target = date.today() - timedelta(days=i)
+        logger.info("[step 1/5] Fetching date: %s", target.isoformat())
         listings = fetch_tenders_by_date(target)
 
         for listing in listings:
@@ -427,10 +431,12 @@ def run(days: int = 1, do_enrich: bool = True):
     logger.info("New tenders found: %d", len(new_tenders))
 
     # Step 2: Fetch detail and create case files
+    logger.info("[step 2/5] Creating case files for %d new tenders...", len(new_tenders))
     created = 0
     enrich_queue = []
 
-    for t in new_tenders:
+    for idx, t in enumerate(new_tenders, 1):
+        logger.info("[step 2/5] (%d/%d) %s — %s", idx, len(new_tenders), t["job_number"], t["title"][:40])
         detail = fetch_tender_detail(t["unit_id"], t["job_number"])
         if not detail:
             logger.warning("No detail for %s, creating minimal case", t["job_number"])
@@ -459,10 +465,11 @@ def run(days: int = 1, do_enrich: bool = True):
 
     # Step 3: Auto-enrich matching tenders
     if do_enrich and enrich_queue:
-        logger.info("Auto-enriching %d matching tenders: %s", len(enrich_queue), enrich_queue)
+        logger.info("[step 3/5] Auto-enriching %d tenders...", len(enrich_queue))
         from services.nexus.tenders import enrich_tender
 
-        for job_number in enrich_queue:
+        for idx, job_number in enumerate(enrich_queue, 1):
+            logger.info("[step 3/5] (%d/%d) enriching %s", idx, len(enrich_queue), job_number)
             try:
                 result = enrich_tender(job_number)
                 logger.info("Enriched %s: %d sections added", job_number, result.get("sections_added", 0))
@@ -470,10 +477,12 @@ def run(days: int = 1, do_enrich: bool = True):
                 logger.error("Enrich failed for %s: %s", job_number, e)
 
     # Step 4: Archive past-deadline tenders
+    logger.info("[step 4/5] Archiving past-deadline tenders...")
     archived = archive_past_deadline()
-    logger.info("Archived %d past-deadline tenders", archived)
+    logger.info("[step 4/5] Archived %d tenders", archived)
 
     # Step 5: Regenerate INDEX.md
+    logger.info("[step 5/5] Regenerating INDEX.md...")
     regenerate_index()
 
     # Summary

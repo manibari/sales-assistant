@@ -16,11 +16,30 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="${PROJECT_DIR}/materials/tenders"
 DATE=$(date +%Y-%m-%d)
 
+# Source exec-lib for dashboard run recording
+RIVENDELL_DIR="$HOME/Documents/Projects/rivendell"
+if [ -f "$RIVENDELL_DIR/bin/sk-exec-lib" ]; then
+  export SK_EXEC_REPO_DIR="$RIVENDELL_DIR"
+  source "$RIVENDELL_DIR/bin/sk-exec-lib"
+fi
+
 echo "=== Tender Scraper — ${DATE} ==="
 echo "Project: ${PROJECT_DIR}"
 
+start_epoch=$(date +%s)
+
 cd "${PROJECT_DIR}"
-python scripts/tender_scraper.py --days 1 \
-  2>&1 | tee "${LOG_DIR}/scraper-${DATE}.log"
+python3 scripts/tender_scraper.py --days 1 \
+  2>&1 | tee "${LOG_DIR}/scraper-${DATE}.log" \
+  && run_exit=0 || run_exit=$?
+
+end_epoch=$(date +%s)
+
+# Record to dashboard DB (if exec-lib available)
+if type _sk_exec_record_run &>/dev/null; then
+  _sk_exec_record_run "sales-assistant" "tender-scraper" \
+    "$start_epoch" "$end_epoch" "$run_exit" "" "" "" "" "" ""
+fi
 
 echo "=== Done ==="
+exit "$run_exit"

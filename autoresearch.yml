@@ -1,0 +1,33 @@
+# Autoresearch goals for sales-assistant project
+# Run: sk-autoresearch autoresearch.yml [goal-name]
+
+goals:
+  - name: keyword-coverage
+    description: Improve tender scraper keyword match rate without increasing false positives
+    scope: materials/tenders/keywords.yml
+    metric_cmd: >
+      python3 -c "
+      from scripts.tender_scraper import _load_keywords, should_enrich, fetch_tenders_by_date;
+      from datetime import date, timedelta;
+      t = date.today() - timedelta(days=1);
+      tenders = fetch_tenders_by_date(t);
+      total = len([x for x in tenders if not any(s in x.get('brief',{}).get('type','') for s in ['決標','無法決標','定期彙送'])]);
+      matched = len([x for x in tenders if should_enrich(x.get('brief',{}).get('title',''), x.get('brief',{}).get('category',''))]);
+      print(f'{matched/total*100:.1f}' if total else '0')
+      "
+    direction: higher
+    verify_cmd: "python3 scripts/tender_scraper.py --days 0"  # just validate syntax
+    max_iterations: 10
+    cooldown_secs: 60
+    stale_limit: 3
+    prompt: |
+      Analyze unmatched tender titles and improve keyword coverage in materials/tenders/keywords.yml.
+
+      Rules:
+      - Only add keywords to the `active` section under appropriate categories
+      - Chinese compound terms (≥2 chars) are safe
+      - English abbreviations ≤2 chars are BANNED (high false positive risk)
+      - For ambiguous English terms, use compound form (e.g. "API介接" not "API")
+      - Check the `rejected` list — do NOT re-add rejected keywords
+      - Each iteration: add 3-5 keywords maximum (small, testable changes)
+      - Explain each addition with a sample tender title that would match

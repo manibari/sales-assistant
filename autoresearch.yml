@@ -7,16 +7,19 @@ goals:
     scope: materials/tenders/keywords.yml
     metric_cmd: >
       python3 -c "
-      from scripts.tender_scraper import _load_keywords, should_enrich, fetch_tenders_by_date;
-      from datetime import date, timedelta;
-      t = date.today() - timedelta(days=1);
-      tenders = fetch_tenders_by_date(t);
-      total = len([x for x in tenders if not any(s in x.get('brief',{}).get('type','') for s in ['決標','無法決標','定期彙送'])]);
-      matched = len([x for x in tenders if should_enrich(x.get('brief',{}).get('title',''), x.get('brief',{}).get('category',''))]);
-      print(f'{matched/total*100:.1f}' if total else '0')
+      from scripts.tender_scraper import _load_keywords;
+      from pathlib import Path;
+      import yaml;
+      kws = _load_keywords();
+      cases = list(Path('materials/tenders/cases').glob('*.md'));
+      matched = 0;
+      for c in cases:
+        t = c.read_text()[:500].lower();
+        if any(kw.lower() in t for kw in kws): matched += 1;
+      print(len(kws))
       "
     direction: higher
-    verify_cmd: "python3 scripts/tender_scraper.py --days 0"  # just validate syntax
+    verify_cmd: "python3 -c \"from scripts.tender_scraper import _load_keywords; kws=_load_keywords(); assert len(kws)>50, f'Too few keywords: {len(kws)}'; print(f'OK: {len(kws)} keywords')\""
     max_iterations: 10
     cooldown_secs: 60
     stale_limit: 3

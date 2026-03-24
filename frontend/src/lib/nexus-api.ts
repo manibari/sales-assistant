@@ -277,6 +277,7 @@ export interface NxTender {
   reference_url: string;
   days_left: number | null;
   status: string;
+  tracking_status: string;
   tags: string[];
   contact_name: string | null;
   contact_phone: string | null;
@@ -671,13 +672,21 @@ export const nxApi = {
       postAPI<{ pitch: string | null; error: string | null }>("/outreach/generate-pitch", data),
   },
   tenders: {
-    list: (category?: string) => {
-      const qs = category ? `?category=${encodeURIComponent(category)}` : "";
-      return fetchAPI<NxTender[]>(`/tenders/${qs}`);
+    list: (category?: string, trackingStatus?: string) => {
+      const params = new URLSearchParams();
+      if (category) params.set("category", category);
+      if (trackingStatus) params.set("tracking_status", trackingStatus);
+      const qs = params.toString();
+      return fetchAPI<NxTender[]>(`/tenders/${qs ? `?${qs}` : ""}`);
     },
     expiring: (days?: number) =>
       fetchAPI<NxTender[]>(`/tenders/expiring${days ? `?within_days=${days}` : ""}`),
     get: (jobNumber: string) => fetchAPI<NxTender>(`/tenders/${encodeURIComponent(jobNumber)}`),
+    updateTrackingStatus: (jobNumber: string, trackingStatus: string) =>
+      patchAPI<{ job_number: string; tracking_status: string }>(
+        `/tenders/${encodeURIComponent(jobNumber)}/tracking-status`,
+        { tracking_status: trackingStatus },
+      ),
     enrich: (jobNumber: string) =>
       postAPI<{ status: string; job_number: string; sections_added: number; page_text_len: number; notice_doc_len: number }>(
         `/tenders/${encodeURIComponent(jobNumber)}/enrich`, {}

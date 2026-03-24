@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxTender } from "@/lib/nexus-api";
 import Link from "next/link";
-import { Calendar, FileText, Gavel } from "lucide-react";
+import { Calendar, FileText, Gavel, ChevronDown } from "lucide-react";
 
+/* ── Tender class (招標類型) ── */
 const CLASS_FILTERS = ["全部", "招標公告", "公開徵求", "公開閱覽", "採購預告"] as const;
 type ClassFilter = (typeof CLASS_FILTERS)[number];
 
@@ -16,6 +17,35 @@ const CLASS_COLORS: Record<string, string> = {
   採購預告: "bg-slate-200/60 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400",
 };
 
+/* ── Tracking status (追蹤狀態) ── */
+const TRACKING_STATUSES = [
+  { key: "all", label: "全部" },
+  { key: "unreviewed", label: "未分類" },
+  { key: "evaluating", label: "評估中" },
+  { key: "preparing", label: "準備中" },
+  { key: "submitted", label: "已投標" },
+  { key: "reviewing", label: "審查中" },
+  { key: "awarded", label: "得標" },
+  { key: "lost", label: "未得標" },
+  { key: "skipped", label: "不投" },
+] as const;
+
+const TRACKING_COLORS: Record<string, string> = {
+  unreviewed: "bg-slate-200/60 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400",
+  evaluating: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  preparing: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  submitted: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
+  reviewing: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  awarded: "bg-green-500/10 text-green-600 dark:text-green-400",
+  lost: "bg-red-500/10 text-red-500 dark:text-red-400",
+  skipped: "bg-slate-300/40 text-slate-400 dark:bg-slate-700/40 dark:text-slate-500",
+};
+
+function trackingLabel(key: string): string {
+  return TRACKING_STATUSES.find((s) => s.key === key)?.label ?? key;
+}
+
+/* ── Urgency helpers ── */
 function urgencyColor(days: number | null): string {
   if (days === null) return "border-l-slate-300 dark:border-l-slate-600";
   if (days <= 7) return "border-l-red-500";
@@ -39,9 +69,70 @@ function daysLeftBadge(days: number | null) {
   );
 }
 
+/* ── Inline status dropdown ── */
+function TrackingStatusDropdown({
+  tender,
+  onUpdate,
+}: {
+  tender: NxTender;
+  onUpdate: (jobNumber: string, status: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const current = tender.tracking_status || "unreviewed";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        className={`flex items-center gap-0.5 text-[11px] px-2 py-0.5 rounded-full font-medium cursor-pointer transition-colors hover:ring-1 hover:ring-slate-300 dark:hover:ring-slate-600 ${TRACKING_COLORS[current] || TRACKING_COLORS.unreviewed}`}
+      >
+        {trackingLabel(current)}
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[100px]">
+          {TRACKING_STATUSES.filter((s) => s.key !== "all").map((s) => (
+            <button
+              key={s.key}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onUpdate(tender.job_number, s.key);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer ${
+                current === s.key ? "font-semibold text-blue-500" : "text-slate-600 dark:text-slate-300"
+              }`}
+            >
+              <span className={`inline-block w-2 h-2 rounded-full mr-2 ${TRACKING_COLORS[s.key]?.split(" ")[0] || "bg-slate-300"}`} />
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Main page ── */
 export default function TendersPage() {
   const [tenders, setTenders] = useState<NxTender[]>([]);
-  const [filter, setFilter] = useState<ClassFilter>("全部");
+  const [classFilter, setClassFilter] = useState<ClassFilter>("全部");
+  const [trackingFilter, setTrackingFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,9 +144,11 @@ export default function TendersPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "全部") return tenders;
-    return tenders.filter((t) => t.tender_class === filter);
-  }, [tenders, filter]);
+    let result = tenders;
+    if (classFilter !== "全部") result = result.filter((t) => t.tender_class === classFilter);
+    if (trackingFilter !== "all") result = result.filter((t) => (t.tracking_status || "unreviewed") === trackingFilter);
+    return result;
+  }, [tenders, classFilter, trackingFilter]);
 
   const classCounts = useMemo(() => {
     const counts: Record<string, number> = { 全部: tenders.length };
@@ -66,12 +159,34 @@ export default function TendersPage() {
     return counts;
   }, [tenders]);
 
+  const trackingCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: tenders.length };
+    for (const t of tenders) {
+      const ts = t.tracking_status || "unreviewed";
+      counts[ts] = (counts[ts] || 0) + 1;
+    }
+    return counts;
+  }, [tenders]);
+
+  async function handleTrackingUpdate(jobNumber: string, status: string) {
+    try {
+      await nxApi.tenders.updateTrackingStatus(jobNumber, status);
+      setTenders((prev) =>
+        prev.map((t) =>
+          t.job_number === jobNumber ? { ...t, tracking_status: status } : t,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to update tracking status:", err);
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       <TopBar title="政府標案">
         <div className="flex items-center gap-1.5 text-xs text-slate-400">
           <Gavel size={14} />
-          {tenders.length} 筆等標中
+          {tenders.length} 筆
         </div>
       </TopBar>
 
@@ -87,16 +202,41 @@ export default function TendersPage() {
           </div>
         ) : (
           <div className="max-w-2xl lg:max-w-4xl mx-auto">
-            {/* Filter chips */}
+            {/* Tracking status filter */}
+            <div className="flex gap-1.5 mb-3 flex-wrap">
+              {TRACKING_STATUSES.map((s) => {
+                const count = trackingCounts[s.key] || 0;
+                if (s.key !== "all" && count === 0) return null;
+                const active = trackingFilter === s.key;
+                return (
+                  <button
+                    key={s.key}
+                    onClick={() => setTrackingFilter(s.key)}
+                    className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors cursor-pointer border ${
+                      active
+                        ? "bg-blue-500/10 border-blue-500/30 text-blue-500 font-semibold"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-500/50"
+                    }`}
+                  >
+                    {s.label}
+                    <span className={`font-bold ${active ? "text-blue-500" : "text-slate-900 dark:text-slate-50"}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Class filter chips */}
             <div className="flex gap-2 mb-4 flex-wrap">
               {CLASS_FILTERS.map((cls) => {
                 const count = classCounts[cls] || 0;
                 if (cls !== "全部" && count === 0) return null;
-                const active = filter === cls;
+                const active = classFilter === cls;
                 return (
                   <button
                     key={cls}
-                    onClick={() => setFilter(cls)}
+                    onClick={() => setClassFilter(cls)}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors cursor-pointer border ${
                       active
                         ? "bg-blue-500/10 border-blue-500/30 text-blue-500 font-semibold"
@@ -114,7 +254,7 @@ export default function TendersPage() {
               })}
             </div>
 
-            {/* Tender cards grouped by class */}
+            {/* Tender cards */}
             <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
               {filtered.map((t) => (
                 <Link
@@ -131,9 +271,10 @@ export default function TendersPage() {
                         {t.agency}
                       </p>
                     </div>
-                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <TrackingStatusDropdown tender={t} onUpdate={handleTrackingUpdate} />
                       <span
-                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                           CLASS_COLORS[t.tender_class || "招標公告"] || CLASS_COLORS["招標公告"]
                         }`}
                       >
@@ -145,7 +286,7 @@ export default function TendersPage() {
                     </div>
                   </div>
 
-                  {/* Meta row: category + deadline + budget */}
+                  {/* Meta row */}
                   <div className="mt-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400">
@@ -203,6 +344,12 @@ export default function TendersPage() {
                   )}
                 </Link>
               ))}
+
+              {filtered.length === 0 && (
+                <div className="col-span-2 text-center py-12 text-slate-400 text-sm">
+                  此篩選條件下無標案
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -10,21 +10,52 @@ from services.nexus.tenders import (
     enrich_tender,
     enrich_all_active,
     import_from_pcc_url,
+    update_tracking_status,
+    TRACKING_STATUSES,
+    TRACKING_STATUS_LABELS,
 )
 
 router = APIRouter()
 
 
 @router.get("/")
-def list_tenders(status: str = "active", category: str | None = None):
-    tenders = get_all_tenders(status, category)
+def list_tenders(
+    status: str = "active",
+    category: str | None = None,
+    tracking_status: str | None = None,
+):
+    tenders = get_all_tenders(status, category, tracking_status)
     # Strip body_md from list response (too large)
     return [{k: v for k, v in t.items() if k != "body_md"} for t in tenders]
+
+
+@router.get("/tracking-statuses")
+def list_tracking_statuses():
+    """Return available tracking statuses with labels."""
+    return [
+        {"key": k, "label": v}
+        for k, v in TRACKING_STATUS_LABELS.items()
+    ]
 
 
 @router.get("/expiring")
 def expiring(within_days: int = 30):
     return get_tenders_expiring(within_days)
+
+
+class UpdateTrackingStatusRequest(BaseModel):
+    tracking_status: str
+
+
+@router.patch("/{job_number}/tracking-status")
+def patch_tracking_status(job_number: str, body: UpdateTrackingStatusRequest):
+    """Update a tender's tracking status."""
+    try:
+        return update_tracking_status(job_number, body.tracking_status)
+    except FileNotFoundError:
+        raise HTTPException(404, f"Tender {job_number} not found")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 class ImportPccRequest(BaseModel):

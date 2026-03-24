@@ -20,6 +20,14 @@ DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
 G0V_API_URL = "https://pcc-api.openfun.app/api/tender?unit_id={unit_id}&job_number={job_number}"
 PCC_DETAIL_URL = "https://web.pcc.gov.tw/tps/QueryTender/query/searchTenderDetail?pkPmsMain={pk}"
+PCC_SEARCH_URL = (
+    "https://web.pcc.gov.tw/prkms/tender/common/basic/readTenderBasic"
+    "?pageSize=50&firstSearch=true&searchType=basic&isBinding=N&isLogIn=N"
+    "&level_1=on&orgName=&orgId=&tenderName=&tenderId={job_number}"
+    "&tenderType=TENDER_DECLARATION&tenderWay=TENDER_WAY_ALL_DECLARATION"
+    "&dateType=isDate&tenderStartDate=&tenderEndDate="
+    "&radProctrgCate=&policyAdvocacy="
+)
 
 BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -319,6 +327,117 @@ def _parse_docx(file_path: str) -> str:
     return "\n".join(texts)
 
 
+def search_pcc_by_job_number(job_number: str) -> dict:
+    """Search pcc.gov.tw by job_number and scrape the detail page.
+
+    Fallback when g0v API doesn't return a pcc URL.
+    Tries all 4 tender types (招標公告, 公開徵求, 公開閱覽, 採購預告).
+    Returns same structure as fetch_pcc_page_content() plus 'pcc_url'.
+    """
+    from playwright.sync_api import sync_playwright
+
+    # pcc.gov.tw search URL template — GET request with tenderId
+    TENDER_TYPES = [
+        "TENDER_DECLARATION",    # 招標公告
+        "TENDER_OPEN_REQUEST",   # 公開徵求
+        "TENDER_OPEN_BROWSE",    # 公開閱覽
+        "TENDER_FORECAST",       # 採購預告
+    ]
+
+    result = {"page_text": "", "notice_doc": "", "download_links": [], "pcc_url": ""}
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(
+            user_agent=BROWSER_UA,
+            viewport={"width": 1280, "height": 900},
+            locale="zh-TW",
+        )
+
+        try:
+            # Step 1: Search across all tender types until we find a result
+            detail_link = None
+            for ttype in TENDER_TYPES:
+                search_url = (
+                    f"https://web.pcc.gov.tw/prkms/tender/common/basic/readTenderBasic"
+                    f"?pageSize=50&firstSearch=true&searchType=basic&isBinding=N&isLogIn=N"
+                    f"&level_1=on&orgName=&orgId=&tenderName=&tenderId={job_number}"
+                    f"&tenderType={ttype}&tenderWay=TENDER_WAY_ALL_DECLARATION"
+                    f"&dateType=isDate&tenderStartDate=&tenderEndDate="
+                    f"&radProctrgCate=&policyAdvocacy="
+                )
+                page.goto(search_url, wait_until="networkidle", timeout=30000)
+                page.wait_for_timeout(2000)
+
+                body = page.inner_text("body")
+                if "無符合條件" in body:
+                    continue
+
+                # Found results — look for 檢視 link
+                detail_link = page.query_selector(
+                    'a[href*="/prkms/urlSelector/"], '
+                    'a[href*="readTenderDetail"], '
+                    'a[href*="searchTenderDetail"], '
+                    'a:has-text("檢視")'
+                )
+                if detail_link:
+                    logger.info("Found tender %s in pcc search (type=%s)", job_number, ttype)
+                    break
+
+            if not detail_link:
+                logger.warning("No results found in pcc search for %s", job_number)
+                result["page_text"] = page.inner_text("body")
+                result["pcc_url"] = page.url
+                browser.close()
+                return result
+
+            # Step 2: Click through to detail page
+            detail_link.click()
+            page.wait_for_load_state("networkidle", timeout=15000)
+            page.wait_for_timeout(2000)
+
+            result["pcc_url"] = page.url
+            result["page_text"] = page.inner_text("body")
+
+            # Step 3: Find and download notice documents
+            links = page.eval_on_selector_all(
+                "a[href]",
+                """els => els.map(e => ({
+                    text: e.innerText.trim().substring(0, 80),
+                    href: e.href
+                }))""",
+            )
+            doc_links = [
+                lk for lk in links
+                if any(kw in lk["text"] for kw in ["下載", "須知", "文件", "規格", "附件"])
+                and "downloadNoticeDocument" in lk.get("href", "")
+            ]
+            result["download_links"] = doc_links
+
+            for lk in doc_links:
+                try:
+                    with page.expect_download(timeout=15000) as dl_info:
+                        page.evaluate(f"window.open('{lk['href']}')")
+                    download = dl_info.value
+                    fname = download.suggested_filename or "notice.odt"
+                    tmp_path = str(DOCS_DIR / fname)
+                    download.save_as(tmp_path)
+                    doc_text = _parse_document(tmp_path)
+                    if doc_text:
+                        result["notice_doc"] = doc_text
+                        logger.info("Downloaded notice doc via search: %s (%d chars)", fname, len(doc_text))
+                    break
+                except Exception as e:
+                    logger.warning("Failed to download notice doc: %s", e)
+
+        except Exception as e:
+            logger.error("pcc search failed for %s: %s", job_number, e)
+
+        browser.close()
+
+    return result
+
+
 def enrich_tender_case(unit_id: str, job_number: str) -> dict | None:
     """Fetch full detail for a tender: g0v API + pcc.gov.tw page + notice document.
 
@@ -337,7 +456,7 @@ def enrich_tender_case(unit_id: str, job_number: str) -> dict | None:
     pk_match = re.search(r"pkPmsMain=([^&]+)", pcc_url)
 
     if pk_match:
-        # Step 3: Scrape pcc page + download notice doc
+        # Step 3a: Direct pcc URL available — scrape it
         try:
             pcc_data = fetch_pcc_page_content(pcc_url)
             detail["page_text"] = pcc_data.get("page_text", "")
@@ -349,9 +468,18 @@ def enrich_tender_case(unit_id: str, job_number: str) -> dict | None:
             detail["notice_doc"] = ""
             detail["pcc_url"] = pcc_url
     else:
-        detail["page_text"] = ""
-        detail["notice_doc"] = ""
-        detail["pcc_url"] = ""
+        # Step 3b: No pcc URL — fallback to search by job_number
+        logger.info("No pcc URL from g0v API, searching pcc.gov.tw for %s", job_number)
+        try:
+            pcc_data = search_pcc_by_job_number(job_number)
+            detail["page_text"] = pcc_data.get("page_text", "")
+            detail["notice_doc"] = pcc_data.get("notice_doc", "")
+            detail["pcc_url"] = pcc_data.get("pcc_url", "")
+        except Exception as e:
+            logger.error("pcc search fallback failed for %s: %s", job_number, e)
+            detail["page_text"] = ""
+            detail["notice_doc"] = ""
+            detail["pcc_url"] = ""
 
     return detail
 

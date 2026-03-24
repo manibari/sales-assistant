@@ -11,6 +11,28 @@ logger = logging.getLogger(__name__)
 
 CASES_DIR = Path(__file__).resolve().parent.parent.parent / "materials" / "tenders" / "cases"
 
+TRACKING_STATUSES = [
+    "unreviewed",   # 未分類 — 剛爬進來
+    "evaluating",   # 評估中
+    "preparing",    # 準備中 — 決定投了，備標
+    "submitted",    # 已投標
+    "reviewing",    # 審查中
+    "awarded",      # 得標
+    "lost",         # 未得標
+    "skipped",      # 不投
+]
+
+TRACKING_STATUS_LABELS = {
+    "unreviewed": "未分類",
+    "evaluating": "評估中",
+    "preparing": "準備中",
+    "submitted": "已投標",
+    "reviewing": "審查中",
+    "awarded": "得標",
+    "lost": "未得標",
+    "skipped": "不投",
+}
+
 TENDER_CLASS_MAP = {
     "採購預告": ["採購預告", "預告"],
     "公開徵求": ["公開徵求廠商提供參考資料"],
@@ -126,6 +148,7 @@ def _parse_case(path: Path) -> dict | None:
         "reference_url": reference_url,
         "days_left": days_left,
         "status": fm.get("status", "active"),
+        "tracking_status": fm.get("tracking_status", "unreviewed"),
         "tags": fm.get("tags", []),
         "contact_name": fm.get("contact_name"),
         "contact_phone": fm.get("contact_phone"),
@@ -148,12 +171,18 @@ def _load_all_cases() -> list[dict]:
     return results
 
 
-def get_all_tenders(status: str = "active", category: str | None = None) -> list[dict]:
-    """Get all tenders, optionally filtered by status and category."""
+def get_all_tenders(
+    status: str = "active",
+    category: str | None = None,
+    tracking_status: str | None = None,
+) -> list[dict]:
+    """Get all tenders, optionally filtered by status, category, tracking_status."""
     all_cases: list[dict] = _cached("all_cases", _load_all_cases)
     result = [t for t in all_cases if t["status"] == status]
     if category:
         result = [t for t in result if t["category"] == category]
+    if tracking_status:
+        result = [t for t in result if t["tracking_status"] == tracking_status]
     # Sort by deadline ASC (None last)
     result.sort(key=lambda t: t["deadline"] or "9999-99-99")
     return result
@@ -200,17 +229,61 @@ def enrich_tender(job_number: str) -> dict:
     fm = yaml.safe_load(parts[1])
     unit_id = str(fm.get("unit_id", ""))
 
-    if not unit_id:
-        raise ValueError(f"No unit_id in frontmatter for {job_number}")
+    enriched = None
 
-    # Enrich via API + Playwright
-    enriched = enrich_tender_case(unit_id, job_number)
+    if unit_id:
+        # Try g0v API + pcc scrape (with fallback to search)
+        enriched = enrich_tender_case(unit_id, job_number)
+
     if not enriched:
-        raise RuntimeError(f"Failed to enrich {job_number}")
+        # Fallback: search pcc.gov.tw directly by job_number
+        from services.nexus.tender_detail_parser import search_pcc_by_job_number
+        logger.info("Falling back to pcc search for %s", job_number)
+        pcc_data = search_pcc_by_job_number(job_number)
+        if pcc_data.get("page_text"):
+            enriched = {
+                "page_text": pcc_data["page_text"],
+                "notice_doc": pcc_data.get("notice_doc", ""),
+                "pcc_url": pcc_data.get("pcc_url", ""),
+            }
+
+    if not enriched:
+        raise RuntimeError(f"Failed to enrich {job_number} — no data from g0v API or pcc search")
 
     page_text = enriched.get("page_text", "")
     notice_doc = enriched.get("notice_doc", "")
     pcc_url = enriched.get("pcc_url", "")
+
+    # Backfill missing frontmatter fields from enriched data
+    fm_updated = False
+    backfill_map = {
+        "budget": "budget",
+        "deadline": "deadline",
+        "contact_name": "contact_name",
+        "contact_phone": "contact_phone",
+        "contact_email": "contact_email",
+        "type": "tender_type",
+        "category": "category",
+    }
+    for fm_key, enriched_key in backfill_map.items():
+        if not fm.get(fm_key) and enriched.get(enriched_key):
+            val = enriched[enriched_key]
+            # Parse budget string to int if possible
+            if fm_key == "budget" and isinstance(val, str):
+                import re
+                nums = re.findall(r"[\d,]+", val)
+                if nums:
+                    try:
+                        val = int(nums[0].replace(",", ""))
+                    except ValueError:
+                        continue
+            fm[fm_key] = val
+            fm_updated = True
+            logger.info("Backfilled %s.%s = %s", job_number, fm_key, val)
+
+    if fm_updated:
+        parts[1] = "\n" + yaml.dump(fm, allow_unicode=True, default_flow_style=False)
+        text = "---".join(parts)
 
     # Update the markdown file — append new sections if not already present
     new_sections = []
@@ -233,16 +306,18 @@ def enrich_tender(job_number: str) -> dict:
         new_sections.append(f"\n## 履約地點\n\n{enriched['location']}\n")
 
     if new_sections:
-        updated = text.rstrip() + "\n" + "\n".join(new_sections)
-        md_file.write_text(updated, encoding="utf-8")
-        # Invalidate cache
+        text = text.rstrip() + "\n" + "\n".join(new_sections)
+
+    if new_sections or fm_updated:
+        md_file.write_text(text, encoding="utf-8")
         _cache.clear()
-        logger.info("Enriched %s with %d new sections", job_number, len(new_sections))
+        logger.info("Enriched %s: %d sections added, fm_updated=%s", job_number, len(new_sections), fm_updated)
 
     return {
         "status": "enriched",
         "job_number": job_number,
         "sections_added": len(new_sections),
+        "fields_backfilled": fm_updated,
         "page_text_len": len(page_text),
         "notice_doc_len": len(notice_doc),
     }
@@ -428,6 +503,35 @@ def import_from_pcc_url(pcc_url: str) -> dict:
         "file": filepath.name,
         "has_notice": bool(notice_doc),
     }
+
+
+def update_tracking_status(job_number: str, tracking_status: str) -> dict:
+    """Update the tracking_status field in a tender's frontmatter."""
+    if tracking_status not in TRACKING_STATUSES:
+        raise ValueError(
+            f"Invalid tracking_status '{tracking_status}'. "
+            f"Valid: {', '.join(TRACKING_STATUSES)}"
+        )
+
+    md_file = _find_case_file(job_number)
+    if not md_file:
+        raise FileNotFoundError(f"Case file not found for {job_number}")
+
+    text = md_file.read_text(encoding="utf-8")
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        raise ValueError(f"Invalid frontmatter in {md_file.name}")
+
+    fm = yaml.safe_load(parts[1])
+    fm["tracking_status"] = tracking_status
+
+    updated = f"---\n{yaml.dump(fm, allow_unicode=True, default_flow_style=False)}---{parts[2]}"
+    md_file.write_text(updated, encoding="utf-8")
+
+    _cache.clear()
+    logger.info("Updated tracking_status for %s → %s", job_number, tracking_status)
+
+    return {"job_number": job_number, "tracking_status": tracking_status}
 
 
 def _find_case_file(job_number: str) -> Path | None:

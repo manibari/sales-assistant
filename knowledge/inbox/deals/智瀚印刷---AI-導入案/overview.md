@@ -12,7 +12,7 @@ tags:
 - closed
 title: 智瀚印刷 - AI 導入案
 type: deal-overview
-updated: '2026-03-18'
+updated: '2026-03-24'
 ---
 
 # 智瀚印刷 - AI 導入案

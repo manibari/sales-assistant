@@ -5,21 +5,9 @@ goals:
   - name: keyword-coverage
     description: Improve tender scraper keyword match rate without increasing false positives
     scope: materials/tenders/keywords.yml
-    metric_cmd: >
-      python3 -c "
-      from scripts.tender_scraper import _load_keywords;
-      from pathlib import Path;
-      import yaml;
-      kws = _load_keywords();
-      cases = list(Path('materials/tenders/cases').glob('*.md'));
-      matched = 0;
-      for c in cases:
-        t = c.read_text()[:500].lower();
-        if any(kw.lower() in t for kw in kws): matched += 1;
-      print(len(kws))
-      "
+    metric_cmd: "python3 scripts/keyword_metric.py"
     direction: higher
-    verify_cmd: "python3 -c \"from scripts.tender_scraper import _load_keywords; kws=_load_keywords(); assert len(kws)>50, f'Too few keywords: {len(kws)}'; print(f'OK: {len(kws)} keywords')\""
+    verify_cmd: "python3 scripts/keyword_metric.py"
     max_iterations: 10
     cooldown_secs: 60
     stale_limit: 3

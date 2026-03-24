@@ -13,7 +13,7 @@ tags:
 - L0
 title: 奇美食品 - 智慧產線導入案
 type: deal-overview
-updated: '2026-03-18'
+updated: '2026-03-24'
 ---
 
 # 奇美食品 - 智慧產線導入案

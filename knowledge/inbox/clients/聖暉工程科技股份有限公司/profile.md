@@ -11,7 +11,7 @@ tags:
 - F41 建築工程業
 title: 聖暉工程科技股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-18'
+updated: '2026-03-24'
 ---
 
 # 聖暉工程科技股份有限公司

@@ -57,6 +57,8 @@ active:
     - 顧問服務
     - 委外服務
     - 技術服務
+    - 資料整合
+    - 資訊維護
 
   enterprise:
     - ERP
@@ -73,6 +75,7 @@ active:
   gis_bim:
     - BIM
     - GIS
+    - 空間資訊
 
   security:
     - 資安
@@ -100,6 +103,7 @@ active:
     - 備份
     - 機房
     - UPS
+    - 網路整併
 
   emerging:
     - 區塊鏈

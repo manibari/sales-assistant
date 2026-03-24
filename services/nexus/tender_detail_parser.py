@@ -29,6 +29,24 @@ PCC_SEARCH_URL = (
     "&radProctrgCate=&policyAdvocacy="
 )
 
+# pcc.gov.tw listing URL — for scraping 公開徵求/招標公告/公開閱覽 listings
+PCC_LIST_URL = (
+    "https://web.pcc.gov.tw/prkms/tender/common/basic/readTenderBasic"
+    "?pageSize=50&firstSearch=true&searchType=basic&isBinding=N&isLogIn=N"
+    "&level_1=on&orgName=&orgId=&tenderName=&tenderId="
+    "&tenderType={tender_type}&tenderWay=TENDER_WAY_ALL_DECLARATION"
+    "&dateType={date_type}&tenderStartDate={start_date}&tenderEndDate={end_date}"
+    "&radProctrgCate=&policyAdvocacy="
+)
+
+# Tender type codes for pcc.gov.tw search
+PCC_TENDER_TYPES = {
+    "招標公告": "TENDER_DECLARATION",
+    "公開徵求": "TENDER_OPEN_REQUEST",
+    "公開閱覽": "TENDER_OPEN_BROWSE",
+    "採購預告": "TENDER_FORECAST",
+}
+
 BROWSER_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -325,6 +343,115 @@ def _parse_docx(file_path: str) -> str:
                 if parts:
                     texts.append("".join(parts))
     return "\n".join(texts)
+
+
+def scrape_pcc_listings(
+    tender_type: str = "公開徵求",
+    date_type: str = "isNow",
+    start_date: str = "",
+    end_date: str = "",
+    max_pages: int = 5,
+) -> list[dict]:
+    """Scrape tender listings from pcc.gov.tw search page.
+
+    Args:
+        tender_type: One of 招標公告/公開徵求/公開閱覽/採購預告
+        date_type: isNow (等標期內), isDate (日期區間), isSpdt (等標期)
+        start_date: ROC date like "115/03/24" (for isDate)
+        end_date: ROC date like "115/03/24" (for isDate)
+        max_pages: Maximum pages to scrape (50 items/page)
+
+    Returns list of dicts: {idx, agency, job_number, name, tender_type_label,
+                            nature, dates, budget, detail_url}
+    """
+    from playwright.sync_api import sync_playwright
+
+    type_code = PCC_TENDER_TYPES.get(tender_type, "TENDER_OPEN_REQUEST")
+    url = PCC_LIST_URL.format(
+        tender_type=type_code,
+        date_type=date_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    all_results = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(
+            user_agent=BROWSER_UA,
+            viewport={"width": 1280, "height": 900},
+            locale="zh-TW",
+        )
+
+        try:
+            page.goto(url, wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(2500)
+
+            for page_num in range(max_pages):
+                body = page.inner_text("body")
+                if "無符合條件" in body:
+                    break
+
+                # Parse result rows
+                rows = page.evaluate("""
+                    () => {
+                        const rows = [];
+                        const trs = document.querySelectorAll('tr');
+                        for (const tr of trs) {
+                            const viewLink = tr.querySelector('a[href*="/prkms/urlSelector/"]');
+                            if (!viewLink) continue;
+                            const tds = tr.querySelectorAll('td');
+                            if (tds.length < 7) continue;
+
+                            const idx = tds[0]?.innerText?.trim() || '';
+                            const agency = tds[1]?.innerText?.trim() || '';
+                            const jobAndName = tds[2]?.innerText?.trim() || '';
+                            const parts = jobAndName.split('\\n').map(s => s.trim()).filter(Boolean);
+                            const job_number = (parts[0] || '').replace(/\\s*\\(更正公告\\)\\s*/, '').trim();
+                            const name = parts.slice(1).join(' ').trim();
+                            const count = tds[3]?.innerText?.trim() || '';
+                            const nature = tds[4]?.innerText?.trim() || '';
+                            const dates = tds[5]?.innerText?.trim() || '';
+                            const budget = tds[6]?.innerText?.trim() || '';
+                            const href = viewLink.href;
+
+                            if (job_number && name) {
+                                rows.push({agency, job_number, name, count, nature, dates, budget, detail_url: href});
+                            }
+                        }
+                        return rows;
+                    }
+                """)
+
+                all_results.extend(rows)
+                logger.info(
+                    "[pcc scrape] page %d: %d rows (total: %d)",
+                    page_num + 1, len(rows), len(all_results),
+                )
+
+                if len(rows) < 50:
+                    break  # Last page
+
+                # Navigate to next page
+                next_link = page.query_selector('a:has-text("下一頁")')
+                if not next_link:
+                    break
+                next_link.click()
+                page.wait_for_load_state("networkidle", timeout=15000)
+                page.wait_for_timeout(2000)
+
+        except Exception as e:
+            logger.error("pcc listing scrape failed: %s", e)
+
+        browser.close()
+
+    # Add tender_type label to each row
+    for r in all_results:
+        r["tender_type_label"] = tender_type
+
+    logger.info("[pcc scrape] Total %s listings: %d", tender_type, len(all_results))
+    return all_results
 
 
 def search_pcc_by_job_number(job_number: str) -> dict:

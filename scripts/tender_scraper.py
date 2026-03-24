@@ -429,6 +429,47 @@ def regenerate_index():
     logger.info("Regenerated INDEX.md: %d active, %d archived", len(active), len(archived))
 
 
+def fetch_pcc_open_requests(existing: set[str]) -> list[dict]:
+    """Fetch 公開徵求 listings from pcc.gov.tw (not available in g0v API).
+
+    Returns list of new tenders (filtered by keywords, deduped).
+    """
+    from services.nexus.tender_detail_parser import scrape_pcc_listings
+
+    logger.info("[pcc 公開徵求] Scraping pcc.gov.tw for 公開徵求 listings (等標期內)...")
+    listings = scrape_pcc_listings(
+        tender_type="公開徵求",
+        date_type="isNow",  # 等標期內 — all currently open
+        max_pages=20,       # up to 1000 items (typical ~900)
+    )
+
+    new_tenders = []
+    for item in listings:
+        job_number = item.get("job_number", "")
+        if not job_number or job_number in existing:
+            continue
+
+        name = item.get("name", "")
+        nature = item.get("nature", "")
+
+        if not should_enrich(name, nature):
+            continue
+
+        new_tenders.append({
+            "job_number": job_number,
+            "unit_id": "",  # pcc doesn't give unit_id directly
+            "title": name,
+            "tender_type": "公開徵求廠商提供參考資料",
+            "category": nature,
+            "unit_name": item.get("agency", ""),
+            "detail_url": item.get("detail_url", ""),
+        })
+        existing.add(job_number)
+
+    logger.info("[pcc 公開徵求] New keyword-matching tenders: %d (from %d total)", len(new_tenders), len(listings))
+    return new_tenders
+
+
 def run(days: int = 1, do_enrich: bool = True):
     """Main scraper pipeline."""
     CASES_DIR.mkdir(parents=True, exist_ok=True)
@@ -442,8 +483,8 @@ def run(days: int = 1, do_enrich: bool = True):
     existing = get_existing_job_numbers()
     logger.info("Existing cases: %d", len(existing))
 
-    # Step 1: Fetch tender listings
-    logger.info("[step 1/5] Fetching tender listings (days=%d)...", days)
+    # Step 1a: Fetch tender listings from g0v API
+    logger.info("[step 1/5] Fetching tender listings from g0v (days=%d)...", days)
     new_tenders = []
     for i in range(days):
         target = date.today() - timedelta(days=i)
@@ -479,7 +520,13 @@ def run(days: int = 1, do_enrich: bool = True):
             })
             existing.add(job_number)
 
-    logger.info("New tenders found: %d", len(new_tenders))
+    logger.info("New tenders from g0v: %d", len(new_tenders))
+
+    # Step 1b: Also fetch 公開徵求 from pcc.gov.tw (better coverage)
+    pcc_tenders = fetch_pcc_open_requests(existing)
+    new_tenders.extend(pcc_tenders)
+
+    logger.info("Total new tenders (g0v + pcc): %d", len(new_tenders))
 
     # Step 2: Fetch detail and create case files
     logger.info("[step 2/5] Creating case files for %d new tenders...", len(new_tenders))
@@ -488,21 +535,26 @@ def run(days: int = 1, do_enrich: bool = True):
 
     for idx, t in enumerate(new_tenders, 1):
         logger.info("[step 2/5] (%d/%d) %s — %s", idx, len(new_tenders), t["job_number"], t["title"][:40])
-        detail = fetch_tender_detail(t["unit_id"], t["job_number"])
+
+        detail = None
+        if t.get("unit_id"):
+            # Has unit_id → try g0v API for structured detail
+            detail = fetch_tender_detail(t["unit_id"], t["job_number"])
+
         if not detail:
-            logger.warning("No detail for %s, creating minimal case", t["job_number"])
+            # No unit_id or g0v failed → create minimal case (enrich will backfill via pcc)
             detail = {
                 "name": t["title"],
                 "agency": t.get("unit_name", ""),
                 "job_number": t["job_number"],
                 "tender_type": t["tender_type"],
                 "category": t["category"],
-                "raw_json": {"unit_id": t["unit_id"]},
+                "raw_json": {"unit_id": t.get("unit_id", "")},
             }
-        # Ensure unit_id is available for source_url
+
         if "raw_json" not in detail:
             detail["raw_json"] = {}
-        detail["raw_json"]["unit_id"] = t["unit_id"]
+        detail["raw_json"]["unit_id"] = t.get("unit_id", "")
 
         filepath = create_case_file(detail)
         if filepath:

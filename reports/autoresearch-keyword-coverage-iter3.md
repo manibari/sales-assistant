@@ -1,14 +1,10 @@
-Verification passes: **89 keywords** (up from 83).
+**91 → 95** (+4). Here's what was added and why:
 
-**Changes made** — added 6 keywords across 2 new categories + 1 addition to existing:
+| Keyword | Category | Matches | Sample tender title |
+|---|---|---|---|
+| `資訊設備` | infrastructure | 3 | 「115年資訊設備及機房整合維護案」 |
+| `負載平衡` | infrastructure | 1 | 「宿網資安防護與廣域負載平衡器一式」 |
+| `門禁` | infrastructure | 1 | 「115年門禁及出勤刷卡機汰換暨系統建置採購案」 |
+| `個資保護` | security | 1 | 「115年度資訊安全與個資保護管理系統顧問服務案」 |
 
-| Keyword | Category | Sample tender it would match |
-|---------|----------|------------------------------|
-| 照護系統 | health_it | "AI 零接觸智能照護系統" |
-| 健康管理 | health_it | "健康管理APP開發" |
-| 網路行銷 | martech | "社群網路行銷服務採購案" |
-| 行銷科技 | martech | "協助企業AI行銷-LinkedIn潛在買主開發" |
-| 行動應用 | martech | mobile app development tenders |
-| 語音辨識 | emerging | "AI語音輔助病歷專案" |
-
-All are Chinese compound terms (≥2 chars), none are on the rejected list, and they target real gaps where tenders were only caught by the broad "AI"/"APP" patterns.
+All are Chinese compound terms (≥2 chars), clearly IT-relevant, and match real tender titles with zero false positive risk.

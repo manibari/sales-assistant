@@ -91,6 +91,7 @@ active:
     - 端點防護
     - EDR
     - MDR
+    - 個資保護
 
   api_integration:
     - API介接
@@ -108,6 +109,9 @@ active:
     - 網路整併
     - 交換器
     - 虛擬化
+    - 資訊設備
+    - 負載平衡
+    - 門禁
 
   emerging:
     - 區塊鏈

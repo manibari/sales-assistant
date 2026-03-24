@@ -108,6 +108,8 @@ active:
     - API介接
     - 系統介接
     - 資料介接
+    - 資料交換
+    - 跨系統
 
   infrastructure:
     - 伺服器
@@ -139,6 +141,9 @@ active:
     - 資料倉儲
     - ETL
     - 儀表板
+    - 數據治理
+    - 資料治理
+    - 資料湖
 
 # Candidates are auto-populated by keyword analysis.
 # Format: keyword: {count: N, first_seen: date, sample_titles: [...]}

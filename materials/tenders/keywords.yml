@@ -1,0 +1,124 @@
+# Tender scraper keyword config
+# - active: currently used for matching
+# - candidates: suggested by daily analysis, pending review
+# - rejected: reviewed and rejected (won't be suggested again)
+#
+# To promote a candidate: move it from candidates to the appropriate active category.
+# To reject: move it to rejected.
+
+active:
+  ai_data:
+    - 人工智慧
+    - AI
+    - 機器學習
+    - 深度學習
+    - 大語言
+    - LLM
+    - GPT
+    - 生成式
+    - 自然語言
+    - NLP
+    - 影像辨識
+    - 電腦視覺
+    - 資料分析
+    - 大數據
+    - 資料科學
+    - 聊天機器人
+    - 智慧
+    - 預測模型
+
+  iot_automation:
+    - 物聯網
+    - IoT
+    - 自動化
+    - RPA
+    - 機器人
+    - 無人機
+    - 無人載具
+
+  info_systems:
+    - 資訊系統
+    - 軟體開發
+    - 系統整合
+    - 雲端
+    - 資訊服務
+    - 數位轉型
+    - 資料庫
+    - 網站
+    - APP
+    - 平台建置
+    - 系統維護
+    - 系統建置
+    - 網站維護
+    - 網站建置
+    - 監控系統
+    - 管理系統
+    - 資訊委外
+    - 顧問服務
+    - 委外服務
+    - 技術服務
+
+  enterprise:
+    - ERP
+    - CRM
+    - HRM
+    - MES
+
+  digital_transform:
+    - 數位學習
+    - 電子簽章
+    - 無紙化
+    - 電子化
+
+  gis_bim:
+    - BIM
+    - GIS
+
+  security:
+    - 資安
+    - ISMS
+    - 資訊安全
+    - 弱點掃描
+    - 滲透測試
+    - SOC
+    - 防火牆
+    - WAF
+    - 端點防護
+    - EDR
+    - MDR
+
+  api_integration:
+    - API介接
+    - 系統介接
+    - 資料介接
+
+  infrastructure:
+    - 伺服器
+    - 網路設備
+    - 磁碟陣列
+    - 儲存設備
+    - 備份
+    - 機房
+    - UPS
+
+  emerging:
+    - 區塊鏈
+    - 元宇宙
+    - XR
+
+  data_platform:
+    - 開放資料
+    - 資料倉儲
+    - ETL
+    - 儀表板
+
+# Candidates are auto-populated by keyword analysis.
+# Format: keyword: {count: N, first_seen: date, sample_titles: [...]}
+candidates: {}
+
+# Rejected keywords won't be suggested again.
+rejected:
+  - AR    # 行政區代碼 false positive
+  - VR    # 路段代碼 false positive
+  - BI    # 編號前綴 false positive
+  - API   # 場域代碼 false positive (use API介接 instead)

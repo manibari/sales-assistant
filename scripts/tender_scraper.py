@@ -40,22 +40,28 @@ BY_CATEGORY_DIR = PROJECT_ROOT / "materials" / "tenders" / "by-category"
 G0V_LIST_URL = "https://pcc-api.openfun.app/api/listbydate"
 G0V_TENDER_URL = "https://pcc-api.openfun.app/api/tender"
 
-# Keywords for auto-enrichment — tenders matching these get full content
-ENRICH_KEYWORDS = [
-    # AI & Data
-    "人工智慧", "AI", "機器學習", "深度學習", "大語言", "LLM", "GPT", "生成式",
-    "自然語言", "NLP", "影像辨識", "電腦視覺", "資料分析", "大數據", "資料科學",
-    "聊天機器人", "智慧", "預測模型",
-    # Information Systems & Services
-    "資訊系統", "軟體開發", "系統整合", "雲端", "資訊服務", "數位轉型",
-    "資料庫", "網站", "APP", "平台建置", "系統維護", "系統建置",
-    "網站維護", "網站建置", "監控系統", "管理系統", "資訊委外",
-    "顧問服務", "委外服務", "技術服務",
-    # Security
-    "資安", "ISMS", "資訊安全", "弱點掃描", "滲透測試", "SOC",
-    # Infrastructure
-    "伺服器", "網路設備", "磁碟陣列", "儲存設備", "備份",
-]
+# Keywords loaded from keywords.yml (data-driven, not hardcoded).
+# Fallback to hardcoded if yml not found.
+def _load_keywords() -> list[str]:
+    keywords_path = PROJECT_ROOT / "materials" / "tenders" / "keywords.yml"
+    if keywords_path.exists():
+        try:
+            data = yaml.safe_load(keywords_path.read_text())
+            keywords = []
+            for cat_list in (data.get("active") or {}).values():
+                if isinstance(cat_list, list):
+                    keywords.extend(cat_list)
+            if keywords:
+                return keywords
+        except Exception:
+            pass
+    # Fallback
+    return [
+        "人工智慧", "AI", "機器學習", "深度學習", "資訊系統", "軟體開發",
+        "系統整合", "雲端", "資訊服務", "數位轉型", "資安", "資訊安全",
+    ]
+
+ENRICH_KEYWORDS = _load_keywords()
 
 # Tender types to fetch (broadened from original 公開徵求 only)
 TENDER_TYPES = [
@@ -66,6 +72,47 @@ TENDER_TYPES = [
 ]
 
 
+def _wait_for_network(host: str = "pcc-api.openfun.app", max_wait: int = 120) -> bool:
+    """Wait until DNS resolves (handles launchd starting before network is ready)."""
+    import socket
+    import time as _time
+
+    for attempt in range(max_wait // 10):
+        try:
+            socket.getaddrinfo(host, 443)
+            return True
+        except socket.gaierror:
+            if attempt == 0:
+                logger.warning("[network] DNS not ready, waiting...")
+            _time.sleep(10)
+    logger.error("[network] DNS still not available after %ds", max_wait)
+    return False
+
+
+def _fetch_with_retry(url: str, params: dict, max_retries: int = 3) -> requests.Response | None:
+    """Fetch with exponential backoff for 429/5xx errors."""
+    import time as _time
+
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, params=params, timeout=15)
+            if resp.status_code == 429:
+                wait = 2 ** (attempt + 2)  # 4s, 8s, 16s
+                logger.warning("[fetch] 429 rate limited, waiting %ds (attempt %d/%d)", wait, attempt + 1, max_retries)
+                _time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.ConnectionError as e:
+            wait = 2 ** (attempt + 1)
+            logger.warning("[fetch] Connection error, retrying in %ds: %s", wait, e)
+            _time.sleep(wait)
+        except Exception as e:
+            logger.error("[fetch] Unexpected error: %s", e)
+            return None
+    return None
+
+
 def fetch_tenders_by_date(target_date: date) -> list[dict]:
     """Fetch tender listings for a given date from g0v API."""
     date_str = target_date.strftime("%Y%m%d")
@@ -73,16 +120,15 @@ def fetch_tenders_by_date(target_date: date) -> list[dict]:
     page = 0
 
     while True:
+        resp = _fetch_with_retry(G0V_LIST_URL, {"date": date_str, "page": page})
+        if not resp:
+            logger.error("Failed to fetch page %d for %s after retries", page, date_str)
+            break
+
         try:
-            resp = requests.get(
-                G0V_LIST_URL,
-                params={"date": date_str, "page": page},
-                timeout=15,
-            )
-            resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.error("Failed to fetch page %d for %s: %s", page, date_str, e)
+            logger.error("Invalid JSON on page %d for %s: %s", page, date_str, e)
             break
 
         records = data.get("records", [])
@@ -387,6 +433,11 @@ def run(days: int = 1, do_enrich: bool = True):
     """Main scraper pipeline."""
     CASES_DIR.mkdir(parents=True, exist_ok=True)
     ARCHIVED_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Wait for network (launchd may start before WiFi/DNS is ready)
+    if not _wait_for_network():
+        logger.error("Aborting: no network connectivity")
+        return
 
     existing = get_existing_job_numbers()
     logger.info("Existing cases: %d", len(existing))

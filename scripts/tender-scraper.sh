@@ -41,5 +41,12 @@ if type _sk_exec_record_run &>/dev/null; then
     "$start_epoch" "$end_epoch" "$run_exit" "" "" "" "" "" ""
 fi
 
+# Run keyword analysis (discover new candidates from unmatched tenders)
+if [ "$run_exit" -eq 0 ] && [ -f "${PROJECT_DIR}/scripts/tender_keyword_analyzer.py" ]; then
+  echo "=== Keyword Analysis ==="
+  python3 "${PROJECT_DIR}/scripts/tender_keyword_analyzer.py" --auto 2>&1 \
+    | tee -a "${LOG_DIR}/keyword-analysis-${DATE}.log" || true
+fi
+
 echo "=== Done ==="
 exit "$run_exit"

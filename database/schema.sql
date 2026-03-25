@@ -593,3 +593,46 @@ CREATE TABLE IF NOT EXISTS nx_email_thread (
 CREATE INDEX IF NOT EXISTS idx_nx_email_thread_client ON nx_email_thread(client_id);
 CREATE INDEX IF NOT EXISTS idx_nx_email_thread_deal ON nx_email_thread(deal_id);
 CREATE INDEX IF NOT EXISTS idx_nx_email_thread_received ON nx_email_thread(received_at DESC);
+
+-- 25. Tender tracking (government procurement / open requests)
+CREATE TABLE IF NOT EXISTS nx_tender (
+    id              SERIAL PRIMARY KEY,
+    job_number      TEXT NOT NULL UNIQUE,
+    title           TEXT NOT NULL,
+    agency          TEXT,
+    agency_id       TEXT,
+    tender_type     TEXT,
+    tender_class    TEXT,
+    category        TEXT,
+    category_detail TEXT,
+    budget          BIGINT,
+    deadline        DATE,
+    opening_date    DATE,
+    contact_name    TEXT,
+    contact_phone   TEXT,
+    contact_email   TEXT,
+    source_url      TEXT,
+    reference_url   TEXT,
+    file_path       TEXT,
+    tracking_status TEXT NOT NULL DEFAULT 'unreviewed',
+    tags            TEXT[],
+    status          TEXT NOT NULL DEFAULT 'active',
+    scraped_date    DATE,
+    notes           TEXT,
+    response_json   JSONB,
+    client_id       INTEGER REFERENCES nx_client(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_tender_status ON nx_tender(status, tracking_status);
+CREATE INDEX IF NOT EXISTS idx_nx_tender_deadline ON nx_tender(deadline);
+CREATE INDEX IF NOT EXISTS idx_nx_tender_job ON nx_tender(job_number);
+
+-- 26. Tender x Deal (M2M)
+CREATE TABLE IF NOT EXISTS nx_tender_deal (
+    id          SERIAL PRIMARY KEY,
+    tender_id   INTEGER NOT NULL REFERENCES nx_tender(id) ON DELETE CASCADE,
+    deal_id     INTEGER NOT NULL REFERENCES nx_deal(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tender_id, deal_id)
+);

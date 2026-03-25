@@ -265,6 +265,7 @@ export interface NxKnowledge {
 }
 
 export interface NxTender {
+  id?: number;
   job_number: string;
   name: string;
   agency: string;
@@ -274,6 +275,7 @@ export interface NxTender {
   tender_class: string;
   deadline: string | null;
   budget_amount: string | null;
+  budget?: number | null;
   reference_url: string;
   days_left: number | null;
   status: string;
@@ -285,6 +287,27 @@ export interface NxTender {
   file_path: string;
   has_notice?: boolean;
   body_md?: string;
+  client_id?: number | null;
+  client_name?: string;
+  response_json?: TenderResponseJson | null;
+  deals?: { deal_id: number; deal_name: string; deal_stage: string; deal_status: string; client_name: string }[];
+}
+
+export interface TenderAnalysis {
+  fit_score: number;
+  summary: string;
+  risks: string[];
+  opportunities?: string[];
+  matched_cases: string[];
+  matched_solutions: string[];
+  key_requirements?: string[];
+  questions: string[];
+}
+
+export interface TenderResponseJson {
+  analysis?: TenderAnalysis;
+  response?: Record<string, unknown>;
+  chat_history?: { role: string; content: string }[];
 }
 
 export interface NxMemory {
@@ -672,16 +695,18 @@ export const nxApi = {
       postAPI<{ pitch: string | null; error: string | null }>("/outreach/generate-pitch", data),
   },
   tenders: {
-    list: (category?: string, trackingStatus?: string) => {
+    list: (category?: string, trackingStatus?: string, source?: string) => {
       const params = new URLSearchParams();
       if (category) params.set("category", category);
       if (trackingStatus) params.set("tracking_status", trackingStatus);
+      if (source) params.set("source", source);
       const qs = params.toString();
       return fetchAPI<NxTender[]>(`/tenders/${qs ? `?${qs}` : ""}`);
     },
     expiring: (days?: number) =>
       fetchAPI<NxTender[]>(`/tenders/expiring${days ? `?within_days=${days}` : ""}`),
     get: (jobNumber: string) => fetchAPI<NxTender>(`/tenders/${encodeURIComponent(jobNumber)}`),
+    getById: (id: number) => fetchAPI<NxTender>(`/tenders/by-id/${id}`),
     updateTrackingStatus: (jobNumber: string, trackingStatus: string) =>
       patchAPI<{ job_number: string; tracking_status: string }>(
         `/tenders/${encodeURIComponent(jobNumber)}/tracking-status`,
@@ -694,6 +719,29 @@ export const nxApi = {
     enrichAll: () =>
       postAPI<{ results: { job_number: string; status: string; sections_added?: number; error?: string }[] }>(
         "/tenders/enrich-all", {}
+      ),
+    sync: () =>
+      postAPI<{ synced: number; errors: number; total: number }>("/tenders/sync", {}),
+    linkDeal: (tenderId: number, dealId: number) =>
+      postAPI<unknown>(`/tenders/by-id/${tenderId}/deals`, { deal_id: dealId }),
+    unlinkDeal: (tenderId: number, dealId: number) =>
+      deleteAPI(`/tenders/by-id/${tenderId}/deals/${dealId}`),
+    getDeals: (tenderId: number) =>
+      fetchAPI<{ deal_id: number; deal_name: string; deal_stage: string; deal_status: string; client_name: string }[]>(
+        `/tenders/by-id/${tenderId}/deals`
+      ),
+    analyze: (tenderId: number) =>
+      postAPI<{ analysis: TenderAnalysis; tender_id: number; job_number: string }>(
+        `/tenders/by-id/${tenderId}/analyze`, {}
+      ),
+    chat: (tenderId: number, message: string, currentResponse?: Record<string, unknown>) =>
+      postAPI<{ ai_reply: string; updated_fields: Record<string, unknown>; response_json: TenderResponseJson }>(
+        `/tenders/by-id/${tenderId}/chat`,
+        { message, current_response: currentResponse || {} },
+      ),
+    generate: (tenderId: number) =>
+      postAPI<{ document: string; tender_id: number; job_number: string; output_path: string }>(
+        `/tenders/by-id/${tenderId}/generate`, {}
       ),
   },
   memory: {

@@ -9,7 +9,7 @@ job_number: 115B011
 opening_date: '2026-03-24'
 scraped_date: '2026-03-18'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=3.9.28&job_number=115B011
-status: active
+status: archived
 tags:
 - 資料庫
 title: 2026年RILM Abstracts of Music Literature資料庫& The Music Index資料庫租賃費用
@@ -17,6 +17,7 @@ type: 公開取得報價單或企劃書
 unit_id: 3.9.28
 unit_name: 國立中山大學
 ---
+
 
 # 2026年RILM Abstracts of Music Literature資料庫& The Music Index資料庫租賃費用
 

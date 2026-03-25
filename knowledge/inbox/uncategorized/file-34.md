@@ -6,16 +6,16 @@ source_id: 34
 source_type: nx_knowledge
 status: inbox
 tags:
-- 品質管控
+- 產品質檢
+- 補助計畫
+- 機器學習
+- 品質控制
+- 上線培訓
+- 導入流程
+- 分公司
+- 包材追溯
 - AI技術
-- 防錯驗證
-- 深度學習
-- 品質檢測
-- ERP整合
-- 硬體建置
-- 軟體整合
-- 系統可靠性
-- OCR辨識
+- 掃碼設備
 title: 文件摘要：20260224_智慧產線導入規劃_金軒揚.pdf
 type: file-summary
 updated: '2026-03-24'

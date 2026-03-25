@@ -9,7 +9,7 @@ job_number: 115-01-003
 opening_date: '2026-03-24'
 scraped_date: '2026-03-18'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=3.9.26&job_number=115-01-003
-status: active
+status: archived
 tags:
 - 系統維護
 title: FIA及Tekmar AtomxXYZ系統維護保養及零組件耗材壹批
@@ -17,6 +17,7 @@ type: 公開取得報價單或企劃書
 unit_id: 3.9.26
 unit_name: 國立成功大學
 ---
+
 
 # FIA及Tekmar AtomxXYZ系統維護保養及零組件耗材壹批
 

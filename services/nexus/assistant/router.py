@@ -33,22 +33,22 @@ async def detect_intent(
         (Intent, entities) tuple where entities may contain extracted
         company, date, time, title, etc.
     """
-    # 1. Active conversation — always followup
-    if has_active_conversation:
-        return Intent.FOLLOWUP, {}
-
-    # 2. Photo → business card
-    if input_type == "photo":
-        return Intent.CAPTURE_CARD, {}
-
     if not text:
         return Intent.CAPTURE_GENERAL, {}
 
     text_stripped = text.strip()
 
-    # 3. Slash commands
+    # 1. Slash commands — always take priority (even with active session)
     if text_stripped.startswith("/"):
         return Intent.COMMAND, {}
+
+    # 2. Active conversation — followup
+    if has_active_conversation:
+        return Intent.FOLLOWUP, {}
+
+    # 3. Photo → business card
+    if input_type == "photo":
+        return Intent.CAPTURE_CARD, {}
 
     # 4. LLM classification
     return await _llm_classify(text_stripped, conversation_context)

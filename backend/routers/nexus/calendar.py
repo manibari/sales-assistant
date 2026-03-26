@@ -24,8 +24,8 @@ router = APIRouter()
 
 
 class MeetingCreate(BaseModel):
-    deal_id: int
     title: str
+    deal_id: int | None = None
     meeting_date: str
     duration_minutes: int = 60
     participants_json: str | None = None

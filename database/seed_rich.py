@@ -327,21 +327,21 @@ def seed():
     next_week_str = (today + timedelta(days=5)).strftime("%Y-%m-%d")
 
     create_meeting(
-        d1["id"],
-        "A 食品 — 技術方案討論",
-        f"{today_str}T14:00:00",
+        title="A 食品 — 技術方案討論",
+        meeting_date=f"{today_str}T14:00:00",
+        deal_id=d1["id"],
         participants_json=json.dumps([{"id": ct1["id"], "name": ct1["name"]}]),
     )
     create_meeting(
-        d4["id"],
-        "D 製造 — IoT Demo",
-        f"{tomorrow_str}T10:00:00",
+        title="D 製造 — IoT Demo",
+        meeting_date=f"{tomorrow_str}T10:00:00",
+        deal_id=d4["id"],
         participants_json=json.dumps([{"id": ct5["id"], "name": ct5["name"]}]),
     )
     create_meeting(
-        d2["id"],
-        "B 石化 — 能源監控需求訪談",
-        f"{next_week_str}T15:00:00",
+        title="B 石化 — 能源監控需求訪談",
+        meeting_date=f"{next_week_str}T15:00:00",
+        deal_id=d2["id"],
         participants_json=json.dumps([{"id": ct3["id"], "name": ct3["name"]}]),
     )
     print("Meetings: 3 (today, tomorrow, next week)")

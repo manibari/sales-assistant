@@ -10,9 +10,9 @@ from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
 def create_meeting(
-    deal_id: int,
     title: str,
     meeting_date: str,
+    deal_id: int | None = None,
     duration_minutes: int = 60,
     participants_json: str | None = None,
     location: str | None = None,

@@ -65,8 +65,8 @@ class AssistantEngine:
         """Main entry point — detect intent, route to handler, return response."""
         has_active = self.sessions.has_active(session_id)
 
-        # Detect intent
-        intent = detect_intent(
+        # Detect intent (async — may call LLM)
+        intent, entities = await detect_intent(
             text=text,
             input_type=input_type,
             has_active_conversation=has_active,
@@ -97,7 +97,9 @@ class AssistantEngine:
                 return await self._handle_query(session_id, text, intent)
 
             case intent if intent.category == "action":
-                return await self._handle_action(session_id, text, intent)
+                return await self._handle_action(
+                    session_id, text, intent, entities
+                )
 
             case _:
                 return AssistantResponse(
@@ -131,8 +133,16 @@ class AssistantEngine:
     async def _handle_followup(
         self, session_id: str, text: str
     ) -> AssistantResponse:
-        from services.nexus.assistant.handlers.capture import handle_followup
+        # Check if the active session is an action (e.g. multi-turn meeting creation)
+        session = self.sessions.get(session_id)
+        if session and session.intent and session.intent.category == "action":
+            from services.nexus.assistant.handlers.action import handle_action
+            return await handle_action(
+                engine=self, session_id=session_id, text=text,
+                intent=session.intent, entities={},
+            )
 
+        from services.nexus.assistant.handlers.capture import handle_followup
         return await handle_followup(engine=self, session_id=session_id, text=text)
 
     # ------------------------------------------------------------------
@@ -155,6 +165,13 @@ class AssistantEngine:
                 return AssistantResponse(
                     text="目前沒有進行中的情報",
                     intent=Intent.COMMAND,
+                )
+            # Action sessions (e.g. meeting creation) use intel_id=-1
+            if session.intent and session.intent.category == "action":
+                return AssistantResponse(
+                    text="已取消操作。",
+                    intent=Intent.COMMAND,
+                    session_closed=True,
                 )
             return AssistantResponse(
                 text=f"已取消。情報 #{session.intel_id} 保留為草稿",
@@ -217,12 +234,14 @@ class AssistantEngine:
     # ------------------------------------------------------------------
 
     async def _handle_action(
-        self, session_id: str, text: str, intent: Intent
+        self, session_id: str, text: str, intent: Intent,
+        entities: dict | None = None,
     ) -> AssistantResponse:
         from services.nexus.assistant.handlers.action import handle_action
 
         return await handle_action(
-            engine=self, session_id=session_id, text=text, intent=intent
+            engine=self, session_id=session_id, text=text, intent=intent,
+            entities=entities or {},
         )
 
     # ------------------------------------------------------------------

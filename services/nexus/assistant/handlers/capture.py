@@ -254,6 +254,9 @@ async def handle_capture(
     intel = await asyncio.to_thread(create_intel, raw_input=raw, input_type=input_type)
     intel_id = intel["id"]
 
+    # Pre-fill from conversation memory (e.g. company mentioned in prior turn)
+    memory_entities = engine.memory.get_recent_entities(session_id, n=6)
+
     # AI initial parse — vision for photos, text for text
     parsed: dict = {}
     if image_bytes:
@@ -297,6 +300,14 @@ async def handle_capture(
 
     if parsed:
         _apply_ocr_corrections(parsed)
+
+    # Merge conversation memory entities (only fill gaps, don't overwrite)
+    if memory_entities and parsed:
+        for key in ("company", "company_name"):
+            mem_val = memory_entities.get(key)
+            if mem_val and "company_name" not in parsed:
+                parsed["company_name"] = mem_val
+                break
 
     # Save parsed to DB
     if parsed:

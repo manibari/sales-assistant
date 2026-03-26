@@ -127,9 +127,15 @@ def build_dynamic_followup_prompt(
         context_lines.append(
             f"目前最需要補齊的資訊（依重要性排序）：{' → '.join(labels)}"
         )
-        context_lines.append(f"請優先追問「{labels[0]}」，除非使用者已經在回答其他問題。")
+        context_lines.append(
+            f"你必須在回覆中追問「{labels[0]}」。不要只是確認已知資訊，要主動問出缺少的。"
+            f"用自然的口語方式問，不要像問卷調查。"
+        )
     else:
-        context_lines.append("資訊已相當完整，可以建議使用者輸入 /done 確認。")
+        context_lines.append(
+            "核心資訊已到位。確認使用者沒有要補充的，再建議 /done。"
+            "例如：「還有什麼要補充的嗎？沒有的話我就存起來了」"
+        )
 
     # Build chat history section
     chat_history_section = ""

@@ -177,16 +177,33 @@ def format_summary(parsed: dict) -> str:
     return " | ".join(parts) if parts else "（無解析結果）"
 
 
+_FIRST_QUESTION_MAP: dict[str, str] = {
+    "role": "這是客戶、夥伴、還是政府補助的情報？",
+    "company_name": "這是哪家公司？",
+    "contact_name": "對方聯絡人是誰？",
+    "industry": "他們是什麼產業？",
+    "pain_points": "他們的痛點或需求是什麼？",
+    "budget": "預算大概多少？",
+    "deal_potential": "你覺得成案機會高嗎？",
+    "nda_status": "NDA 簽了嗎？",
+    "mou_status": "MOU 簽了嗎？",
+    "subsidy_name": "計畫名稱是什麼？",
+    "agency": "主辦機關是哪個？",
+    "deadline": "截止日期是什麼時候？",
+    "funding_amount": "補助額度大概多少？",
+    "capabilities": "他們主要能力是什麼？",
+    "team_size": "團隊多大？",
+}
+
+
 def format_initial_reply(intel_id: int, parsed: dict | None, has_missing: bool) -> str:
-    """Format the first reply after intel creation."""
+    """Format the first reply after intel creation — always ask a specific question."""
     if not parsed:
         lines = [
             f"📝 情報 #{intel_id} 已建立",
             "",
-            "我沒辦法自動判斷分類，請直接告訴我更多細節！",
-            "例如：這是哪種類型？（客戶/夥伴/政府補貼）",
-            "",
-            "輸入 /done 可隨時結束",
+            "收到了，先幫你記下來。",
+            "這是哪種類型的情報？（客戶 / 夥伴 / 政府補貼）",
         ]
         return "\n".join(lines)
 
@@ -196,13 +213,18 @@ def format_initial_reply(intel_id: int, parsed: dict | None, has_missing: bool) 
     ]
     if has_missing:
         missing = missing_fields(parsed)
-        missing_labels = [FIELD_LABELS.get(f, f) for f in missing[:3]]
+        # Ask the first missing field directly
+        first_missing = missing[0] if missing else None
+        question = _FIRST_QUESTION_MAP.get(first_missing, "")
+        remaining = [FIELD_LABELS.get(f, f) for f in missing[1:3]]
         lines.append("")
-        lines.append(f"還缺少：{' / '.join(missing_labels)}")
-        lines.append("直接回覆補充，或輸入 /done 結束")
+        if question:
+            lines.append(question)
+        if remaining:
+            lines.append(f"（之後還想知道：{' / '.join(remaining)}）")
     else:
         lines.append("")
-        lines.append("資訊已很完整！輸入 /done 確認，或繼續補充")
+        lines.append("資訊蠻完整的，還有什麼要補充的嗎？沒有的話輸入 /done 就好")
     return "\n".join(lines)
 
 

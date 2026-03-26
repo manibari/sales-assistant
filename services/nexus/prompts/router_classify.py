@@ -5,7 +5,7 @@ from services.nexus.prompts._base import JSON_ONLY_INSTRUCTION
 INTENT_CLASSIFY_PROMPT = f"""你是 B2B 業務助理的意圖分類器。根據使用者輸入，判斷他想做什麼。
 
 可能的意圖：
-- CAPTURE_VISIT: 回報拜訪筆記（"今天去了XX公司"、"拜訪現場"）
+- CAPTURE_VISIT: 回報或記錄拜訪（"今天去了XX公司"、"拜訪現場"、"下午要去XX工廠"、"去XX出差"）
 - CAPTURE_MEETING: 回報會議內容（"跟XX開會，談了..."）
 - CAPTURE_LEAD: 回報商機線索（"XX想做..."、"XX需要..."）
 - CAPTURE_CARD: 名片辨識（照片）
@@ -31,9 +31,19 @@ INTENT_CLASSIFY_PROMPT = f"""你是 B2B 業務助理的意圖分類器。根據�
 - "跟台積電開會談了預算" → CAPTURE_MEETING（回報會議結果）
 - "排明天下午兩點跟台積電開會" → ACTION_CREATE_MEETING（安排新會議）
 
+判斷「拜訪回報」vs「安排行程」的關鍵：
+- "去了XX"、"要去XX工廠"、"跑客戶"、"出差" → CAPTURE_VISIT（記錄拜訪）
+- "排會議"、"約開會"、"新增行程" → ACTION_CREATE_MEETING（建立行事曆事件）
+- 去「工廠」「現場」「辦公室」通常是 CAPTURE_VISIT
+
 判斷「查看」vs「新增」的關鍵：
-- 含有「有什麼」「有哪些」「列出」→ 查看（QUERY）
+- 含有「有什麼」「有哪些」「列出」「查」「找」→ 查看（QUERY）
 - 含有「增加」「加」「新增」「排」「安排」「約」「建」→ 新增（ACTION）
+
+判斷「查詢」vs「回報」的關鍵：
+- 帶有疑問語氣（"有沒有"、"有什麼"、"可以申請"、"怎樣"、"如何"）→ QUERY
+- 直接陳述特定資訊（"SBIR 115年度第一梯次"、"經濟部有個新計畫"）→ CAPTURE（回報情報）
+- 業務員日常使用場景：直接丟一段訊息通常是在回報情報，不是在問問題
 
 {JSON_ONLY_INSTRUCTION}
 

@@ -22,6 +22,7 @@ async def detect_intent(
     text: str,
     input_type: str = "text",
     has_active_conversation: bool = False,
+    conversation_context: str = "",
 ) -> tuple[Intent, dict]:
     """Detect user intent from text using LLM classification.
 
@@ -50,17 +51,30 @@ async def detect_intent(
         return Intent.COMMAND, {}
 
     # 4. LLM classification
-    return await _llm_classify(text_stripped)
+    return await _llm_classify(text_stripped, conversation_context)
 
 
-async def _llm_classify(text: str) -> tuple[Intent, dict]:
+async def _llm_classify(
+    text: str, conversation_context: str = ""
+) -> tuple[Intent, dict]:
     """Call LLM to classify intent and extract entities."""
     from services.ai_provider import generate_ai_response
     from services.nexus.prompts.router_classify import INTENT_CLASSIFY_PROMPT
 
     try:
+        # Build user message with conversation context if available
+        if conversation_context:
+            user_message = (
+                f"對話紀錄（供參考，用來理解代名詞和上下文）：\n"
+                f"{conversation_context}\n\n"
+                f"---\n"
+                f"最新訊息（請分類這句）：{text}"
+            )
+        else:
+            user_message = text
+
         raw = await asyncio.to_thread(
-            generate_ai_response, INTENT_CLASSIFY_PROMPT, text
+            generate_ai_response, INTENT_CLASSIFY_PROMPT, user_message
         )
         result = _parse_llm_response(raw)
         intent_name = result.get("intent", "").upper()

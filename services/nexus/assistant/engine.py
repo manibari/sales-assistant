@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 from services.nexus.assistant.intents import Intent
 from services.nexus.assistant.router import detect_intent
-from services.nexus.assistant.session import Session, SessionManager
+from services.nexus.assistant.session import ConversationMemory, Session, SessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class AssistantEngine:
 
     def __init__(self) -> None:
         self.sessions = SessionManager()
+        self.memory = ConversationMemory()
 
     async def handle_message(
         self,
@@ -65,11 +66,21 @@ class AssistantEngine:
         """Main entry point — detect intent, route to handler, return response."""
         has_active = self.sessions.has_active(session_id)
 
+        # Build conversation context for LLM router
+        conversation_context = self.memory.format_context(session_id)
+
         # Detect intent (async — may call LLM)
         intent, entities = await detect_intent(
             text=text,
             input_type=input_type,
             has_active_conversation=has_active,
+            conversation_context=conversation_context,
+        )
+
+        # Record user message to conversation memory
+        self.memory.add(
+            session_id, "user", text,
+            intent=intent.name, entities=entities,
         )
 
         # Check for pending deal response first
@@ -83,29 +94,33 @@ class AssistantEngine:
         # Route by intent category
         match intent:
             case Intent.COMMAND:
-                return await self.handle_command(session_id, text)
+                response = await self.handle_command(session_id, text)
 
             case Intent.FOLLOWUP:
-                return await self._handle_followup(session_id, text)
+                response = await self._handle_followup(session_id, text)
 
             case intent if intent.category == "capture":
-                return await self._handle_capture(
+                response = await self._handle_capture(
                     session_id, text, intent, input_type, image_bytes
                 )
 
             case intent if intent.category == "query":
-                return await self._handle_query(session_id, text, intent)
+                response = await self._handle_query(session_id, text, intent)
 
             case intent if intent.category == "action":
-                return await self._handle_action(
+                response = await self._handle_action(
                     session_id, text, intent, entities
                 )
 
             case _:
-                return AssistantResponse(
+                response = AssistantResponse(
                     text="⚠️ 無法理解你的訊息，請重新輸入",
                     intent=intent,
                 )
+
+        # Record assistant response to conversation memory
+        self.memory.add(session_id, "assistant", response.text, intent=intent.name)
+        return response
 
     # ------------------------------------------------------------------
     # Capture handler (intel input)

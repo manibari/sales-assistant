@@ -29,6 +29,8 @@ from services.nexus.tender_db import (
     sync_all_markdown,
 )
 
+from services.nexus.prompts import TENDER_ANALYZE_PROMPT, TENDER_CHAT_PROMPT, TENDER_GENERATE_PROMPT
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -165,71 +167,6 @@ def read_tender_by_id(tender_id: int):
 # ---------------------------------------------------------------------------
 # AI-assisted response generation (analyze / chat / generate)
 # ---------------------------------------------------------------------------
-
-TENDER_ANALYZE_PROMPT = """你是 B2B 業務投標分析師。分析以下標案需求，並根據公司素材進行匹配。
-
-輸出 JSON 格式（繁體中文）：
-{
-  "fit_score": 0-100 的匹配度分數,
-  "summary": "一句話說明此案與我司的匹配度",
-  "risks": ["風險1", "風險2"],
-  "opportunities": ["機會1", "機會2"],
-  "matched_cases": ["case_study_id1"],
-  "matched_solutions": ["solution_id1"],
-  "key_requirements": ["需求1", "需求2"],
-  "questions": ["需要確認的問題1", "需要確認的問題2"]
-}
-
-匹配邏輯：
-- 比對標案的採購類別、標的分類、廠商資格與我司的能力/案例
-- 考慮預算規模是否合理
-- 評估時程是否可行
-- 識別需要的認證或資格
-
-只輸出 JSON，不要其他文字。"""
-
-
-TENDER_CHAT_PROMPT = """你是協助準備標案回應的 B2B 業務助手。根據標案資訊和目前已收集的回應內容，繼續問答以補齊回應書所需資訊。
-
-標案資訊：
-{tender_info}
-
-目前已收集的回應資料：
-{current_response}
-
-{chat_history_section}
-
-使用者訊息：{user_msg}
-
-請根據使用者的回答：
-1. 更新回應資料中的相應欄位
-2. 繼續追問下一個需要補齊的資訊
-3. 優先補齊：技術方案、團隊配置、時程、費用
-
-回覆格式：
-(你的回覆文字，繁體中文)
----
-(更新後的 JSON 欄位，只包含新增/修改的欄位)"""
-
-
-TENDER_GENERATE_PROMPT = """你是專業的標案回應書撰寫者。根據以下結構化資料，套用範本格式產生完整的回應書。
-
-標案資訊：
-{tender_info}
-
-回應資料：
-{response_data}
-
-公司素材：
-{company_materials}
-
-範本格式：
-{template}
-
-請產生完整的回應書 markdown。使用繁體中文。
-保持專業但清晰的語氣。用實際資料填入範本的 placeholder。
-如果某些欄位資料不足，用合理的預設內容標記「[待補充]」。"""
-
 
 class ChatMessage(BaseModel):
     message: str

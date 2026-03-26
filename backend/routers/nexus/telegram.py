@@ -1,4 +1,13 @@
-"""Telegram Bot webhook — conversational intel capture + AI parse."""
+"""Telegram Bot webhook — thin adapter over the unified Assistant Engine.
+
+Telegram-specific responsibilities:
+- Webhook verification and message extraction
+- Photo/document download from Telegram API
+- /register, /unregister for daily digest
+- Formatting responses for Telegram (HTML parse mode)
+
+All conversation logic lives in services.nexus.assistant.engine.
+"""
 
 import asyncio
 import json
@@ -17,6 +26,10 @@ from services.ai_provider import (
 from services.nexus.documents import create_file
 from services.nexus.intel import confirm_intel, create_intel, update_intel
 from services.nexus.deals import get_deals_by_client, link_intel_to_deal
+from services.nexus.prompts import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT, BUSINESS_CARD_PROMPT
+from services.nexus.assistant import Intent, detect_intent
+from services.nexus.assistant.engine import engine as assistant_engine
+from services.nexus.prompts.strategy import build_dynamic_followup_prompt
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,182 +70,8 @@ _registered_chats: set[int] = _load_registered_chats()
 
 
 # ---------------------------------------------------------------------------
-# AI prompts
+# AI prompts — imported from services.nexus.prompts
 # ---------------------------------------------------------------------------
-
-INTEL_PARSE_PROMPT = """\
-You are an intel classifier for a B2B sales assistant.
-The user (our company) sells technology solutions. Extract structured fields from their input.
-
-IMPORTANT context for role classification:
-- "client" = a company that BUYS from us or needs our services (they have a problem we solve)
-- "partner" = a company we COLLABORATE with to deliver solutions together
-- "subsidy" = government subsidy / grant opportunity
-- "si" = system integrator
-- If someone mentions a company wanting to outsource, find vendors, or needs custom development → they are a "client"
-- If someone mentions a company with complementary skills to join forces → they are a "partner"
-
-Return ONLY a JSON object. Do NOT wrap in markdown code fences.
-Omit any field you are not confident about — never guess.
-
-Available fields and allowed values:
-
-role: "client" | "partner" | "subsidy" | "si" | "other"
-industry: "food" | "petrochemical" | "semiconductor" | "manufacturing" | "tech" | "finance" | "healthcare" | "transportation" | "other"
-  If NONE of the above fit well, you may suggest a NEW industry value:
-  - Use a short English snake_case key (e.g. "travel_tech", "logistics", "energy", "retail", "education")
-  - Also add "industry_label" with the Chinese name (e.g. "旅遊科技", "物流業", "能源業")
-  Do NOT use "other" if you can identify a specific industry — suggest a new one instead.
-pain_points: array of "automation" | "aoi" | "energy" | "safety" | "erp" | "iot" (client only)
-  ("erp" covers system integration, custom development, IT outsourcing needs)
-nda_status: "pending" | "in_progress" | "signed" | "not_required" (client only)
-mou_status: "pending" | "in_progress" | "signed" | "not_required" (client only)
-budget: integer in TWD (e.g. 3000000 for 300萬) (client only)
-capabilities: array of "iot" | "vision" | "erp" | "auto_ctrl" | "security" | "ml_ai" (partner only)
-team_size: "1-10" | "10-50" | "50-200" | "200+" (partner only)
-subsidy_partner: "has_partner" | "searching" | "not_required" | "undecided" (subsidy only)
-subsidy_deadline: "within_1m" | "1-3m" | "3m+" | "unknown" (subsidy only)
-
-Subsidy-specific free-form fields (capture when role is "subsidy"):
-subsidy_name: official program name (e.g. "中小企業數位轉型計畫", "SBIR 115年度")
-agency: issuing government agency (e.g. "經濟部中小及新創企業署", "工業局")
-funding_amount: subsidy amount description (e.g. "200萬~300萬", "最高1,000萬")
-deadline: application deadline (free text, e.g. "3/31截止", "115年6月30日")
-eligibility: who can apply (free text)
-scope: what the program covers (free text)
-
-Free-form fields (any string, capture if mentioned):
-company_name: the company/organization name (the PRIMARY entity — usually client)
-contact_name: contact person's name (at the primary company)
-contact_title: their job title
-contact_email: email
-contact_phone: phone
-decision_maker: who makes the buying decision
-competitors: other vendors being considered (NOT partners/collaborators!)
-next_meeting: next meeting date/time (free text is fine)
-timeline: when they want to start
-notes: any other important detail
-
-Partner/collaborator fields (capture when a SEPARATE partner company is mentioned alongside client):
-partner_name: partner/collaborator company name (e.g. 中華電信, if they are working WITH the client)
-partner_contact_name: contact person at the partner company
-partner_contact_title: partner contact's job title
-partner_contact_email: partner contact's email
-partner_contact_phone: partner contact's phone
-
-Deal potential field:
-deal_potential: "high" | "medium" | "low" | "none"
-  - "high" = clear need + budget + timeline, ready to create a deal
-  - "medium" = has interest but unclear budget/timeline
-  - "low" = exploratory, no concrete plan
-  - "none" = no deal potential (info only, internal reference)
-  Infer from context: mentions of budget, timeline, concrete needs → higher potential
-
-IMPORTANT distinctions:
-- "合作夥伴" / "partner" / "一起合作" → use partner_name, NOT competitors
-- "競爭對手" / "也在談" / "也有報價" → use competitors
-- If one company is the client and another helps deliver the solution → second is partner_name
-
-Example 1: "跟台積電開會，他們想做AOI自動化，預算500萬"
-→ {"role":"client","company_name":"台積電","industry":"semiconductor","pain_points":["aoi","automation"],"budget":5000000,"deal_potential":"high"}
-
-Example 2: "Sabre 想找外部團隊做客製化開發"
-→ {"role":"client","company_name":"Sabre","industry":"tech","pain_points":["erp"]}
-
-Example 3: "跟一家做IoT的新創談合作，他們10人團隊"
-→ {"role":"partner","company_name":"","capabilities":["iot"],"team_size":"1-10"}
-
-Example 4: "今天跟王經理聊了，他是鴻海的採購主管，下週三再約"
-→ {"role":"client","company_name":"鴻海","industry":"manufacturing","contact_name":"王經理","contact_title":"採購主管","next_meeting":"下週三"}
-
-Example 5: "永豐紙業想做 IOT，目前合作夥伴是中華電信，對方聯絡人是吳欣曄"
-→ {"role":"client","company_name":"永豐紙業","industry":"manufacturing","pain_points":["iot"],"partner_name":"中華電信","partner_contact_name":"吳欣曄"}
-"""
-
-FOLLOWUP_PROMPT = """\
-You are a sharp B2B sales assistant chatbot speaking Traditional Chinese.
-You are helping the user capture intel from a sales interaction through natural conversation.
-
-Think like a sales manager debriefing a rep after a meeting — ask practical, actionable follow-ups.
-
-Current intel so far:
-{current_json}
-
-{chat_history_section}
-
-The user just said: "{user_msg}"
-
-Do TWO things in your response, separated by exactly "---" on its own line:
-
-PART 1 (above ---): A short, natural reply in Traditional Chinese (2-4 sentences).
-- Acknowledge what the user shared BRIEFLY (1 sentence max). Do NOT parrot back what they said.
-- Ask ONE practical follow-up question about a DIFFERENT topic than what was just discussed. Prioritize questions like:
-  • 對方的聯絡人是誰？有拿到名片嗎？（contact_name, contact_title, contact_email, contact_phone）
-  • 有約下次會議嗎？大概什麼時候？（next_meeting）
-  • 他們的痛點或需求具體是什麼？
-  • 預算範圍大概多少？誰是決策者？（decision_maker）
-  • 有沒有競爭對手也在談？（competitors）
-  • 時程急不急？他們希望什麼時候開始？（timeline）
-  • NDA/MOU 狀態？
-- Pick the most natural next question based on what's already known and what's missing
-- If the user says "不知道", "尚未確定", "沒有", or similar vague answers, do NOT repeat or rephrase the same question. Accept the answer, mark the field as unknown, and move on to a DIFFERENT topic.
-- Never ask more than 3 questions total about the same topic area.
-- If the info seems pretty complete, say so and suggest /done
-
-PART 2 (below ---): A JSON object with ANY new or updated fields from the user's message.
-Return ONLY new/changed fields. Do NOT repeat existing ones. Omit uncertain fields.
-Do NOT wrap in markdown code fences.
-
-Structured fields (allowed values):
-role: "client" | "partner" | "subsidy" | "si" | "other"
-industry: "food" | "petrochemical" | "semiconductor" | "manufacturing" | "tech" | "finance" | "healthcare" | "transportation" | "other"
-  (If none fit, suggest a new snake_case key + add "industry_label" with Chinese name)
-pain_points: array of "automation" | "aoi" | "energy" | "safety" | "erp" | "iot"
-nda_status: "pending" | "in_progress" | "signed" | "not_required"
-mou_status: "pending" | "in_progress" | "signed" | "not_required"
-budget: integer in TWD
-capabilities: array of "iot" | "vision" | "erp" | "auto_ctrl" | "security" | "ml_ai"
-team_size: "1-10" | "10-50" | "50-200" | "200+"
-subsidy_partner: "has_partner" | "searching" | "not_required" | "undecided"
-subsidy_deadline: "within_1m" | "1-3m" | "3m+" | "unknown"
-
-Free-form fields (any string value, capture if mentioned):
-contact_name: contact person's name (at the primary company)
-contact_title: their job title
-contact_email: email address
-contact_phone: phone number
-company_name: the company/organization name
-decision_maker: who makes the buying decision
-competitors: other vendors they're considering (NOT partners!)
-next_meeting: next meeting date/time (free text like "下週三" is fine)
-timeline: when they want to start or deadline
-notes: any other important context worth remembering
-
-Partner/collaborator fields (when a SEPARATE partner company is mentioned):
-partner_name: partner/collaborator company name
-partner_contact_name: contact at the partner company
-partner_contact_title: partner contact's job title
-partner_contact_email: partner contact's email
-partner_contact_phone: partner contact's phone
-
-Subsidy fields (when role is "subsidy"):
-subsidy_name: official program name
-agency: issuing government agency
-funding_amount: subsidy amount description
-deadline: application deadline (free text)
-eligibility: who can apply
-scope: what the program covers
-
-Deal potential field:
-deal_potential: "high" | "medium" | "low" | "none"
-  - "high" = clear need + budget + timeline, ready to create a deal
-  - "medium" = has interest but unclear budget/timeline
-  - "low" = exploratory, no concrete plan
-  - "none" = no deal potential (info only)
-  If deal_potential is missing and role is "client", proactively ask:
-  「這個案子有開案的可能性嗎？（高/中/低/無）」
-"""
-
 
 # ---------------------------------------------------------------------------
 # Field definitions per role (for missing-field detection)
@@ -324,37 +163,6 @@ def _strip_json_fences(text: str) -> str:
     return text.strip()
 
 
-BUSINESS_CARD_PROMPT = """\
-You are an OCR and business card parser for a B2B sales assistant.
-Analyze the image of a business card and extract all visible information.
-
-Return ONLY a JSON object. Do NOT wrap in markdown code fences.
-Omit any field you cannot read clearly — never guess.
-
-Extract these fields:
-contact_name: person's full name — if the card shows BOTH Chinese and English names, combine them as "中文名 English Name" (e.g. "張曉華 Eva Chang"). Always include both if visible.
-contact_title: job title / position
-contact_email: email address
-contact_phone: phone number(s) — if multiple, use the mobile one
-contact_fax: fax number (if any)
-company_name: company / organization name (full official name)
-company_address: office address
-company_website: website URL
-line_id: LINE ID (if printed on card)
-department: department name
-notes: any other text on the card worth noting (e.g. certifications, slogan)
-
-Also infer these if possible from the company/role context:
-industry: best-fit from "food" | "petrochemical" | "semiconductor" | "manufacturing" | "tech" | "finance" | "healthcare" | "transportation" | "other"
-  If none fit, suggest a snake_case key + add "industry_label" with Chinese name.
-
-Do NOT include "role" — the user will classify this contact as client or partner later.
-
-Example output:
-{"contact_name":"王大明 David Wang","contact_title":"業務經理","company_name":"台灣積體電路製造股份有限公司","contact_phone":"0912-345-678","contact_email":"dm.wang@tsmc.com","industry":"semiconductor"}
-"""
-
-
 async def _auto_parse(raw_input: str) -> dict | None:
     """Initial parse — extract structured fields from first message."""
     available, info = check_ai_available()
@@ -421,30 +229,46 @@ async def _parse_business_card(image_bytes: bytes, caption: str = "") -> list[di
 
 
 async def _followup_parse(
-    current_parsed: dict, user_msg: str, chat_history: list | None = None
+    current_parsed: dict,
+    user_msg: str,
+    chat_history: list | None = None,
+    intent: Intent | None = None,
 ) -> tuple[str, dict]:
-    """Follow-up parse — returns (reply_text, new_fields)."""
+    """Follow-up parse — returns (reply_text, new_fields).
+
+    When intent is provided, uses context-aware dynamic prompt strategy.
+    """
     available, info = check_ai_available()
     if not available:
         return "⚠️ AI 暫時不可用，請稍後再試", {}
 
-    chat_history_section = ""
-    if chat_history:
-        recent = chat_history[-6:]
-        lines = []
-        for msg in recent:
-            role = "User" if msg.get("role") == "user" else "AI"
-            lines.append(f"{role}: {msg.get('text', '')}")
-        chat_history_section = (
-            "Previous conversation (DO NOT repeat questions already asked):\n"
-            + "\n".join(lines)
+    # Use dynamic strategy when intent is available
+    if intent is not None:
+        prompt = build_dynamic_followup_prompt(
+            intent=intent,
+            parsed=current_parsed,
+            chat_history=chat_history or [],
+            user_msg=user_msg,
         )
+    else:
+        # Fallback: original static prompt
+        chat_history_section = ""
+        if chat_history:
+            recent = chat_history[-6:]
+            lines = []
+            for msg in recent:
+                role = "User" if msg.get("role") == "user" else "AI"
+                lines.append(f"{role}: {msg.get('text', '')}")
+            chat_history_section = (
+                "Previous conversation (DO NOT repeat questions already asked):\n"
+                + "\n".join(lines)
+            )
 
-    prompt = FOLLOWUP_PROMPT.format(
-        current_json=json.dumps(current_parsed, ensure_ascii=False, indent=2),
-        user_msg=user_msg,
-        chat_history_section=chat_history_section or "(First message.)",
-    )
+        prompt = FOLLOWUP_PROMPT.format(
+            current_json=json.dumps(current_parsed, ensure_ascii=False, indent=2),
+            user_msg=user_msg,
+            chat_history_section=chat_history_section or "(First message.)",
+        )
     try:
         response = await asyncio.to_thread(
             generate_ai_response,
@@ -1063,8 +887,16 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
     # Check for new industry suggestion
     industry_prompt = _check_new_industry(parsed) if parsed else None
 
-    # Detect if this was a business card (has contact_name but no role)
-    is_card = bool(parsed.get("contact_name") and not parsed.get("role"))
+    # Detect intent using the new router
+    intent = detect_intent(
+        text=text or "",
+        input_type=input_type,
+        has_active_conversation=False,
+        parsed=parsed,
+    )
+
+    # Detect if this was a business card — require photo input, not just contact_name
+    is_card = intent == Intent.CAPTURE_CARD and bool(parsed.get("contact_name"))
 
     # Start conversation
     # Save card-parsed fields separately so they can never be lost by followup AI
@@ -1075,6 +907,8 @@ async def _handle_new_intel(chat_id: int, text: str, message: dict) -> None:
         "parsed": parsed,
         "card_base": card_base,  # immutable card OCR fields
         "raw_history": [raw] if text else [],
+        "input_type": input_type,  # "text" | "photo"
+        "intent": intent,  # detected intent for strategy
         "pending_industry_confirm": bool(industry_prompt),
         "pending_role_confirm": is_card,
     }
@@ -1191,9 +1025,11 @@ async def _handle_followup(chat_id: int, text: str) -> None:
     full_raw = "\n---\n".join(conv["raw_history"])
     await asyncio.to_thread(update_intel, intel_id, raw_input=full_raw)
 
-    # AI follow-up parse
+    # AI follow-up parse — use intent-aware strategy when available
     reply_text, new_fields = await _followup_parse(
-        conv["parsed"], text, chat_history=conv["chat_history"]
+        conv["parsed"], text,
+        chat_history=conv["chat_history"],
+        intent=conv.get("intent"),
     )
 
     # Track conversation history so AI knows what was already asked
@@ -1273,68 +1109,67 @@ async def telegram_webhook(
 
     chat_id = message["chat"]["id"]
     text = (message.get("text") or message.get("caption") or "").strip()
+    session_id = f"tg:{chat_id}"
 
     try:
-        # --- Commands ---
+        # --- Telegram-only commands (not in engine) ---
         if text.startswith("/"):
             cmd = text.split()[0].lower()
-            if cmd in ("/done", "/確認"):
-                await _handle_done(chat_id)
-            elif cmd in ("/cancel", "/取消"):
-                await _handle_cancel(chat_id)
-            elif cmd in ("/status", "/狀態"):
-                await _handle_status(chat_id)
-            elif cmd == "/start":
-                await _send_reply(
-                    chat_id,
-                    "👋 你好！我是你的情報助理。\n\n"
-                    "直接傳訊息、照片或檔案給我，我會幫你建立情報並自動分類。\n\n"
-                    "指令：\n"
-                    "/done — 確認並儲存情報\n"
-                    "/cancel — 取消目前情報\n"
-                    "/status — 查看目前進度\n"
-                    "/new — 強制開始新情報\n"
-                    "/today — 今日待辦摘要\n"
-                    "/register — 啟用每日自動推送\n"
-                    "/unregister — 關閉自動推送",
-                )
-            elif cmd in ("/today", "/待辦"):
-                await _handle_today(chat_id)
-            elif cmd == "/register":
+            if cmd == "/register":
                 _registered_chats.add(chat_id)
                 _save_registered_chats(_registered_chats)
                 await _send_reply(chat_id, f"✅ 已註冊每日推送 (chat_id: {chat_id})")
-            elif cmd == "/unregister":
+                return {"ok": True}
+            if cmd == "/unregister":
                 _registered_chats.discard(chat_id)
                 _save_registered_chats(_registered_chats)
                 await _send_reply(chat_id, "已取消每日推送")
-            elif cmd == "/new":
-                # Force start new (abandon current if any)
-                _conversations.pop(chat_id, None)
-                _pending_deal.pop(chat_id, None)
-                await _send_reply(chat_id, "好的，傳訊息開始新的情報！")
-            else:
-                await _send_reply(
-                    chat_id,
-                    "未知指令。可用：/done /cancel /status /new /today /register",
-                )
+                return {"ok": True}
+
+            # All other commands → engine
+            response = await assistant_engine.handle_command(session_id, text)
+            await _send_reply(chat_id, response.text)
             return {"ok": True}
 
-        # --- Pending deal creation prompt ---
+        # --- Detect intent to decide routing ---
+        has_active = assistant_engine.sessions.has_active(session_id)
+        intent = detect_intent(
+            text=text,
+            input_type="photo" if message.get("photo") else "text",
+            has_active_conversation=has_active,
+        )
+
+        # --- Query and Action intents → engine (even during capture) ---
+        if intent.category in ("query", "action") and not has_active:
+            response = await assistant_engine.handle_message(
+                session_id=session_id,
+                text=text,
+                input_type="text",
+            )
+            await _send_reply(chat_id, response.text)
+            return {"ok": True}
+
+        # --- Pending deal creation prompt (legacy path, handled by engine) ---
+        from services.nexus.assistant.engine import _pending_deal as engine_pending_deal
+        if session_id in engine_pending_deal and text:
+            response = await assistant_engine.handle_message(
+                session_id=session_id, text=text
+            )
+            await _send_reply(chat_id, response.text)
+            return {"ok": True}
+
+        # Legacy pending deal (old dict, for backward compat during transition)
         if chat_id in _pending_deal and text:
             handled = await _handle_deal_response(chat_id, text)
             if handled:
                 return {"ok": True}
-            # Not a yes/no → clear pending, fall through to new intel
             _pending_deal.pop(chat_id, None)
 
-        # --- Active conversation: follow-up ---
+        # --- Active conversation: follow-up (legacy path) ---
         if chat_id in _conversations:
             if text:
                 await _handle_followup(chat_id, text)
             elif message.get("photo"):
-                # Photo in active conversation — auto-done current, start new intel
-                # Default role to "client" if not set (most common for business cards)
                 conv = _conversations.get(chat_id)
                 if conv and "role" not in conv.get("parsed", {}):
                     conv["parsed"]["role"] = "client"
@@ -1342,7 +1177,6 @@ async def telegram_webhook(
                 await _handle_done(chat_id, silent=True)
                 await _handle_new_intel(chat_id, text, message)
             elif message.get("document"):
-                # Document in follow-up — save to existing intel
                 conv = _conversations[chat_id]
                 intel_id = conv["intel_id"]
                 doc = message["document"]
@@ -1355,9 +1189,66 @@ async def telegram_webhook(
                 await _send_reply(chat_id, f"📎 檔案已加到情報 #{intel_id}")
             return {"ok": True}
 
+        # --- Engine-managed active session: follow-up ---
+        if assistant_engine.sessions.has_active(session_id):
+            if text:
+                response = await assistant_engine.handle_message(
+                    session_id=session_id, text=text
+                )
+                await _send_reply(chat_id, response.text)
+            elif message.get("photo"):
+                # Photo during engine session — download, then route through engine
+                image_bytes = None
+                if photos := message.get("photo"):
+                    try:
+                        _, image_bytes = await _tg_get_file(photos[-1]["file_id"])
+                    except Exception as e:
+                        logger.error("Failed to download photo: %s", e)
+                response = await assistant_engine.handle_message(
+                    session_id=session_id,
+                    text=text,
+                    input_type="photo",
+                    image_bytes=image_bytes,
+                )
+                await _send_reply(chat_id, response.text)
+            return {"ok": True}
+
         # --- No active conversation: start new ---
         if text or message.get("photo") or message.get("document"):
-            await _handle_new_intel(chat_id, text, message)
+            # For photos, download image bytes for engine
+            if message.get("photo") and intent.category == "capture":
+                image_bytes = None
+                if photos := message.get("photo"):
+                    try:
+                        _, image_bytes = await _tg_get_file(photos[-1]["file_id"])
+                    except Exception as e:
+                        logger.error("Failed to download photo: %s", e)
+                response = await assistant_engine.handle_message(
+                    session_id=session_id,
+                    text=text,
+                    input_type="photo",
+                    image_bytes=image_bytes,
+                )
+                # Save photo attachment after parse
+                if photos and response.intel_id:
+                    parsed = response.parsed_update or {}
+                    await _save_attachment(
+                        photos[-1]["file_id"], None, response.intel_id,
+                        company_name=parsed.get("company_name"),
+                        contact_name=parsed.get("contact_name"),
+                    )
+                await _send_reply(chat_id, response.text)
+            elif text:
+                # Text message → route through engine for all intents
+                response = await assistant_engine.handle_message(
+                    session_id=session_id,
+                    text=text,
+                    input_type="text",
+                )
+                await _send_reply(chat_id, response.text)
+            else:
+                # Document without active conversation → legacy path
+                await _handle_new_intel(chat_id, text, message)
         else:
             await _send_reply(chat_id, "⚠️ 不支援的訊息類型，請傳文字、照片或檔案")
 

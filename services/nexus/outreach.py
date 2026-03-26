@@ -9,6 +9,7 @@ import yaml
 
 from database.connection import get_connection, rows_to_dicts
 from services.ai_provider import generate_ai_response, check_ai_available
+from services.nexus.prompts import PITCH_SYSTEM_PROMPT, VISIT_PLAN_SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -106,35 +107,79 @@ def get_available_industries() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def get_target_companies(industry: str | None = None) -> list[dict]:
+def get_available_regions() -> list[dict]:
+    """List distinct regions from nx_client with counts."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT region, COUNT(*) AS count
+                   FROM nx_client
+                   WHERE region IS NOT NULL AND region != '' AND status = 'active'
+                   GROUP BY region
+                   ORDER BY count DESC, region"""
+            )
+            return rows_to_dicts(cur)
+
+
+def get_target_companies(
+    industry: str | None = None,
+    region: str | None = None,
+) -> list[dict]:
     """Get potential target companies from nx_client, with deal counts."""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            conditions = ["c.status = 'active'"]
+            params: list = []
             if industry:
-                cur.execute(
-                    """SELECT c.id, c.name, c.industry, c.status,
-                              (SELECT COUNT(*) FROM nx_deal d
-                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_count,
-                              (SELECT COUNT(*) FROM nx_contact ct
-                               WHERE ct.org_type = 'client' AND ct.org_id = c.id) AS contact_count
-                       FROM nx_client c
-                       WHERE c.status = 'active'
-                         AND c.industry ILIKE %s
-                       ORDER BY deal_count DESC, c.name""",
-                    (f"%{industry}%",),
-                )
-            else:
-                cur.execute(
-                    """SELECT c.id, c.name, c.industry, c.status,
-                              (SELECT COUNT(*) FROM nx_deal d
-                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_count,
-                              (SELECT COUNT(*) FROM nx_contact ct
-                               WHERE ct.org_type = 'client' AND ct.org_id = c.id) AS contact_count
-                       FROM nx_client c
-                       WHERE c.status = 'active'
-                       ORDER BY deal_count DESC, c.name"""
-                )
+                conditions.append("c.industry ILIKE %s")
+                params.append(f"%{industry}%")
+            if region:
+                conditions.append("c.region ILIKE %s")
+                params.append(f"%{region}%")
+            where = " AND ".join(conditions)
+            cur.execute(
+                f"""SELECT c.id, c.name, c.industry, c.region, c.status,
+                          (SELECT COUNT(*) FROM nx_deal d
+                           WHERE d.client_id = c.id AND d.status = 'active') AS deal_count,
+                          (SELECT COUNT(*) FROM nx_contact ct
+                           WHERE ct.org_type = 'client' AND ct.org_id = c.id) AS contact_count
+                   FROM nx_client c
+                   WHERE {where}
+                   ORDER BY deal_count DESC, c.name""",
+                params,
+            )
             return rows_to_dicts(cur)
+
+
+def get_batch_summary(client_ids: list[int]) -> list[dict]:
+    """Enriched info for batch: name, industry, region, contacts (max 3), deal_count."""
+    if not client_ids:
+        return []
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT c.id, c.name, c.industry, c.region,
+                          (SELECT COUNT(*) FROM nx_deal d
+                           WHERE d.client_id = c.id AND d.status = 'active') AS deal_count
+                   FROM nx_client c
+                   WHERE c.id = ANY(%s)
+                   ORDER BY c.name""",
+                (client_ids,),
+            )
+            clients = rows_to_dicts(cur)
+
+            for client in clients:
+                cur.execute(
+                    """SELECT name, title, phone, email
+                       FROM nx_contact
+                       WHERE org_type = 'client' AND org_id = %s
+                       ORDER BY name
+                       LIMIT 3""",
+                    (client["id"],),
+                )
+                client["contacts"] = rows_to_dicts(cur)
+
+            return clients
 
 
 def get_contacts_for_client(client_id: int) -> list[dict]:
@@ -154,19 +199,6 @@ def get_contacts_for_client(client_id: int) -> list[dict]:
 # ---------------------------------------------------------------------------
 # AI Pitch Generation
 # ---------------------------------------------------------------------------
-
-_PITCH_SYSTEM_PROMPT = """你是一位 B2B 業務策略顧問，專長於製作陌生開發說帖。
-
-根據提供的案例、方案和目標公司資訊，生成一份簡潔有力的說帖（pitch），包含：
-
-1. **開場切入點**（1-2 句）：針對該產業的痛點，引起對方興趣
-2. **案例佐證**（2-3 句）：引用成功案例的具體成果數字
-3. **方案亮點**（3-5 個要點）：適合該公司的解決方案重點
-4. **行動呼籲**（1 句）：建議的下一步
-
-語氣：專業但親切，避免過度推銷。使用繁體中文。
-控制在 300 字以內。"""
-
 
 def generate_pitch(
     target_company: str,
@@ -207,8 +239,67 @@ def generate_pitch(
     user_text = "\n".join(context_parts)
 
     try:
-        pitch = generate_ai_response(_PITCH_SYSTEM_PROMPT, user_text)
+        pitch = generate_ai_response(PITCH_SYSTEM_PROMPT, user_text)
         return {"pitch": pitch, "error": None}
     except Exception as e:
         logger.error("Pitch generation failed: %s", e)
         return {"pitch": None, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# AI Visit Plan Generation
+# ---------------------------------------------------------------------------
+
+def generate_visit_plan(
+    targets: list[dict],
+    region: str | None = None,
+    industry: str | None = None,
+    case_studies: list[dict] | None = None,
+    solutions: list[dict] | None = None,
+) -> dict:
+    """Generate an AI visit plan for batch outreach.
+
+    Returns {"plan": str, "error": str | None}.
+    """
+    available, msg = check_ai_available()
+    if not available:
+        return {"plan": None, "error": msg}
+
+    context_parts = []
+    if region:
+        context_parts.append(f"目標區域：{region}")
+    if industry:
+        context_parts.append(f"目標產業：{industry}")
+
+    context_parts.append(f"\n目標公司（{len(targets)} 家）：")
+    for t in targets:
+        contacts_str = ""
+        if t.get("contacts"):
+            contacts_str = "；聯絡人：" + ", ".join(
+                f"{c['name']}({c.get('title', '')})" for c in t["contacts"][:3]
+            )
+        context_parts.append(
+            f"- {t['name']}（{t.get('industry', '?')}）"
+            f"｜{t.get('deal_count', 0)} 商機{contacts_str}"
+        )
+
+    if case_studies:
+        context_parts.append("\n可用案例：")
+        for cs in case_studies[:3]:
+            context_parts.append(
+                f"- {cs.get('client', '?')}：{cs.get('outcome', '')}"
+            )
+
+    if solutions:
+        context_parts.append("\n可用方案：")
+        for sol in solutions[:3]:
+            context_parts.append(f"- {sol.get('name', '?')}")
+
+    user_text = "\n".join(context_parts)
+
+    try:
+        plan = generate_ai_response(VISIT_PLAN_SYSTEM_PROMPT, user_text)
+        return {"plan": plan, "error": None}
+    except Exception as e:
+        logger.error("Visit plan generation failed: %s", e)
+        return {"plan": None, "error": str(e)}

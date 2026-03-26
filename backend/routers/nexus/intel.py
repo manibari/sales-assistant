@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from services.ai_provider import check_ai_available, generate_ai_response
+from services.ai_provider import check_ai_available, generate_ai_response, generate_ai_chat
 from services.nexus.intel import (
     create_intel,
     get_intel,
@@ -25,12 +25,10 @@ from services.nexus.documents import get_files_by_intel
 from services.nexus.intel import get_intel_linked_deals, get_intel_linked_meetings, link_intel_entity
 from services.nexus.materialize import materialize_intel, _normalize_company_name
 from services.nexus.partners import find_partner_by_name
+from services.nexus.prompts import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT, INTEL_SUMMARIZE_PROMPT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# Reuse prompts from telegram module
-from backend.routers.nexus.telegram import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT
 
 
 class IntelCreate(BaseModel):
@@ -130,27 +128,6 @@ def list_intel(status: str | None = None, limit: int = 50):
 def intel_by_entity(entity_type: str, entity_id: int):
     """Get all intel linked to a specific entity (client, partner, contact, deal)."""
     return get_entity_intel(entity_type, entity_id)
-
-
-INTEL_SUMMARIZE_PROMPT = """你是 B2B 業務情報分析師。根據以下多筆情報原文，產生一份結構化摘要。
-
-格式要求（繁體中文）：
-## 關鍵實體
-列出所有提到的公司、人物、組織
-
-## 痛點與需求
-客戶面臨的問題和需求
-
-## 時程與預算
-任何提到的時間線、預算範圍、年度
-
-## 關鍵聯絡人
-提到的決策者、聯絡窗口及其角色
-
-## 商機潛力評估
-綜合判斷這些情報反映的商機成熟度和下一步建議
-
-如果某個區段沒有相關資訊，請標註「未提及」而非省略。"""
 
 
 @router.post("/summarize")
@@ -297,21 +274,19 @@ def initial_parse(intel_id: int):
     # Save parsed to intel
     update_intel(intel_id, parsed_json=json.dumps(parsed, ensure_ascii=False))
 
-    # Generate greeting via followup prompt, include DB context
-    extra_context = ""
+    # Generate greeting via multi-turn chat
+    system = FOLLOWUP_PROMPT
     if db_context:
-        extra_context = (
-            f"\n\n以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
-        )
-    greeting_prompt = FOLLOWUP_PROMPT.format(
-        current_json=json.dumps(parsed, ensure_ascii=False, indent=2),
-        user_msg=f"（使用者剛輸入了情報原文，請根據已解析的內容做簡短摘要，並問第一個追問）{extra_context}",
-        chat_history_section="(This is the first message, no prior conversation.)",
-    )
-    greeting_raw = generate_ai_response(
-        "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
-        greeting_prompt,
-    )
+        system += f"\n\n[SYSTEM NOTE] 以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
+
+    # Inject current parsed state as context in the first user message
+    context_note = f"\n\n[已解析欄位]\n{json.dumps(parsed, ensure_ascii=False, indent=2)}"
+    messages = [
+        {"role": "user", "content": raw + context_note},
+    ]
+
+    greeting_raw = generate_ai_chat(system, messages)
+
     # Split on --- to get reply part
     ai_reply = (
         greeting_raw.split("---")[0].strip()
@@ -327,7 +302,7 @@ def initial_parse(intel_id: int):
     # Save chat history
     chat_history = [
         {"role": "user", "text": raw},
-        {"role": "ai", "text": ai_reply},
+        {"role": "assistant", "text": ai_reply},
     ]
     update_intel(intel_id, chat_history=json.dumps(chat_history, ensure_ascii=False))
 
@@ -336,7 +311,7 @@ def initial_parse(intel_id: int):
 
 @router.post("/{intel_id}/chat")
 def chat_followup(intel_id: int, body: ChatMessage):
-    """Conversational followup — AI asks questions, user replies, returns updated fields."""
+    """Conversational followup — multi-turn chat with native messages."""
     intel = get_intel(intel_id)
     if not intel:
         raise HTTPException(404, "Intel not found")
@@ -349,37 +324,34 @@ def chat_followup(intel_id: int, body: ChatMessage):
     # Enrich current parsed with DB data before sending to AI
     enriched_before, _ = _enrich_from_db(current)
 
-    # Build chat history section for context
-    chat_history_section = ""
+    # Build native multi-turn messages from chat history
+    existing_history = []
     if intel.get("chat_history"):
         try:
-            history = (
+            existing_history = (
                 json.loads(intel["chat_history"])
                 if isinstance(intel["chat_history"], str)
                 else intel["chat_history"]
             )
-            # Include last 6 messages max to avoid token bloat
-            recent = history[-6:]
-            lines = []
-            for msg in recent:
-                role = "User" if msg["role"] == "user" else "AI"
-                lines.append(f"{role}: {msg['text']}")
-            chat_history_section = (
-                "Previous conversation (DO NOT repeat questions already asked):\n"
-                + "\n".join(lines)
-            )
         except (json.JSONDecodeError, TypeError):
             pass
 
-    prompt = FOLLOWUP_PROMPT.format(
-        current_json=json.dumps(enriched_before, ensure_ascii=False, indent=2),
-        user_msg=body.message,
-        chat_history_section=chat_history_section,
-    )
-    ai_raw = generate_ai_response(
-        "You are a B2B sales assistant chatbot. Reply in Traditional Chinese.",
-        prompt,
-    )
+    # Convert stored history to API messages format
+    # Keep last 10 messages to avoid token bloat
+    recent = existing_history[-10:]
+    api_messages: list[dict[str, str]] = []
+    for msg in recent:
+        role = "user" if msg["role"] == "user" else "assistant"
+        api_messages.append({"role": role, "content": msg["text"]})
+
+    # Add current user message with parsed state context
+    context_note = f"\n\n[目前已知欄位]\n{json.dumps(enriched_before, ensure_ascii=False, indent=2)}"
+    api_messages.append({"role": "user", "content": body.message + context_note})
+
+    # Build system prompt
+    system = FOLLOWUP_PROMPT
+
+    ai_raw = generate_ai_chat(system, api_messages)
 
     ai_reply = ai_raw.strip()
     new_fields = {}
@@ -407,20 +379,7 @@ def chat_followup(intel_id: int, body: ChatMessage):
     _, db_context_before = _enrich_from_db(enriched_before)
     merged, db_context_after = _enrich_from_db(merged)
 
-    # Save to intel
-    # Append to chat history
-    existing_history = []
-    if intel.get("chat_history"):
-        try:
-            existing_history = (
-                json.loads(intel["chat_history"])
-                if isinstance(intel["chat_history"], str)
-                else intel["chat_history"]
-            )
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-    # Only show DB enrichment if NEW entities were found (not already shown before)
+    # Only show DB enrichment if NEW entities were found
     new_db_lines = set((db_context_after or "").split("\n")) - set(
         (db_context_before or "").split("\n")
     )
@@ -430,7 +389,7 @@ def chat_followup(intel_id: int, body: ChatMessage):
         ai_reply = f"{system_note}\n\n{ai_reply}"
 
     existing_history.append({"role": "user", "text": body.message})
-    existing_history.append({"role": "ai", "text": ai_reply})
+    existing_history.append({"role": "assistant", "text": ai_reply})
 
     update_intel(
         intel_id,

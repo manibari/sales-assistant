@@ -7,6 +7,7 @@ from pathlib import Path
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 from services.ai_provider import generate_ai_response, check_ai_available
+from services.nexus.prompts import KNOWLEDGE_SUMMARIZE_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -349,15 +350,6 @@ def _extract_docx(path: Path) -> list[dict]:
 # AI summarization
 # ---------------------------------------------------------------------------
 
-_SUMMARIZE_PROMPT = """You are a knowledge extraction assistant for a B2B sales CRM system.
-Given a text chunk from a business document, provide:
-1. A concise summary (1-3 sentences, in the same language as the content)
-2. 3-8 relevant tags for categorization (in the same language as the content)
-
-Respond in JSON format only:
-{"summary": "...", "tags": ["tag1", "tag2", ...]}"""
-
-
 def summarize_chunk(content: str) -> dict:
     """Use AI to generate summary and tags for a chunk.
 
@@ -371,7 +363,7 @@ def summarize_chunk(content: str) -> dict:
     try:
         # Truncate very long content
         truncated = content[:3000] if len(content) > 3000 else content
-        response = generate_ai_response(_SUMMARIZE_PROMPT, truncated)
+        response = generate_ai_response(KNOWLEDGE_SUMMARIZE_PROMPT, truncated)
 
         # Try to parse JSON from response
         # Strip markdown code fences if present

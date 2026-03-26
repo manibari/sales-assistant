@@ -91,10 +91,20 @@ def get_subsidy(subsidy_id: int) -> dict | None:
                    WHERE s.id = %s""",
                 (subsidy_id,),
             )
-            return row_to_dict(cur)
+            result = row_to_dict(cur)
+            if result:
+                cur.execute(
+                    """SELECT sc.client_id AS id, cl.name
+                       FROM nx_subsidy_client sc
+                       JOIN nx_client cl ON sc.client_id = cl.id
+                       WHERE sc.subsidy_id = %s ORDER BY cl.name""",
+                    (subsidy_id,),
+                )
+                result["clients"] = rows_to_dicts(cur)
+            return result
 
 
-def get_all_subsidies(status: str = "active", view: str = "stage") -> list[dict]:
+def get_all_subsidies(status: str | None = "active", view: str = "stage") -> list[dict]:
     order = "s.stage ASC, s.created_at DESC"
     if view == "deadline":
         order = (
@@ -103,19 +113,26 @@ def get_all_subsidies(status: str = "active", view: str = "stage") -> list[dict]
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            where = "WHERE s.status = %s" if status else ""
+            params: tuple = (status,) if status else ()
             cur.execute(
                 f"""SELECT s.*,
                            c.name AS client_name,
                            p.name AS partner_name,
                            CASE WHEN s.deadline_date IS NOT NULL
                                 THEN (s.deadline_date - CURRENT_DATE)
-                           END AS days_left
+                           END AS days_left,
+                           (SELECT STRING_AGG(cl.name, ', ' ORDER BY cl.name)
+                            FROM nx_subsidy_client sc
+                            JOIN nx_client cl ON sc.client_id = cl.id
+                            WHERE sc.subsidy_id = s.id
+                           ) AS client_names
                     FROM nx_subsidy s
                     LEFT JOIN nx_client c ON s.client_id = c.id
                     LEFT JOIN nx_partner p ON s.partner_id = p.id
-                    WHERE s.status = %s
+                    {where}
                     ORDER BY {order}""",
-                (status,),
+                params,
             )
             return rows_to_dicts(cur)
 
@@ -175,6 +192,71 @@ def close_subsidy(subsidy_id: int, notes: str | None = None) -> dict | None:
                 (notes, subsidy_id),
             )
             return row_to_dict(cur)
+
+
+def archive_subsidy(subsidy_id: int) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE nx_subsidy SET status = 'archived', updated_at = NOW()
+                   WHERE id = %s RETURNING *""",
+                (subsidy_id,),
+            )
+            return row_to_dict(cur)
+
+
+def restore_subsidy(subsidy_id: int) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE nx_subsidy SET status = 'active', updated_at = NOW()
+                   WHERE id = %s RETURNING *""",
+                (subsidy_id,),
+            )
+            return row_to_dict(cur)
+
+
+# ---------------------------------------------------------------------------
+# Multi-client association (nx_subsidy_client M2M)
+# ---------------------------------------------------------------------------
+
+
+def link_client(subsidy_id: int, client_id: int) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO nx_subsidy_client (subsidy_id, client_id)
+                   VALUES (%s, %s)
+                   ON CONFLICT (subsidy_id, client_id) DO NOTHING
+                   RETURNING *""",
+                (subsidy_id, client_id),
+            )
+            result = row_to_dict(cur)
+            return result or {"subsidy_id": subsidy_id, "client_id": client_id}
+
+
+def unlink_client(subsidy_id: int, client_id: int) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM nx_subsidy_client WHERE subsidy_id = %s AND client_id = %s",
+                (subsidy_id, client_id),
+            )
+            return cur.rowcount > 0
+
+
+def get_subsidy_clients(subsidy_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT sc.id, sc.subsidy_id, sc.client_id, c.name AS client_name
+                   FROM nx_subsidy_client sc
+                   JOIN nx_client c ON sc.client_id = c.id
+                   WHERE sc.subsidy_id = %s
+                   ORDER BY c.name""",
+                (subsidy_id,),
+            )
+            return rows_to_dicts(cur)
 
 
 def link_deal(subsidy_id: int, deal_id: int) -> dict:

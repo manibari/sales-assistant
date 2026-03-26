@@ -15,6 +15,9 @@ import {
   CalendarClock,
   Plus,
   Trash2,
+  Archive,
+  RotateCcw,
+  Building2,
 } from "lucide-react";
 import { nxApi, type NxSubsidy, type NxSubsidyDeadline, type NxClient, type NxPartner, type NxDeal } from "@/lib/nexus-api";
 import { getIntelDisplayTitle } from "@/lib/intel-display";
@@ -73,6 +76,9 @@ export default function SubsidyDetailPage() {
   const [clients, setClients] = useState<NxClient[]>([]);
   const [partners, setPartners] = useState<NxPartner[]>([]);
 
+  // For client linking modal
+  const [showLinkClient, setShowLinkClient] = useState(false);
+
   const load = useCallback(() => {
     nxApi.subsidies.get(id).then(setSubsidy).catch(console.error).finally(() => setLoading(false));
   }, [id]);
@@ -104,6 +110,24 @@ export default function SubsidyDetailPage() {
     }
   };
 
+  const handleArchive = async () => {
+    try {
+      const updated = await nxApi.subsidies.archive(id);
+      setSubsidy((prev) => (prev ? { ...prev, ...updated } : prev));
+    } catch (err) {
+      console.error("Archive failed:", err);
+    }
+  };
+
+  const handleRestore = async () => {
+    try {
+      const updated = await nxApi.subsidies.restore(id);
+      setSubsidy((prev) => (prev ? { ...prev, ...updated } : prev));
+    } catch (err) {
+      console.error("Restore failed:", err);
+    }
+  };
+
   const handleLinkDeal = async (dealId: number) => {
     try {
       await nxApi.subsidies.linkDeal(id, dealId);
@@ -120,6 +144,24 @@ export default function SubsidyDetailPage() {
       load();
     } catch (err) {
       console.error("Unlink deal failed:", err);
+    }
+  };
+
+  const handleLinkClient = async (clientId: number) => {
+    try {
+      await nxApi.subsidies.linkClient(id, clientId);
+      load();
+    } catch (err) {
+      console.error("Link client failed:", err);
+    }
+  };
+
+  const handleUnlinkClient = async (clientId: number) => {
+    try {
+      await nxApi.subsidies.unlinkClient(id, clientId);
+      load();
+    } catch (err) {
+      console.error("Unlink client failed:", err);
     }
   };
 
@@ -143,6 +185,8 @@ export default function SubsidyDetailPage() {
   }
 
   const linkedDealIds = new Set((subsidy.deals || []).map((d) => d.deal_id));
+  const linkedClientIds = new Set((subsidy.clients || []).map((c) => c.id));
+  const isArchived = subsidy.status === "archived";
 
   return (
     <div className="flex flex-col h-full">
@@ -153,12 +197,38 @@ export default function SubsidyDetailPage() {
         >
           <ChevronLeft size={20} />
         </Link>
+        {/* Archive / Restore button in header */}
+        {isArchived ? (
+          <button
+            onClick={handleRestore}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-green-500 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-colors cursor-pointer"
+          >
+            <RotateCcw size={14} />
+            還原
+          </button>
+        ) : (
+          <button
+            onClick={handleArchive}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-red-500 bg-slate-100 dark:bg-slate-800 hover:bg-red-500/10 border border-slate-200 dark:border-slate-700 hover:border-red-500/20 transition-colors cursor-pointer"
+          >
+            <Archive size={14} />
+            封存
+          </button>
+        )}
       </TopBar>
 
       <div className="flex-1 px-4 lg:px-6 py-4 overflow-auto">
         <div className="max-w-5xl mx-auto lg:grid lg:grid-cols-5 lg:gap-6">
           {/* Left column 3/5 */}
           <div className="lg:col-span-3 space-y-6">
+            {/* Archived banner */}
+            {isArchived && (
+              <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 flex items-center gap-3">
+                <Archive size={16} className="text-slate-400" />
+                <span className="text-sm text-slate-500">此補助案已封存</span>
+              </div>
+            )}
+
             {/* Stage pipeline */}
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
               <div className="flex gap-1">
@@ -290,21 +360,6 @@ export default function SubsidyDetailPage() {
 
               <EditableField label="備註" value={subsidy.notes} field="notes" multiline editField={editField} editValue={editValue} saving={saving} onEdit={(f, v) => { setEditField(f); setEditValue(v); }} onSave={handleSave} onCancel={() => setEditField(null)} setEditValue={setEditValue} />
 
-              {/* Client selector */}
-              <div>
-                <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">關聯客戶</label>
-                <select
-                  value={subsidy.client_id ?? ""}
-                  onChange={(e) => handleSave("client_id", e.target.value)}
-                  className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:outline-none transition-colors"
-                >
-                  <option value="">無</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
               {/* Partner selector */}
               <div>
                 <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1 block">關聯夥伴</label>
@@ -324,6 +379,60 @@ export default function SubsidyDetailPage() {
 
           {/* Right column 2/5 */}
           <div className="lg:col-span-2 space-y-4 mt-6 lg:mt-0">
+            {/* Multi-client association */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-2">
+                  <Building2 size={16} /> 關聯客戶
+                </h3>
+                <button
+                  onClick={() => setShowLinkClient(!showLinkClient)}
+                  className="text-xs text-blue-500 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <Plus size={12} /> 關聯
+                </button>
+              </div>
+              {showLinkClient && (
+                <div className="mb-3 max-h-40 overflow-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                  {clients.filter((c) => !linkedClientIds.has(c.id)).map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => handleLinkClient(c.id)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer border-b border-slate-100 dark:border-slate-800 last:border-b-0"
+                    >
+                      {c.name} {c.industry && <span className="text-xs text-slate-400">({c.industry})</span>}
+                    </button>
+                  ))}
+                  {clients.filter((c) => !linkedClientIds.has(c.id)).length === 0 && (
+                    <p className="px-3 py-2 text-xs text-slate-400">無可關聯的客戶</p>
+                  )}
+                </div>
+              )}
+              {(subsidy.clients || []).length === 0 ? (
+                <p className="text-xs text-slate-400">尚無關聯客戶</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {(subsidy.clients || []).map((c) => (
+                    <span
+                      key={c.id}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium"
+                    >
+                      <Building2 size={11} />
+                      <Link href={`/clients/${c.id}`} className="hover:underline">
+                        {c.name}
+                      </Link>
+                      <button
+                        onClick={() => handleUnlinkClient(c.id)}
+                        className="ml-0.5 text-blue-400 hover:text-red-500 cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Deadlines */}
             <DeadlinesCard subsidyId={id} deadlines={subsidy.deadlines || []} onReload={load} />
 

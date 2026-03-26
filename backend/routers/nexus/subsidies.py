@@ -11,6 +11,8 @@ from services.nexus.subsidies import (
     update_subsidy,
     advance_stage,
     close_subsidy,
+    archive_subsidy,
+    restore_subsidy,
     link_deal,
     unlink_deal,
     get_subsidy_deals,
@@ -19,6 +21,9 @@ from services.nexus.subsidies import (
     get_deadlines,
     update_deadline,
     delete_deadline,
+    link_client,
+    unlink_client,
+    get_subsidy_clients,
 )
 from services.nexus.intel import get_entity_intel
 
@@ -80,6 +85,10 @@ class SubsidyDealLink(BaseModel):
     deal_id: int
 
 
+class SubsidyClientLink(BaseModel):
+    client_id: int
+
+
 class SubsidyFromUrl(BaseModel):
     url: str
 
@@ -119,6 +128,7 @@ def read_subsidy(subsidy_id: int):
     sub["deals"] = get_subsidy_deals(subsidy_id)
     sub["intel"] = get_entity_intel("subsidy", subsidy_id)
     sub["deadlines"] = get_deadlines(subsidy_id)
+    # clients already populated by get_subsidy via M2M query
     return sub
 
 
@@ -153,6 +163,38 @@ def close(subsidy_id: int, body: SubsidyClose):
     if not result:
         raise HTTPException(404, "Subsidy not found")
     return result
+
+
+@router.post("/{subsidy_id}/archive")
+def archive(subsidy_id: int):
+    result = archive_subsidy(subsidy_id)
+    if not result:
+        raise HTTPException(404, "Subsidy not found")
+    return result
+
+
+@router.post("/{subsidy_id}/restore")
+def restore(subsidy_id: int):
+    result = restore_subsidy(subsidy_id)
+    if not result:
+        raise HTTPException(404, "Subsidy not found")
+    return result
+
+
+@router.get("/{subsidy_id}/clients")
+def list_clients(subsidy_id: int):
+    return get_subsidy_clients(subsidy_id)
+
+
+@router.post("/{subsidy_id}/clients", status_code=201)
+def link_client_to_subsidy(subsidy_id: int, body: SubsidyClientLink):
+    return link_client(subsidy_id, body.client_id)
+
+
+@router.delete("/{subsidy_id}/clients/{client_id}", status_code=204)
+def unlink_client_from_subsidy(subsidy_id: int, client_id: int):
+    if not unlink_client(subsidy_id, client_id):
+        raise HTTPException(404, "Client not linked to this subsidy")
 
 
 @router.post("/{subsidy_id}/deals", status_code=201)

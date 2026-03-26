@@ -1,0 +1,18 @@
+---
+client: 桃園國際機場
+client_id: 125
+created: '2026-03-26'
+scope: long-term
+source: auto
+source_id: 125
+source_type: nx_client
+status: inbox
+tags: []
+title: 桃園國際機場 — 客戶概覽
+type: client-profile
+updated: '2026-03-26'
+---
+
+# 桃園國際機場
+
+- **狀態**: active

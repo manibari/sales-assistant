@@ -1,0 +1,24 @@
+---
+client: 聯詠科技股份有限公司
+client_id: 32
+created: '2026-03-26'
+scope: long-term
+source: auto
+source_id: 32
+source_type: nx_client
+status: inbox
+tags:
+- semiconductor
+title: 聯詠 — 客戶概覽
+type: client-profile
+updated: '2026-03-26'
+---
+
+# 聯詠
+
+- **產業**: semiconductor
+- **狀態**: active
+
+## 備註
+
+Website: https://www.novatek.com.tw

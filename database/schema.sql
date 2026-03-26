@@ -253,6 +253,7 @@ CREATE TABLE IF NOT EXISTS nx_client (
     id              SERIAL PRIMARY KEY,
     name            TEXT NOT NULL,
     industry        TEXT,
+    region          TEXT,
     aliases         TEXT,
     budget_range    TEXT,
     status          TEXT NOT NULL DEFAULT 'active',
@@ -504,7 +505,16 @@ CREATE TABLE IF NOT EXISTS nx_subsidy_deadline (
 CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_subsidy ON nx_subsidy_deadline(subsidy_id);
 CREATE INDEX IF NOT EXISTS idx_nx_subsidy_deadline_date ON nx_subsidy_deadline(deadline_date, status);
 
--- 19. Subsidy x Deal (M2M)
+-- 19a. Subsidy x Client (M2M — multi-client association)
+CREATE TABLE IF NOT EXISTS nx_subsidy_client (
+    id          SERIAL PRIMARY KEY,
+    subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,
+    client_id   INTEGER NOT NULL REFERENCES nx_client(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(subsidy_id, client_id)
+);
+
+-- 19b. Subsidy x Deal (M2M)
 CREATE TABLE IF NOT EXISTS nx_subsidy_deal (
     id          SERIAL PRIMARY KEY,
     subsidy_id  INTEGER NOT NULL REFERENCES nx_subsidy(id) ON DELETE CASCADE,

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { TopBar } from "@/components/top-bar";
 import { nxApi, type NxSubsidy } from "@/lib/nexus-api";
-import { AlertTriangle, Building2, Calendar, ChevronDown, ChevronRight, ChevronRightCircle, Clock, Globe, Handshake, PenLine, Plus } from "lucide-react";
+import { AlertTriangle, Archive, Building2, Calendar, ChevronDown, ChevronRight, ChevronRightCircle, Clock, Globe, Handshake, PenLine, Plus, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { SubsidyUrlModal } from "@/components/subsidy-url-modal";
 
@@ -61,8 +61,11 @@ function formatDeadlineDate(dateStr: string | null): string {
   return d.toLocaleDateString("zh-TW", { month: "numeric", day: "numeric" });
 }
 
+type Tab = "active" | "past";
+
 export default function SubsidiesPage() {
-  const [subsidies, setSubsidies] = useState<NxSubsidy[]>([]);
+  const [allSubsidies, setAllSubsidies] = useState<NxSubsidy[]>([]);
+  const [tab, setTab] = useState<Tab>("active");
   const [view, setView] = useState<"stage" | "deadline">("stage");
   const [filter, setFilter] = useState<"all" | "urgent" | "upcoming" | "nodate">("all");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -71,12 +74,19 @@ export default function SubsidiesPage() {
   const [showUrlModal, setShowUrlModal] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  const loadAll = () => {
+    setLoading(true);
+    // Fetch all subsidies regardless of status
     nxApi.subsidies
       .list(view)
-      .then(setSubsidies)
+      .then(setAllSubsidies)
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   useEffect(() => {
@@ -89,6 +99,23 @@ export default function SubsidiesPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showAddMenu]);
 
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Split into active vs past
+  const activeSubsidies = useMemo(
+    () => allSubsidies.filter((s) => s.status === "active" && (!s.deadline_date || s.deadline_date >= today)),
+    [allSubsidies, today],
+  );
+
+  const pastSubsidies = useMemo(
+    () => allSubsidies.filter((s) =>
+      s.status === "archived" || s.status === "closed" || (s.status === "active" && s.deadline_date && s.deadline_date < today),
+    ),
+    [allSubsidies, today],
+  );
+
+  const subsidies = tab === "active" ? activeSubsidies : pastSubsidies;
+
   const toggleCollapse = (key: string) => {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -96,28 +123,48 @@ export default function SubsidiesPage() {
   const handleAdvance = async (id: number, stage: string) => {
     try {
       const updated = await nxApi.subsidies.advance(id, stage);
-      setSubsidies((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+      setAllSubsidies((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     } catch (err) {
       console.error("Advance failed:", err);
     }
   };
 
-  // Deadline summary stats (always from full list)
+  const handleArchive = async (id: number) => {
+    try {
+      const updated = await nxApi.subsidies.archive(id);
+      setAllSubsidies((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+    } catch (err) {
+      console.error("Archive failed:", err);
+    }
+  };
+
+  const handleRestore = async (id: number) => {
+    try {
+      const updated = await nxApi.subsidies.restore(id);
+      setAllSubsidies((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+    } catch (err) {
+      console.error("Restore failed:", err);
+    }
+  };
+
+  // Deadline summary stats (always from active tab subsidies)
   const deadlineStats = useMemo(() => {
-    const withDate = subsidies.filter((s) => s.days_left != null);
+    const src = tab === "active" ? subsidies : [];
+    const withDate = src.filter((s) => s.days_left != null);
     const urgent = withDate.filter((s) => s.days_left! >= 0 && s.days_left! <= 30);
     const upcoming = withDate.filter((s) => s.days_left! > 30 && s.days_left! <= 90);
-    const noDate = subsidies.filter((s) => s.days_left == null);
+    const noDate = src.filter((s) => s.days_left == null);
     return { urgent, upcoming, noDate, withDate };
-  }, [subsidies]);
+  }, [subsidies, tab]);
 
   // Filtered list
   const filtered = useMemo(() => {
+    if (tab === "past") return subsidies;
     if (filter === "all") return subsidies;
     if (filter === "urgent") return subsidies.filter((s) => s.days_left != null && s.days_left >= 0 && s.days_left <= 30);
     if (filter === "upcoming") return subsidies.filter((s) => s.days_left != null && s.days_left > 30 && s.days_left <= 90);
     return subsidies.filter((s) => s.days_left == null);
-  }, [subsidies, filter]);
+  }, [subsidies, filter, tab]);
 
   // Groups for deadline view
   const deadlineGroups = useMemo(() => {
@@ -170,31 +217,59 @@ export default function SubsidiesPage() {
             </div>
           )}
         </div>
-        <button
-          onClick={() => {
-            const idx = VIEW_ORDER.indexOf(view);
-            setView(VIEW_ORDER[(idx + 1) % VIEW_ORDER.length]);
-          }}
-          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-        >
-          {VIEW_LABELS[VIEW_ORDER[(VIEW_ORDER.indexOf(view) + 1) % VIEW_ORDER.length]]}
-        </button>
+        {tab === "active" && (
+          <button
+            onClick={() => {
+              const idx = VIEW_ORDER.indexOf(view);
+              setView(VIEW_ORDER[(idx + 1) % VIEW_ORDER.length]);
+            }}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+          >
+            {VIEW_LABELS[VIEW_ORDER[(VIEW_ORDER.indexOf(view) + 1) % VIEW_ORDER.length]]}
+          </button>
+        )}
       </TopBar>
 
       <div className="flex-1 px-4 lg:px-6 py-4 overflow-auto">
+        {/* Tab switcher */}
+        <div className="max-w-2xl lg:max-w-4xl mx-auto mb-4">
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+            <button
+              onClick={() => setTab("active")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                tab === "active"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+              }`}
+            >
+              進行中 ({activeSubsidies.length})
+            </button>
+            <button
+              onClick={() => setTab("past")}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                tab === "past"
+                  ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 shadow-sm"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+              }`}
+            >
+              過去的 ({pastSubsidies.length})
+            </button>
+          </div>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20 text-slate-400">
             載入中...
           </div>
         ) : subsidies.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
-            <p className="text-sm">尚無補助案</p>
-            <p className="text-xs mt-1">點右上角新增第一個補助案</p>
+            <p className="text-sm">{tab === "active" ? "尚無進行中的補助案" : "尚無過去的補助案"}</p>
+            {tab === "active" && <p className="text-xs mt-1">點右上角新增第一個補助案</p>}
           </div>
         ) : (
           <div className="max-w-2xl lg:max-w-4xl mx-auto">
-            {/* Deadline summary banner */}
-            {deadlineStats.urgent.length > 0 && (
+            {/* Deadline summary banner — active tab only */}
+            {tab === "active" && deadlineStats.urgent.length > 0 && (
               <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
                 <AlertTriangle size={18} className="text-red-500 flex-shrink-0" />
                 <div className="flex-1">
@@ -208,15 +283,17 @@ export default function SubsidiesPage() {
               </div>
             )}
 
-            {/* Filter chips */}
-            <div className="flex gap-2 mb-4 flex-wrap">
-              <FilterChip active={filter === "all"} onClick={() => setFilter("all")} dotColor="bg-blue-500" label="全部" count={subsidies.length} />
-              <FilterChip active={filter === "urgent"} onClick={() => setFilter("urgent")} dotColor="bg-red-500" label="≤30天" count={deadlineStats.urgent.length} />
-              <FilterChip active={filter === "upcoming"} onClick={() => setFilter("upcoming")} dotColor="bg-amber-500" label="30-90天" count={deadlineStats.upcoming.length} />
-              <FilterChip active={filter === "nodate"} onClick={() => setFilter("nodate")} dotColor="bg-slate-400" label="隨到隨審" count={deadlineStats.noDate.length} />
-            </div>
+            {/* Filter chips — active tab only */}
+            {tab === "active" && (
+              <div className="flex gap-2 mb-4 flex-wrap">
+                <FilterChip active={filter === "all"} onClick={() => setFilter("all")} dotColor="bg-blue-500" label="全部" count={subsidies.length} />
+                <FilterChip active={filter === "urgent"} onClick={() => setFilter("urgent")} dotColor="bg-red-500" label="≤30天" count={deadlineStats.urgent.length} />
+                <FilterChip active={filter === "upcoming"} onClick={() => setFilter("upcoming")} dotColor="bg-amber-500" label="30-90天" count={deadlineStats.upcoming.length} />
+                <FilterChip active={filter === "nodate"} onClick={() => setFilter("nodate")} dotColor="bg-slate-400" label="隨到隨審" count={deadlineStats.noDate.length} />
+              </div>
+            )}
 
-            {view === "stage" ? (
+            {tab === "active" && view === "stage" ? (
               <div className="space-y-4">
                 {STAGE_ORDER.map((stage) => {
                   const items = grouped[stage];
@@ -243,7 +320,7 @@ export default function SubsidiesPage() {
                       {!isCollapsed && (
                         <div className="space-y-3 mt-1 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
                           {items.map((s) => (
-                            <SubsidyCard key={s.id} subsidy={s} onAdvance={handleAdvance} />
+                            <SubsidyCard key={s.id} subsidy={s} onAdvance={handleAdvance} onArchive={handleArchive} />
                           ))}
                         </div>
                       )}
@@ -251,7 +328,7 @@ export default function SubsidiesPage() {
                   );
                 })}
               </div>
-            ) : (
+            ) : tab === "active" && view === "deadline" ? (
               /* Deadline view — grouped by urgency */
               <div className="space-y-4">
                 {deadlineGroups.map((group) => {
@@ -279,13 +356,20 @@ export default function SubsidiesPage() {
                       {!isCollapsed && (
                         <div className="space-y-3 mt-1 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
                           {group.items.map((s) => (
-                            <SubsidyCard key={s.id} subsidy={s} onAdvance={handleAdvance} />
+                            <SubsidyCard key={s.id} subsidy={s} onAdvance={handleAdvance} onArchive={handleArchive} />
                           ))}
                         </div>
                       )}
                     </div>
                   );
                 })}
+              </div>
+            ) : (
+              /* Past tab — flat list */
+              <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+                {filtered.map((s) => (
+                  <SubsidyCard key={s.id} subsidy={s} isPast onRestore={handleRestore} />
+                ))}
               </div>
             )}
           </div>
@@ -327,11 +411,26 @@ function getNextStage(current: string): string | null {
   return STAGE_PROGRESSION[idx + 1];
 }
 
-function SubsidyCard({ subsidy, onAdvance }: { subsidy: NxSubsidy; onAdvance?: (id: number, stage: string) => void }) {
+function SubsidyCard({
+  subsidy,
+  onAdvance,
+  onArchive,
+  onRestore,
+  isPast = false,
+}: {
+  subsidy: NxSubsidy;
+  onAdvance?: (id: number, stage: string) => void;
+  onArchive?: (id: number) => void;
+  onRestore?: (id: number) => void;
+  isPast?: boolean;
+}) {
   const days = subsidy.days_left;
   const borderColor = deadlineBorderColor(days ?? null);
   const hasDate = subsidy.deadline_date != null;
   const nextStage = getNextStage(subsidy.stage);
+
+  // Display multi-client names: prefer M2M client_names, fallback to single client_name
+  const displayClients = subsidy.client_names || subsidy.client_name || null;
 
   return (
     <div className={`relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4 transition-colors duration-200 hover:border-slate-300 dark:hover:border-slate-600 border-l-4 ${borderColor}`}>
@@ -355,16 +454,21 @@ function SubsidyCard({ subsidy, onAdvance }: { subsidy: NxSubsidy; onAdvance?: (
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
               {TYPE_LABELS[subsidy.program_type] || subsidy.program_type}
             </span>
+            {isPast && subsidy.status === "archived" && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-400">
+                已封存
+              </span>
+            )}
           </div>
         </div>
 
         {/* Client / Partner row */}
-        {(subsidy.client_name || subsidy.partner_name) && (
+        {(displayClients || subsidy.partner_name) && (
           <div className="mt-2 flex items-center gap-3 flex-wrap">
-            {subsidy.client_name && (
+            {displayClients && (
               <span className="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
                 <Building2 size={11} className="text-blue-400" />
-                {subsidy.client_name}
+                {displayClients}
               </span>
             )}
             {subsidy.partner_name && (
@@ -376,7 +480,7 @@ function SubsidyCard({ subsidy, onAdvance }: { subsidy: NxSubsidy; onAdvance?: (
           </div>
         )}
 
-        {/* Deadline row — enhanced */}
+        {/* Deadline row */}
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {hasDate ? (
@@ -422,19 +526,50 @@ function SubsidyCard({ subsidy, onAdvance }: { subsidy: NxSubsidy; onAdvance?: (
         </div>
       </Link>
 
-      {/* Quick advance button */}
-      {nextStage && onAdvance && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdvance(subsidy.id, nextStage);
-          }}
-          className="mt-2 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-500 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 transition-colors cursor-pointer"
-        >
-          <ChevronRightCircle size={13} />
-          推進至「{STAGE_LABELS[nextStage]}」
-        </button>
-      )}
+      {/* Action buttons */}
+      <div className="mt-2 flex gap-2">
+        {/* Quick advance button — active tab only */}
+        {!isPast && nextStage && onAdvance && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdvance(subsidy.id, nextStage);
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-500 bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 transition-colors cursor-pointer"
+          >
+            <ChevronRightCircle size={13} />
+            推進至「{STAGE_LABELS[nextStage]}」
+          </button>
+        )}
+
+        {/* Archive button — active tab */}
+        {!isPast && onArchive && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive(subsidy.id);
+            }}
+            className="flex items-center justify-center gap-1 py-1.5 px-3 rounded-lg text-[11px] font-medium text-slate-400 hover:text-red-500 bg-slate-50 dark:bg-slate-800 hover:bg-red-500/10 border border-slate-200 dark:border-slate-700 hover:border-red-500/20 transition-colors cursor-pointer"
+            title="封存"
+          >
+            <Archive size={13} />
+          </button>
+        )}
+
+        {/* Restore button — past tab */}
+        {isPast && onRestore && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore(subsidy.id);
+            }}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium text-green-500 bg-green-500/5 hover:bg-green-500/10 border border-green-500/20 transition-colors cursor-pointer"
+          >
+            <RotateCcw size={13} />
+            還原
+          </button>
+        )}
+      </div>
     </div>
   );
 }

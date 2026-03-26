@@ -228,6 +228,7 @@ export interface NxSubsidy {
   stage: string;
   client_id: number | null;
   client_name?: string;
+  client_names?: string;
   partner_id: number | null;
   partner_name?: string;
   notes: string | null;
@@ -238,6 +239,7 @@ export interface NxSubsidy {
   deals?: { deal_id: number; deal_name: string; deal_stage: string; deal_status: string; client_name: string }[];
   intel?: NxIntel[];
   deadlines?: NxSubsidyDeadline[];
+  clients?: { id: number; name: string }[];
 }
 
 export interface NxSubsidyDeadline {
@@ -476,6 +478,14 @@ export const nxApi = {
       postAPI<NxSubsidy>(`/subsidies/${id}/advance?stage=${stage}`, {}),
     close: (id: number, notes?: string) =>
       postAPI<NxSubsidy>(`/subsidies/${id}/close`, { notes }),
+    archive: (id: number) =>
+      postAPI<NxSubsidy>(`/subsidies/${id}/archive`, {}),
+    restore: (id: number) =>
+      postAPI<NxSubsidy>(`/subsidies/${id}/restore`, {}),
+    linkClient: (subsidyId: number, clientId: number) =>
+      postAPI<unknown>(`/subsidies/${subsidyId}/clients`, { client_id: clientId }),
+    unlinkClient: (subsidyId: number, clientId: number) =>
+      deleteAPI(`/subsidies/${subsidyId}/clients/${clientId}`),
     linkDeal: (subsidyId: number, dealId: number) =>
       postAPI<unknown>(`/subsidies/${subsidyId}/deals`, { deal_id: dealId }),
     unlinkDeal: (subsidyId: number, dealId: number) =>

@@ -3,6 +3,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BottomNav } from "@/components/bottom-nav";
 import { DesktopSidebar } from "@/components/desktop-sidebar";
+import { AssistantChat } from "@/components/assistant-chat";
 
 export const metadata: Metadata = {
   title: "Project Nexus",
@@ -33,6 +34,7 @@ export default function RootLayout({
             </div>
           </div>
           <BottomNav />
+          <AssistantChat />
         </ThemeProvider>
       </body>
     </html>

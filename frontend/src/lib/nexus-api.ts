@@ -42,6 +42,7 @@ export interface NxClient {
   id: number;
   name: string;
   industry: string | null;
+  region: string | null;
   budget_range: string | null;
   deal_budget_total: number | null;
   status: string;
@@ -679,20 +680,32 @@ export const nxApi = {
   },
   outreach: {
     industries: () => fetchAPI<{ industry: string; case_studies: number; solutions: number }[]>("/outreach/industries"),
+    regions: () => fetchAPI<{ region: string; count: number }[]>("/outreach/regions"),
     caseStudies: (industry?: string) =>
       fetchAPI<Record<string, unknown>[]>(`/outreach/case-studies${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`),
     solutions: (industry?: string) =>
       fetchAPI<Record<string, unknown>[]>(`/outreach/solutions${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`),
-    targets: (industry?: string) =>
-      fetchAPI<{ id: number; name: string; industry: string | null; status: string; deal_count: number; contact_count: number }[]>(
-        `/outreach/targets${industry ? `?industry=${encodeURIComponent(industry)}` : ""}`
-      ),
+    targets: (industry?: string, region?: string) => {
+      const params = new URLSearchParams();
+      if (industry) params.set("industry", industry);
+      if (region) params.set("region", region);
+      const qs = params.toString();
+      return fetchAPI<{ id: number; name: string; industry: string | null; region: string | null; status: string; deal_count: number; contact_count: number }[]>(
+        `/outreach/targets${qs ? `?${qs}` : ""}`
+      );
+    },
     contacts: (clientId: number) =>
       fetchAPI<{ id: number; name: string; title: string | null; phone: string | null; email: string | null; line_id: string | null; role: string | null }[]>(
         `/outreach/targets/${clientId}/contacts`
       ),
+    batchSummary: (clientIds: number[]) =>
+      postAPI<{ id: number; name: string; industry: string | null; region: string | null; deal_count: number; contacts: { name: string; title: string | null; phone: string | null; email: string | null }[] }[]>(
+        "/outreach/batch-summary", { client_ids: clientIds }
+      ),
     generatePitch: (data: { target_company: string; target_industry: string; case_study_industries?: string[]; include_knowledge?: boolean }) =>
       postAPI<{ pitch: string | null; error: string | null }>("/outreach/generate-pitch", data),
+    generateVisitPlan: (data: { client_ids: number[]; region?: string; industry?: string }) =>
+      postAPI<{ plan: string | null; error: string | null }>("/outreach/generate-visit-plan", data),
   },
   tenders: {
     list: (category?: string, trackingStatus?: string, source?: string) => {
@@ -801,6 +814,37 @@ export const nxApi = {
     syncEmails: () => postAPI<{ synced: number }>("/outlook/emails/sync", {}),
     syncCalendar: () => postAPI<{ pushed_to_outlook: number; pulled_from_outlook: number }>("/outlook/calendar/sync", {}),
     syncContacts: () => postAPI<{ pushed: number; pulled: number; matched: number }>("/outlook/contacts/sync", {}),
+  },
+  assistant: {
+    chat: (sessionId: string, text: string, inputType: string = "text") =>
+      postAPI<{
+        text: string;
+        intent: string;
+        intent_category: string;
+        parsed_update: Record<string, unknown> | null;
+        actions_taken: { type: string; [key: string]: unknown }[];
+        suggestions: string[];
+        card_data: Record<string, unknown> | null;
+        intel_id: number | null;
+        session_closed: boolean;
+      }>("/assistant/chat", { session_id: sessionId, text, input_type: inputType }),
+    command: (sessionId: string, command: string) =>
+      postAPI<{
+        text: string;
+        intent: string;
+        intent_category: string;
+        intel_id: number | null;
+        session_closed: boolean;
+      }>("/assistant/command", { session_id: sessionId, command }),
+    session: (sessionId: string) =>
+      fetchAPI<{
+        active: boolean;
+        intel_id: number | null;
+        intent: string | null;
+        parsed: Record<string, unknown>;
+        input_type: string;
+        message_count: number;
+      }>(`/assistant/session/${encodeURIComponent(sessionId)}`),
   },
   settings: {
     listIntegrations: () => fetchAPI<NxIntegrationConfig[]>("/settings/integrations"),

@@ -10,6 +10,7 @@ from services.nexus.clients import (
     update_client,
     delete_client,
     merge_clients,
+    toggle_pin_client,
 )
 from services.nexus.documents import get_documents_by_client
 from services.nexus.tags import get_entity_tags
@@ -61,9 +62,20 @@ def patch_client(client_id: int, body: ClientUpdate):
     return result
 
 
+@router.post("/{client_id}/pin")
+def pin_client(client_id: int):
+    result = toggle_pin_client(client_id)
+    if not result:
+        raise HTTPException(404, "Client not found")
+    return result
+
+
 @router.delete("/{client_id}", status_code=204)
 def remove_client(client_id: int):
-    if not delete_client(client_id):
+    result = delete_client(client_id)
+    if isinstance(result, str):
+        raise HTTPException(409, result)
+    if not result:
         raise HTTPException(404, "Client not found")
 
 

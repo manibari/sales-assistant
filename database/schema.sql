@@ -256,6 +256,7 @@ CREATE TABLE IF NOT EXISTS nx_client (
     region          TEXT,
     aliases         TEXT,
     budget_range    TEXT,
+    pinned          BOOLEAN NOT NULL DEFAULT FALSE,
     status          TEXT NOT NULL DEFAULT 'active',
     notes           TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -269,6 +270,7 @@ CREATE TABLE IF NOT EXISTS nx_partner (
     trust_level     TEXT NOT NULL DEFAULT 'unverified',
     team_size       TEXT,
     aliases         TEXT,
+    pinned          BOOLEAN NOT NULL DEFAULT FALSE,
     notes           TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()

@@ -10,6 +10,7 @@ from services.nexus.partners import (
     update_partner,
     update_trust_level,
     delete_partner,
+    toggle_pin_partner,
 )
 from services.nexus.tags import get_entity_tags
 
@@ -64,6 +65,14 @@ def change_trust(partner_id: int, level: str):
         result = update_trust_level(partner_id, level)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    if not result:
+        raise HTTPException(404, "Partner not found")
+    return result
+
+
+@router.post("/{partner_id}/pin")
+def pin_partner(partner_id: int):
+    result = toggle_pin_partner(partner_id)
     if not result:
         raise HTTPException(404, "Partner not found")
     return result

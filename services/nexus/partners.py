@@ -39,20 +39,28 @@ def get_partner(partner_id: int) -> dict | None:
 def get_all_partners(trust_level: str | None = None) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            if trust_level:
-                cur.execute(
-                    "SELECT * FROM nx_partner WHERE trust_level = %s ORDER BY updated_at DESC",
-                    (trust_level,),
-                )
-            else:
-                cur.execute("SELECT * FROM nx_partner ORDER BY updated_at DESC")
+            where = "WHERE trust_level = %s" if trust_level else ""
+            params: tuple = (trust_level,) if trust_level else ()
+            cur.execute(
+                f"""SELECT p.*,
+                           (SELECT COUNT(*) FROM nx_deal_partner dp
+                            JOIN nx_deal d ON dp.deal_id = d.id
+                            WHERE dp.partner_id = p.id AND d.status = 'active') AS deal_count
+                    FROM nx_partner p {where}
+                    ORDER BY p.pinned DESC,
+                             (SELECT COUNT(*) FROM nx_deal_partner dp
+                              JOIN nx_deal d ON dp.deal_id = d.id
+                              WHERE dp.partner_id = p.id AND d.status = 'active') DESC,
+                             p.updated_at DESC""",
+                params,
+            )
             return rows_to_dicts(cur)
 
 
 def update_partner(partner_id: int, **fields) -> dict | None:
     if not fields:
         return get_partner(partner_id)
-    allowed = {"name", "trust_level", "team_size", "notes", "aliases"}
+    allowed = {"name", "trust_level", "team_size", "notes", "aliases", "pinned"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_partner(partner_id)
@@ -97,6 +105,16 @@ def find_partner_by_name(name: str) -> list[dict]:
                 (q, q, name, name, name, q, name.lower()),
             )
             return rows_to_dicts(cur)
+
+
+def toggle_pin_partner(partner_id: int) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nx_partner SET pinned = NOT pinned, updated_at = NOW() WHERE id = %s RETURNING *",
+                (partner_id,),
+            )
+            return row_to_dict(cur)
 
 
 def delete_partner(partner_id: int) -> bool:

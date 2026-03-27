@@ -70,28 +70,40 @@ def get_client(client_id: int) -> dict | None:
 def get_all_clients(status: str | None = None) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            if status:
-                cur.execute(
-                    """SELECT c.*,
-                              (SELECT SUM(d.budget_amount)
-                               FROM nx_deal d
-                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
-                       FROM nx_client c WHERE c.status = %s ORDER BY c.updated_at DESC""",
-                    (status,),
-                )
-            else:
-                cur.execute("""SELECT c.*,
-                              (SELECT SUM(d.budget_amount)
-                               FROM nx_deal d
-                               WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total
-                       FROM nx_client c ORDER BY c.updated_at DESC""")
+            where = "WHERE c.status = %s" if status else ""
+            params: tuple = (status,) if status else ()
+            cur.execute(
+                f"""SELECT c.*,
+                           (SELECT SUM(d.budget_amount)
+                            FROM nx_deal d
+                            WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total,
+                           (SELECT COUNT(*)
+                            FROM nx_deal d
+                            WHERE d.client_id = c.id AND d.status = 'active') AS deal_count
+                    FROM nx_client c {where}
+                    ORDER BY c.pinned DESC,
+                             (SELECT COUNT(*) FROM nx_deal d WHERE d.client_id = c.id AND d.status = 'active') DESC,
+                             COALESCE((SELECT SUM(d.budget_amount) FROM nx_deal d WHERE d.client_id = c.id AND d.status = 'active'), 0) DESC,
+                             c.updated_at DESC""",
+                params,
+            )
             return rows_to_dicts(cur)
+
+
+def toggle_pin_client(client_id: int) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE nx_client SET pinned = NOT pinned, updated_at = NOW() WHERE id = %s RETURNING *",
+                (client_id,),
+            )
+            return row_to_dict(cur)
 
 
 def update_client(client_id: int, **fields) -> dict | None:
     if not fields:
         return get_client(client_id)
-    allowed = {"name", "industry", "budget_range", "status", "notes", "aliases"}
+    allowed = {"name", "industry", "region", "budget_range", "status", "notes", "aliases", "pinned"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_client(client_id)
@@ -120,13 +132,13 @@ def find_client_by_name(name: str) -> list[dict]:
                 """SELECT id, name, industry, status, aliases
                    FROM nx_client
                    WHERE name LIKE %s OR aliases LIKE %s
-                      OR %s LIKE '%%' || name || '%%'
-                      OR %s LIKE '%%' || aliases || '%%'
+                      OR (LENGTH(name) >= 2 AND %s LIKE '%%' || name || '%%')
+                      OR (LENGTH(COALESCE(aliases, '')) >= 2 AND %s LIKE '%%' || aliases || '%%')
                    ORDER BY
                      CASE
                        WHEN LOWER(name) = LOWER(%s) THEN 0
                        WHEN LOWER(name) LIKE LOWER(%s) THEN 1
-                       WHEN %s LIKE '%%' || LOWER(name) || '%%' THEN 2
+                       WHEN LENGTH(name) >= 2 AND %s LIKE '%%' || LOWER(name) || '%%' THEN 2
                        ELSE 3
                      END,
                      updated_at DESC""",
@@ -135,9 +147,15 @@ def find_client_by_name(name: str) -> list[dict]:
             return rows_to_dicts(cur)
 
 
-def delete_client(client_id: int) -> bool:
+def delete_client(client_id: int) -> bool | str:
+    """Delete client. Returns True on success, error string if FK blocks it."""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Check for referencing deals
+            cur.execute("SELECT COUNT(*) FROM nx_deal WHERE client_id = %s", (client_id,))
+            deal_count = cur.fetchone()[0]
+            if deal_count:
+                return f"此客戶有 {deal_count} 筆關聯商機，無法刪除。請先刪除或轉移商機。"
             cur.execute("DELETE FROM nx_client WHERE id = %s", (client_id,))
             return cur.rowcount > 0
 

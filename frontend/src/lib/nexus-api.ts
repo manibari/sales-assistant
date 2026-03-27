@@ -45,6 +45,8 @@ export interface NxClient {
   region: string | null;
   budget_range: string | null;
   deal_budget_total: number | null;
+  deal_count?: number;
+  pinned?: boolean;
   status: string;
   notes: string | null;
   created_at: string;
@@ -58,6 +60,8 @@ export interface NxPartner {
   name: string;
   trust_level: string;
   team_size: string | null;
+  pinned?: boolean;
+  deal_count?: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -507,6 +511,7 @@ export const nxApi = {
     update: (id: number, data: Partial<NxClient>) =>
       patchAPI<NxClient>(`/clients/${id}`, data),
     delete: (id: number) => deleteAPI(`/clients/${id}`),
+    togglePin: (id: number) => postAPI<NxClient>(`/clients/${id}/pin`, {}),
     merge: (targetId: number, sourceIds: number[]) =>
       postAPI<{ target_id: number; target_name: string; merged: number; contacts_moved: number; deals_moved: number }>(
         "/clients/merge", { target_id: targetId, source_ids: sourceIds }
@@ -520,6 +525,7 @@ export const nxApi = {
     update: (id: number, data: Partial<NxPartner>) =>
       patchAPI<NxPartner>(`/partners/${id}`, data),
     delete: (id: number) => deleteAPI(`/partners/${id}`),
+    togglePin: (id: number) => postAPI<NxPartner>(`/partners/${id}/pin`, {}),
   },
   contacts: {
     list: (orgType?: string, orgId?: number) => {
@@ -590,6 +596,10 @@ export const nxApi = {
       postAPI<NxDeal>(`/deals/${id}/advance?stage=${stage}`, {}),
     close: (id: number, reason: string, notes?: string) =>
       postAPI<NxDeal>(`/deals/${id}/close`, { reason, notes }),
+    hold: (id: number, notes?: string) =>
+      postAPI<NxDeal>(`/deals/${id}/hold`, { notes }),
+    unhold: (id: number, resumeStage?: string) =>
+      postAPI<NxDeal>(`/deals/${id}/unhold`, { resume_stage: resumeStage || "L0" }),
     addPartner: (dealId: number, partnerId: number, role?: string) =>
       postAPI<NxDealPartner>(`/deals/${dealId}/partners`, { partner_id: partnerId, role }),
     removePartner: (dealId: number, partnerId: number) =>

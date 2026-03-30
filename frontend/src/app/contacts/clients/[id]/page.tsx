@@ -217,6 +217,17 @@ export default function ClientDetailPage() {
                 >
                   產業: {client.industry || "—"}
                 </span>
+                <span
+                  onClick={async () => {
+                    const next = client.market === "overseas" ? "domestic" : "overseas";
+                    await nxApi.clients.update(clientId, { market: next } as Partial<NxClient>);
+                    loadData();
+                  }}
+                  className="cursor-pointer hover:text-blue-500 transition-colors"
+                  title="Click to toggle market"
+                >
+                  市場: {client.market === "overseas" ? "海外" : "國內"}
+                </span>
                 <span>預算: {formatBudget(client.deal_budget_total)}</span>
               </div>
             </div>

@@ -8,14 +8,15 @@ def create_client(
     industry: str | None = None,
     budget_range: str | None = None,
     notes: str | None = None,
+    market: str = "domestic",
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_client (name, industry, budget_range, notes)
-                   VALUES (%s, %s, %s, %s)
+                """INSERT INTO nx_client (name, industry, budget_range, notes, market)
+                   VALUES (%s, %s, %s, %s, %s)
                    RETURNING *""",
-                (name, industry, budget_range, notes),
+                (name, industry, budget_range, notes, market),
             )
             client = row_to_dict(cur)
     # Auto-create NDA + MOU tracking entries
@@ -103,7 +104,7 @@ def toggle_pin_client(client_id: int) -> dict | None:
 def update_client(client_id: int, **fields) -> dict | None:
     if not fields:
         return get_client(client_id)
-    allowed = {"name", "industry", "region", "budget_range", "status", "notes", "aliases", "pinned"}
+    allowed = {"name", "industry", "region", "market", "budget_range", "status", "notes", "aliases", "pinned"}
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
         return get_client(client_id)

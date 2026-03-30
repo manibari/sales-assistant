@@ -23,6 +23,7 @@ class ClientCreate(BaseModel):
     industry: str | None = None
     budget_range: str | None = None
     notes: str | None = None
+    market: str = "domestic"
 
 
 class ClientUpdate(BaseModel):
@@ -31,6 +32,7 @@ class ClientUpdate(BaseModel):
     budget_range: str | None = None
     status: str | None = None
     notes: str | None = None
+    market: str | None = None
 
 
 @router.get("/")

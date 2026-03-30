@@ -43,6 +43,7 @@ export interface NxClient {
   name: string;
   industry: string | null;
   region: string | null;
+  market: "domestic" | "overseas";
   budget_range: string | null;
   deal_budget_total: number | null;
   deal_count?: number;
@@ -317,6 +318,22 @@ export interface TenderResponseJson {
   chat_history?: { role: string; content: string }[];
 }
 
+export interface NxPlan {
+  id: number;
+  title: string;
+  plan_type: string;
+  fiscal_year: number | null;
+  deal_id: number | null;
+  client_id: number | null;
+  client_name?: string;
+  deal_name?: string;
+  body: string | null;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NxMemory {
   path: string;
   title: string;
@@ -458,6 +475,22 @@ export interface SearchResults {
 }
 
 export const nxApi = {
+  plans: {
+    list: (planType?: string, status?: string) => {
+      const params = new URLSearchParams();
+      if (planType) params.set("plan_type", planType);
+      if (status) params.set("status", status);
+      const qs = params.toString();
+      return fetchAPI<NxPlan[]>(`/plans/${qs ? `?${qs}` : ""}`);
+    },
+    get: (id: number) => fetchAPI<NxPlan>(`/plans/${id}`),
+    create: (data: { title: string; plan_type?: string; fiscal_year?: number; body?: string; deal_id?: number; client_id?: number; notes?: string }) =>
+      postAPI<NxPlan>("/plans/", data),
+    update: (id: number, data: Partial<NxPlan>) =>
+      patchAPI<NxPlan>(`/plans/${id}`, data),
+    archive: (id: number) =>
+      postAPI<NxPlan>(`/plans/${id}/archive`, {}),
+  },
   subsidies: {
     list: (view?: string, clientId?: number) => {
       const params = new URLSearchParams();
@@ -506,7 +539,7 @@ export const nxApi = {
   clients: {
     list: (status?: string) => fetchAPI<NxClient[]>(`/clients/${status ? `?status=${status}` : ""}`),
     get: (id: number) => fetchAPI<NxClient>(`/clients/${id}`),
-    create: (data: { name: string; industry?: string; budget_range?: string }) =>
+    create: (data: { name: string; industry?: string; budget_range?: string; market?: "domestic" | "overseas" }) =>
       postAPI<NxClient>("/clients/", data),
     update: (id: number, data: Partial<NxClient>) =>
       patchAPI<NxClient>(`/clients/${id}`, data),

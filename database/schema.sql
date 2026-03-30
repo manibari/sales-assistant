@@ -254,6 +254,7 @@ CREATE TABLE IF NOT EXISTS nx_client (
     name            TEXT NOT NULL,
     industry        TEXT,
     region          TEXT,
+    market          TEXT NOT NULL DEFAULT 'domestic',
     aliases         TEXT,
     budget_range    TEXT,
     pinned          BOOLEAN NOT NULL DEFAULT FALSE,
@@ -648,3 +649,19 @@ CREATE TABLE IF NOT EXISTS nx_tender_deal (
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(tender_id, deal_id)
 );
+
+-- 27. Plans (strategy / annual / proposal)
+CREATE TABLE IF NOT EXISTS nx_plan (
+    id            SERIAL PRIMARY KEY,
+    title         TEXT NOT NULL,
+    plan_type     TEXT NOT NULL DEFAULT 'annual',
+    fiscal_year   INTEGER,
+    deal_id       INTEGER REFERENCES nx_deal(id),
+    client_id     INTEGER REFERENCES nx_client(id),
+    body          TEXT,
+    status        TEXT NOT NULL DEFAULT 'draft',
+    notes         TEXT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_plan_type_status ON nx_plan(plan_type, status);

@@ -5,8 +5,6 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
 import {
   ChevronLeft,
-  ChevronUp,
-  ChevronDown,
   Check,
   X,
   AlertTriangle,
@@ -20,15 +18,20 @@ import {
   ExternalLink,
   Download,
   Users,
-  Trash2,
 } from "lucide-react";
 import { nxApi, type NxDeal, type NxPartner, type NxIntel, type NxContact, type MeddicProgress } from "@/lib/nexus-api";
 import { getIntelDisplayTitle } from "@/lib/intel-display";
 import { formatBudget } from "@/lib/options";
+import { STAGE_ORDER, STAGE_LABELS } from "@/lib/deal-constants";
 import { FileUploadModal } from "@/components/file-upload-modal";
 import { ContactFormModal } from "@/components/contact-form-modal";
 import { DealGantt } from "@/components/deal-gantt";
 import { IntelSummaryModal } from "@/components/intel-summary-modal";
+import { IntelRow } from "@/components/intel-row";
+import { Section } from "@/components/collapsible-section";
+import { DealStageStepper } from "@/components/deal-stage-stepper";
+import { DealMeddic } from "@/components/deal-meddic";
+import { DealCloseModal } from "@/components/deal-close-modal";
 import Link from "next/link";
 
 const TRUST_LABELS: Record<string, string> = {
@@ -36,139 +39,19 @@ const TRUST_LABELS: Record<string, string> = {
   core_team: "核心班底", si_backed: "SI 擔保", demoted: "不推薦",
 };
 
-const STAGE_ORDER = ["L0", "L1", "L2", "L3", "L4"];
-const STAGE_LABELS: Record<string, string> = {
-  L0: "L0 潛在",
-  L1: "L1 接觸中",
-  L2: "L2 需求確認",
-  L3: "L3 報價",
-  L4: "L4 簽約",
-  closed: "已關閉",
-};
-
-const MEDDIC_LABELS: Record<string, string> = {
-  metrics: "Metrics (量化指標)",
-  economic_buyer: "Economic Buyer (經濟決策者)",
-  decision_criteria: "Decision Criteria (決策標準)",
-  decision_process: "Decision Process (決策流程)",
-  identify_pain: "Identify Pain (痛點辨識)",
-  champion: "Champion (內部擁護者)",
-};
-
-const CLOSE_REASONS = [
-  { label: "預算不足", value: "budget" },
-  { label: "時程不合", value: "timing" },
-  { label: "選擇競品", value: "competitor" },
-  { label: "需求消失", value: "no_need" },
-  { label: "其他", value: "other" },
-];
-
-function IntelRow({
-  intelId,
-  title,
-  date,
-  editing,
-  onUnlink,
-  onTitleSaved,
-}: {
-  intelId: number;
-  title: string;
-  date?: string;
-  editing: boolean;
-  onUnlink: () => void;
-  onTitleSaved: () => void;
-}) {
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!draft.trim() || saving) return;
-    setSaving(true);
-    try {
-      await nxApi.intel.update(intelId, { title: draft.trim() });
-      setEditingTitle(false);
-      onTitleSaved();
-    } catch (err) {
-      console.error("Failed to save intel title:", err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="flex items-start justify-between py-2 gap-2">
-      <div className="flex-1 min-w-0">
-        {editingTitle ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditingTitle(false); }}
-              className="flex-1 text-sm bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded px-2 py-1 text-slate-900 dark:text-slate-50 focus:outline-none"
-              autoFocus
-              placeholder="情報標題..."
-            />
-            <button onClick={handleSave} disabled={saving} className="p-1 text-blue-500 hover:text-blue-600 cursor-pointer disabled:opacity-50"><Check size={14} /></button>
-            <button onClick={() => setEditingTitle(false)} className="p-1 text-slate-400 hover:text-slate-500 cursor-pointer"><X size={14} /></button>
-          </div>
-        ) : (
-          <div className="group">
-            <Link
-              href={`/intel/${intelId}`}
-              className="text-sm text-slate-700 dark:text-slate-300 hover:text-blue-500 dark:hover:text-blue-400 line-clamp-2 transition-colors"
-            >
-              {title}
-              <ExternalLink size={11} className="inline ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />
-            </Link>
-          </div>
-        )}
-        <span className="text-[11px] text-slate-400 mt-1 block">
-          {date ? new Date(date).toLocaleDateString("zh-TW") : ""}
-        </span>
-      </div>
-      {editing && !editingTitle && (
-        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-          <button
-            onClick={() => { setDraft(title); setEditingTitle(true); }}
-            className="p-1 text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 rounded cursor-pointer transition-colors"
-            title="修改標題"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={onUnlink}
-            className="p-1 text-red-400 hover:text-red-500 hover:bg-red-500/10 rounded cursor-pointer transition-colors"
-            title="取消關聯"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function DealDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
   const dealId = Number(params.id);
 
-  // Back navigation: return to originating contact page if available
-  const fromType = searchParams.get("from"); // "client" | "partner"
+  const fromType = searchParams.get("from");
   const orgId = searchParams.get("orgId");
   const backHref = fromType && orgId ? `/contacts/${fromType}s/${orgId}` : "/deals";
 
   const [deal, setDeal] = useState<NxDeal | null>(null);
   const [loading, setLoading] = useState(true);
-  const [meddicOpen, setMeddicOpen] = useState(false);
-  const [editingMeddic, setEditingMeddic] = useState<string | null>(null);
-  const [meddicValue, setMeddicValue] = useState("");
   const [showCloseModal, setShowCloseModal] = useState(false);
-  const [closeReason, setCloseReason] = useState("");
-  const [closeNotes, setCloseNotes] = useState("");
   const [advancing, setAdvancing] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showAddPartner, setShowAddPartner] = useState(false);
@@ -228,7 +111,6 @@ export default function DealDetailPage() {
       .get(dealId)
       .then((d) => {
         setDeal(d);
-        // Load contacts for this deal's client
         if (d.client_id) {
           nxApi.contacts.list("client", d.client_id).then(setContacts).catch(console.error);
         }
@@ -249,17 +131,14 @@ export default function DealDetailPage() {
 
     const isForward = targetIdx > currentIdx;
 
-    // MEDDIC gate only on forward movement past L1
     if (isForward) {
       const progress = deal.meddic_progress;
       if (progress && progress.missing.length > 0 && currentIdx >= 1) {
         alert(`需先完成 MEDDIC：${progress.missing.join(", ")}`);
-        setMeddicOpen(true);
         return;
       }
     }
 
-    // Confirm backward movement
     if (!isForward) {
       const ok = confirm(`確定要將階段從 ${STAGE_LABELS[deal.stage]} 退回到 ${STAGE_LABELS[targetStage]}？`);
       if (!ok) return;
@@ -276,28 +155,13 @@ export default function DealDetailPage() {
     }
   };
 
-  const handleClose = async () => {
-    if (!closeReason) return;
+  const handleClose = async (reason: string, notes?: string) => {
     try {
-      await nxApi.deals.close(dealId, closeReason, closeNotes || undefined);
+      await nxApi.deals.close(dealId, reason, notes);
       setShowCloseModal(false);
       loadDeal();
     } catch (err) {
       console.error("Failed to close:", err);
-    }
-  };
-
-  const handleMeddicSave = async (key: string) => {
-    if (!deal) return;
-    const current = deal.meddic_json ? JSON.parse(deal.meddic_json) : {};
-    current[key] = meddicValue;
-    try {
-      await nxApi.deals.update(dealId, { meddic_json: JSON.stringify(current) } as Partial<NxDeal>);
-      setEditingMeddic(null);
-      setMeddicValue("");
-      loadDeal();
-    } catch (err) {
-      console.error("Failed to save MEDDIC:", err);
     }
   };
 
@@ -318,17 +182,14 @@ export default function DealDetailPage() {
     );
   }
 
-  const meddic: Record<string, string | null> = deal.meddic_json
-    ? typeof deal.meddic_json === "string"
-      ? JSON.parse(deal.meddic_json)
-      : deal.meddic_json
-    : {};
   const progress: MeddicProgress = deal.meddic_progress || {
     completed: 0,
     total: 6,
     missing: [],
   };
   const isClosed = deal.status === "closed";
+  const isHold = deal.stage === "HOLD";
+  const isInactive = isClosed || isHold;
 
   const handleDeleteDeal = async () => {
     if (!confirm(`確定要刪除商機「${deal.name}」？此操作無法復原，會議、提醒等關聯資料也會一併刪除。`)) return;
@@ -353,7 +214,6 @@ export default function DealDetailPage() {
       </TopBar>
 
       <div className="flex-1 px-4 lg:px-6 py-4 overflow-auto max-w-2xl lg:max-w-6xl mx-auto w-full">
-        {/* Desktop: 2-column layout */}
         <div className="lg:grid lg:grid-cols-5 lg:gap-6 space-y-4 lg:space-y-0">
         {/* Left column (3/5) — header + MEDDIC */}
         <div className="lg:col-span-3 space-y-4">
@@ -363,7 +223,9 @@ export default function DealDetailPage() {
             <span
               className={`text-xs px-2.5 py-1 rounded-full font-medium ${
                 isClosed
-                  ? "bg-slate-700 text-slate-400"
+                  ? "bg-red-500/10 text-red-400"
+                  : isHold
+                  ? "bg-gray-500/10 text-gray-400"
                   : "bg-blue-500/10 text-blue-400"
               }`}
             >
@@ -485,48 +347,57 @@ export default function DealDetailPage() {
             </div>
           )}
 
-          {/* Stage stepper */}
-          {!isClosed && (
-            <div className="mt-4 space-y-3">
-              <div className="flex items-center gap-1">
-                {STAGE_ORDER.map((s, i) => {
-                  const currentIdx = STAGE_ORDER.indexOf(deal.stage);
-                  const isActive = i === currentIdx;
-                  const isPast = i < currentIdx;
-                  return (
-                    <button
-                      key={s}
-                      onClick={() => {
-                        if (i !== currentIdx && !advancing) handleStageClick(s);
-                      }}
-                      disabled={advancing || i === currentIdx}
-                      className={`flex-1 py-2 text-xs font-medium rounded-lg cursor-pointer transition-all disabled:cursor-default ${
-                        isActive
-                          ? "bg-blue-500 text-white"
-                          : isPast
-                          ? "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      {advancing ? "…" : STAGE_LABELS[s]?.split(" ")[0] || s}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Resume held deal */}
+          {isHold && !isClosed && (
+            <div className="mt-4">
+              {deal.close_notes && (
+                <p className="text-xs text-slate-400 mb-2">
+                  擱置備註: {deal.close_notes}
+                </p>
+              )}
               <button
-                onClick={() => setShowCloseModal(true)}
-                className="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 min-h-[44px] cursor-pointer transition-colors"
+                onClick={async () => {
+                  if (!confirm("確定要解除擱置？將回到 L0 階段。")) return;
+                  setAdvancing(true);
+                  try {
+                    await nxApi.deals.unhold(dealId, "L0");
+                    loadDeal();
+                  } catch (err) {
+                    console.error("Failed to unhold:", err);
+                  } finally {
+                    setAdvancing(false);
+                  }
+                }}
+                disabled={advancing}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2.5 rounded-lg text-sm min-h-[44px] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
               >
-                關閉案件
-              </button>
-              <button
-                onClick={handleDeleteDeal}
-                className="w-full px-4 py-2.5 rounded-lg text-sm font-medium text-red-500 hover:bg-red-500/10 border border-red-500/20 min-h-[44px] cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-              >
-                <Trash2 size={14} />
-                刪除商機
+                {advancing ? "處理中..." : "解除擱置"}
               </button>
             </div>
+          )}
+
+          {/* Stage stepper */}
+          {!isInactive && (
+            <DealStageStepper
+              currentStage={deal.stage}
+              advancing={advancing}
+              onStageClick={handleStageClick}
+              onClose={() => setShowCloseModal(true)}
+              onHold={async () => {
+                const notes = prompt("擱置備註（可留空）：");
+                if (notes === null) return;
+                setAdvancing(true);
+                try {
+                  await nxApi.deals.hold(dealId, notes || undefined);
+                  loadDeal();
+                } catch (err) {
+                  console.error("Failed to hold:", err);
+                } finally {
+                  setAdvancing(false);
+                }
+              }}
+              onDelete={handleDeleteDeal}
+            />
           )}
         </div>
 
@@ -541,122 +412,13 @@ export default function DealDetailPage() {
         )}
 
         {/* MEDDIC Progress */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
-          <button
-            onClick={() => setMeddicOpen(!meddicOpen)}
-            className="w-full flex items-center justify-between p-4 cursor-pointer"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-                MEDDIC 進度
-              </span>
-              <span className="text-xs text-slate-400">
-                {progress.completed}/{progress.total}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-20 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 rounded-full transition-all"
-                  style={{
-                    width: `${(progress.completed / progress.total) * 100}%`,
-                  }}
-                />
-              </div>
-              {meddicOpen ? (
-                <ChevronUp size={16} className="text-slate-400" />
-              ) : (
-                <ChevronDown size={16} className="text-slate-400" />
-              )}
-            </div>
-          </button>
-          {meddicOpen && (
-            <div className="border-t border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
-              {progress.missing.length > 0 && !isClosed && (
-                <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50">
-                  <button
-                    onClick={async () => {
-                      try {
-                        const res = await nxApi.deals.aiFillMeddic(dealId);
-                        if (res.ai_filled.length > 0) {
-                          loadDeal();
-                        } else {
-                          alert("AI 未找到新的 MEDDIC 線索");
-                        }
-                      } catch (err) {
-                        console.error("AI MEDDIC fill failed:", err);
-                        alert("AI 分析失敗，請確認有關聯情報");
-                      }
-                    }}
-                    className="text-xs text-cyan-500 hover:text-cyan-400 font-medium cursor-pointer transition-colors"
-                  >
-                    ✨ AI 從情報自動填寫（{progress.missing.length} 項未填）
-                  </button>
-                </div>
-              )}
-              {Object.entries(MEDDIC_LABELS).map(([key, label]) => {
-                const value = meddic[key];
-                const isEditing = editingMeddic === key;
-                return (
-                  <div key={key} className="px-4 py-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {value ? (
-                          <Check size={14} className="text-green-500" />
-                        ) : (
-                          <CircleDot size={14} className="text-slate-400" />
-                        )}
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          {label}
-                        </span>
-                      </div>
-                      {!isEditing && !isClosed && (
-                        <button
-                          onClick={() => {
-                            setEditingMeddic(key);
-                            setMeddicValue(value || "");
-                          }}
-                          className="text-xs text-blue-500 cursor-pointer"
-                        >
-                          {value ? "編輯" : "填寫"}
-                        </button>
-                      )}
-                    </div>
-                    {value && !isEditing && (
-                      <p className="text-sm text-slate-700 dark:text-slate-300 mt-1 ml-6">
-                        {value}
-                      </p>
-                    )}
-                    {isEditing && (
-                      <div className="mt-2 ml-6 flex gap-2">
-                        <input
-                          type="text"
-                          value={meddicValue}
-                          onChange={(e) => setMeddicValue(e.target.value)}
-                          className="flex-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                          placeholder="輸入內容..."
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => handleMeddicSave(key)}
-                          className="p-2 bg-blue-500 text-white rounded-lg cursor-pointer"
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button
-                          onClick={() => setEditingMeddic(null)}
-                          className="p-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <DealMeddic
+          dealId={dealId}
+          meddicJson={deal.meddic_json}
+          progress={progress}
+          isClosed={isClosed}
+          onUpdated={loadDeal}
+        />
 
         </div>
         {/* Right column (2/5) — related data */}
@@ -1053,7 +815,7 @@ export default function DealDetailPage() {
         </div>
       )}
 
-      {/* Add Intel modal */}
+      {/* Intel summary modal */}
       {showSummaryModal && deal?.intel && (
         <IntelSummaryModal
           intelIds={deal.intel.map((i) => {
@@ -1076,6 +838,7 @@ export default function DealDetailPage() {
         />
       )}
 
+      {/* Add Intel modal */}
       {showAddIntel && (
         <div className="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4">
@@ -1182,103 +945,10 @@ export default function DealDetailPage() {
 
       {/* Close modal */}
       {showCloseModal && (
-        <div className="fixed inset-0 bg-slate-950/50 flex items-end md:items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl md:rounded-xl p-6 w-full max-w-md mx-auto space-y-4">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50">
-              關閉商機
-            </h3>
-            <p className="text-sm text-slate-500">選擇關閉原因：</p>
-            <div className="grid grid-cols-2 gap-2">
-              {CLOSE_REASONS.map((r) => (
-                <button
-                  key={r.value}
-                  onClick={() => setCloseReason(r.value)}
-                  className={`min-h-[44px] px-3 py-2 text-sm font-medium rounded-lg border transition-colors cursor-pointer ${
-                    closeReason === r.value
-                      ? "border-red-500 bg-red-500/10 text-red-400"
-                      : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={closeNotes}
-              onChange={(e) => setCloseNotes(e.target.value)}
-              placeholder="備註 (optional)"
-              className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-900 dark:text-slate-50 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none h-20"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowCloseModal(false)}
-                className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-medium px-4 py-3 rounded-lg min-h-[44px] cursor-pointer transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleClose}
-                disabled={!closeReason}
-                className="flex-1 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white font-semibold px-4 py-3 rounded-lg min-h-[44px] cursor-pointer transition-all"
-              >
-                確定關閉
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Section({
-  title,
-  icon,
-  count,
-  editing,
-  onToggleEdit,
-  onAdd,
-  children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  count?: number;
-  editing?: boolean;
-  onToggleEdit?: () => void;
-  onAdd?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`bg-white dark:bg-slate-900 border rounded-xl p-4 transition-colors ${editing ? "border-blue-500/50" : "border-slate-200 dark:border-slate-700"}`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-            {title}
-          </span>
-          {count !== undefined && (
-            <span className="text-xs text-slate-400">({count})</span>
-          )}
-        </div>
-        {onToggleEdit && (
-          <button
-            onClick={onToggleEdit}
-            className={`text-xs cursor-pointer transition-colors ${editing ? "text-blue-500 font-medium" : "text-slate-400 hover:text-blue-500"}`}
-          >
-            {editing ? "完成" : "編輯"}
-          </button>
-        )}
-      </div>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800">
-        {children}
-      </div>
-      {editing && onAdd && (
-        <button
-          onClick={onAdd}
-          className="mt-3 w-full py-2 text-xs text-blue-500 border border-dashed border-blue-500/30 rounded-lg hover:bg-blue-500/5 cursor-pointer transition-colors"
-        >
-          + 新增
-        </button>
+        <DealCloseModal
+          onClose={() => setShowCloseModal(false)}
+          onConfirm={handleClose}
+        />
       )}
     </div>
   );

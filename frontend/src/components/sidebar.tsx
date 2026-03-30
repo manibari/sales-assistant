@@ -8,6 +8,7 @@ const NAV_SECTIONS = [
     title: "戰略中心",
     items: [
       { label: "關係網絡", href: "/network" },
+      { label: "策略計畫", href: "/strategy" },
     ],
   },
   {
@@ -36,7 +37,7 @@ export function Sidebar() {
             </p>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
-                const active = pathname === item.href;
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <li key={item.href}>
                     <Link

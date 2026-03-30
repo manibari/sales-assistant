@@ -24,11 +24,11 @@ from services.nexus.knowledge import (
     update_file_parse_status,
     delete_knowledge_by_file,
     extract_text_from_file,
-    summarize_chunk,
     create_knowledge_chunk,
     PARSEABLE_EXTENSIONS,
     _get_file_extension,
 )
+from services.nexus.ai.knowledge_ai import summarize_chunk
 from services.nexus.documents import get_file
 
 

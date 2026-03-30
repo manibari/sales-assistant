@@ -114,6 +114,72 @@ def generate_ai_response(system_prompt: str, user_text: str) -> str:
     raise ValueError(f"Unknown AI_PROVIDER: {provider}")
 
 
+def generate_embedding(text: str) -> list[float]:
+    """Generate text embedding using Google text-embedding-004.
+
+    Always uses Google/Gemini regardless of AI_PROVIDER env var.
+    Requires GOOGLE_API_KEY to be set.
+    """
+    import google.generativeai as genai  # noqa: E402 — lazy import
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY not set — cannot generate embeddings")
+    genai.configure(api_key=api_key)
+    result = genai.embed_content(model="models/text-embedding-004", content=text)
+    return result["embedding"]
+
+
+def generate_ai_with_tools(
+    system_prompt: str,
+    messages: list[dict],
+    tools: list[dict],
+    provider: str | None = None,
+) -> dict:
+    """Tool-calling AI dispatch. Uses AGENT_PROVIDER env var (default: gemini).
+
+    Args:
+        system_prompt: System instruction.
+        messages: List of {"role": "user"|"assistant", "content": str}.
+        tools: List of tool definitions (OpenAI-style function schema).
+        provider: Override AGENT_PROVIDER env var.
+
+    Returns:
+        {"content": str | None, "tool_calls": [{"name": str, "arguments": dict}]}
+    """
+    p = provider or os.getenv("AGENT_PROVIDER", "gemini")
+    if p == "gemini":
+        return _call_gemini_with_tools(system_prompt, messages, tools)
+    if p == "azure_openai":
+        return _call_azure_openai_with_tools(system_prompt, messages, tools)
+    raise ValueError(f"Tool calling not supported for provider: {p}")
+
+
+def generate_ai_chat(
+    system_prompt: str,
+    messages: list[dict[str, str]],
+) -> str:
+    """Dispatch a multi-turn chat to the active provider.
+
+    Args:
+        system_prompt: The system instruction.
+        messages: List of {"role": "user"|"assistant", "content": str}.
+
+    Returns:
+        The raw text response from the AI model.
+    """
+    provider = get_provider_name()
+
+    if provider == "gemini":
+        return _call_gemini_chat(system_prompt, messages)
+    if provider == "azure_openai":
+        return _call_azure_openai_chat(system_prompt, messages)
+    if provider == "anthropic":
+        return _call_anthropic_chat(system_prompt, messages)
+
+    raise ValueError(f"Unknown AI_PROVIDER: {provider}")
+
+
 # ---------------------------------------------------------------------------
 # Private provider implementations
 # ---------------------------------------------------------------------------
@@ -159,6 +225,67 @@ def _call_anthropic(system_prompt: str, user_text: str) -> str:
         max_tokens=4096,
         system=system_prompt,
         messages=[{"role": "user", "content": user_text}],
+    )
+    return response.content[0].text.strip()
+
+
+# ---------------------------------------------------------------------------
+# Multi-turn chat provider implementations
+# ---------------------------------------------------------------------------
+
+
+def _call_gemini_chat(system_prompt: str, messages: list[dict[str, str]]) -> str:
+    import google.generativeai as genai  # noqa: E402
+
+    model_name = os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=system_prompt,
+    )
+    # Convert to Gemini's content format
+    history = []
+    for msg in messages[:-1]:
+        role = "user" if msg["role"] == "user" else "model"
+        history.append({"role": role, "parts": [msg["content"]]})
+    chat = model.start_chat(history=history)
+    last_msg = messages[-1]["content"] if messages else ""
+    response = chat.send_message(last_msg)
+    return response.text.strip()
+
+
+def _call_azure_openai_chat(
+    system_prompt: str, messages: list[dict[str, str]]
+) -> str:
+    from openai import AzureOpenAI  # noqa: E402
+
+    client = AzureOpenAI(
+        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        api_key=os.environ["AZURE_OPENAI_KEY"],
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01"),
+    )
+    api_messages = [{"role": "system", "content": system_prompt}]
+    for msg in messages:
+        api_messages.append({"role": msg["role"], "content": msg["content"]})
+    response = client.chat.completions.create(
+        model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+        messages=api_messages,
+    )
+    return response.choices[0].message.content.strip()
+
+
+def _call_anthropic_chat(
+    system_prompt: str, messages: list[dict[str, str]]
+) -> str:
+    import anthropic  # noqa: E402
+
+    client = anthropic.Anthropic()
+    model_name = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    api_messages = [{"role": m["role"], "content": m["content"]} for m in messages]
+    response = client.messages.create(
+        model=model_name,
+        max_tokens=4096,
+        system=system_prompt,
+        messages=api_messages,
     )
     return response.content[0].text.strip()
 
@@ -238,3 +365,113 @@ def _call_anthropic_vision(
         messages=[{"role": "user", "content": content}],
     )
     return response.content[0].text.strip()
+
+
+# ---------------------------------------------------------------------------
+# Tool-calling provider implementations
+# ---------------------------------------------------------------------------
+
+
+def _call_gemini_with_tools(
+    system_prompt: str,
+    messages: list[dict],
+    tools: list[dict],
+) -> dict:
+    """Gemini function-calling via google-generativeai SDK."""
+    import google.generativeai as genai  # noqa: E402
+    from google.generativeai.types import FunctionDeclaration, Tool  # noqa: E402
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY not set")
+    genai.configure(api_key=api_key)
+
+    # Convert OpenAI-style tool defs to Gemini FunctionDeclarations
+    decls = []
+    for t in tools:
+        fn = t.get("function", t)
+        params = fn.get("parameters", {})
+        decls.append(
+            FunctionDeclaration(
+                name=fn["name"],
+                description=fn.get("description", ""),
+                parameters=params,
+            )
+        )
+    gemini_tools = [Tool(function_declarations=decls)] if decls else []
+
+    model_name = os.getenv("GOOGLE_AGENT_MODEL", "gemini-1.5-flash")
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=system_prompt,
+        tools=gemini_tools,
+    )
+
+    # Build history
+    history = []
+    for msg in messages[:-1]:
+        role = "user" if msg["role"] == "user" else "model"
+        history.append({"role": role, "parts": [msg["content"]]})
+
+    chat = model.start_chat(history=history)
+    last = messages[-1]["content"] if messages else ""
+    response = chat.send_message(last)
+
+    # Parse response
+    tool_calls = []
+    text_content = None
+    for part in response.parts:
+        if hasattr(part, "function_call") and part.function_call.name:
+            fc = part.function_call
+            tool_calls.append(
+                {
+                    "name": fc.name,
+                    "arguments": dict(fc.args),
+                }
+            )
+        elif hasattr(part, "text") and part.text:
+            text_content = part.text.strip()
+
+    return {"content": text_content, "tool_calls": tool_calls}
+
+
+def _call_azure_openai_with_tools(
+    system_prompt: str,
+    messages: list[dict],
+    tools: list[dict],
+) -> dict:
+    """Azure OpenAI function-calling."""
+    from openai import AzureOpenAI  # noqa: E402
+
+    client = AzureOpenAI(
+        azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+        api_key=os.environ["AZURE_OPENAI_KEY"],
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-06-01"),
+    )
+    api_messages = [{"role": "system", "content": system_prompt}]
+    for msg in messages:
+        api_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    # Convert tool defs to OpenAI format (already compatible)
+    response = client.chat.completions.create(
+        model=os.environ["AZURE_OPENAI_DEPLOYMENT"],
+        messages=api_messages,
+        tools=[{"type": "function", "function": t.get("function", t)} for t in tools],
+        tool_choice="auto",
+    )
+    msg = response.choices[0].message
+    tool_calls = []
+    if msg.tool_calls:
+        import json as _json
+
+        for tc in msg.tool_calls:
+            tool_calls.append(
+                {
+                    "name": tc.function.name,
+                    "arguments": _json.loads(tc.function.arguments),
+                }
+            )
+    return {
+        "content": msg.content.strip() if msg.content else None,
+        "tool_calls": tool_calls,
+    }

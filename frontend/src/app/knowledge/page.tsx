@@ -1,1277 +1,902 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   Loader2,
   Search,
-  Brain,
+  FolderOpen,
+  Folder,
   FileText,
-  Tag,
+  LayoutGrid,
+  LayoutList,
+  ChevronRight,
   ArrowLeft,
   Plus,
-  Pencil,
   Trash2,
   RefreshCw,
-  Inbox,
-  BookOpen,
-  Archive,
-  ArrowUpRight,
-  ChevronRight,
-  ChevronDown,
   X,
-  FilePlus2,
-  FolderOpen,
-  CheckCircle2,
-  Clock,
+  Brain,
+  FolderPlus,
+  File,
+  Upload,
+  MessageSquare,
+  Send,
+  Sparkles,
 } from "lucide-react";
 import {
   nxApi,
   type NxMemory,
-  type NxMemoryCategory,
-  type NxMemoryTemplate,
+  type NxFile,
 } from "@/lib/nexus-api";
 
-type Tab = "inbox" | "library";
-type ViewMode = "list" | "read" | "edit";
+type ViewMode = "icon" | "list";
+
+// Build folder tree from flat memory paths
+interface FolderNode {
+  name: string;
+  path: string;
+  children: Map<string, FolderNode>;
+  files: NxMemory[];
+}
+
+function buildTree(memories: NxMemory[]): FolderNode {
+  const root: FolderNode = { name: "知識庫", path: "", children: new Map(), files: [] };
+
+  for (const m of memories) {
+    const parts = m.path.split("/");
+    const fileName = parts.pop()!;
+    let current = root;
+
+    for (const part of parts) {
+      if (!current.children.has(part)) {
+        const childPath = current.path ? `${current.path}/${part}` : part;
+        current.children.set(part, {
+          name: part,
+          path: childPath,
+          children: new Map(),
+          files: [],
+        });
+      }
+      current = current.children.get(part)!;
+    }
+
+    current.files.push(m);
+  }
+
+  return root;
+}
+
+function getNode(root: FolderNode, path: string): FolderNode | null {
+  if (!path) return root;
+  const parts = path.split("/");
+  let current = root;
+  for (const part of parts) {
+    const child = current.children.get(part);
+    if (!child) return null;
+    current = child;
+  }
+  return current;
+}
+
+function formatSize(memory: NxMemory): string {
+  const body = memory._body || memory.snippet || "";
+  const bytes = new TextEncoder().encode(body).length;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 const TYPE_LABELS: Record<string, string> = {
-  "client-profile": "客戶",
-  "deal-overview": "案件",
-  intel: "情報",
-  meeting: "會議",
-  "file-summary": "文件",
+  "client-profile": "客戶資料",
+  "deal-overview": "案件總覽",
+  intel: "情報摘要",
+  meeting: "會議紀錄",
+  "file-summary": "文件摘要",
   "domain-insight": "領域知識",
-  "deal-note": "案件知識",
-  manual: "手動",
+  "deal-note": "案件筆記",
+  manual: "手動筆記",
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  inbox: { label: "收件匣", color: "bg-orange-500/10 text-orange-600" },
-  draft: { label: "草稿", color: "bg-yellow-500/10 text-yellow-600" },
-  published: { label: "已發布", color: "bg-green-500/10 text-green-600" },
-  archived: { label: "已封存", color: "bg-slate-500/10 text-slate-500" },
+const TYPE_ICONS: Record<string, string> = {
+  "client-profile": "👤",
+  "deal-overview": "💼",
+  intel: "🔍",
+  meeting: "📅",
+  "file-summary": "📄",
+  "domain-insight": "🧠",
+  "deal-note": "📝",
+  manual: "✏️",
 };
 
 export default function KnowledgePage() {
-  const [tab, setTab] = useState<Tab>("inbox");
   const [memories, setMemories] = useState<NxMemory[]>([]);
-  const [categories, setCategories] = useState<NxMemoryCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  // Library filters
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [zoneFilter, setZoneFilter] = useState<string>("");
-  // View
   const [viewMode, setViewMode] = useState<ViewMode>("list");
-  const [selectedMemory, setSelectedMemory] = useState<NxMemory | null>(null);
-  const [editBody, setEditBody] = useState("");
-  // Modals
-  const [showPromote, setShowPromote] = useState(false);
-  const [promoteSource, setPromoteSource] = useState<NxMemory | null>(null);
-  const [showTemplate, setShowTemplate] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
+  const [currentPath, setCurrentPath] = useState("");
+  const [selectedFile, setSelectedFile] = useState<NxMemory | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<NxMemory[] | null>(null);
+  const [showNewFolder, setShowNewFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creating, setCreating] = useState(false);
 
-  // Inbox count
-  const [inboxCount, setInboxCount] = useState(0);
+  // Drag & drop upload
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string[]>([]);
 
-  const loadInboxCount = useCallback(async () => {
-    try {
-      const data = await nxApi.memory.list({ status: "inbox" });
-      setInboxCount(data.length);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  // AI ask panel
+  const [showAsk, setShowAsk] = useState(false);
+  const [askQuestion, setAskQuestion] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const [askAnswer, setAskAnswer] = useState<string | null>(null);
+  const [askSources, setAskSources] = useState<Array<{ source_type: string; id: number; text: string; score: number }>>([]);
+  const askInputRef = useRef<HTMLInputElement>(null);
 
-  const loadCategories = useCallback(async () => {
-    try {
-      const cats = await nxApi.memory.categories();
-      setCategories(cats);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const loadAll = useCallback(async () => {
+  // Load all memories
+  const loadMemories = useCallback(() => {
     setLoading(true);
-    try {
-      if (tab === "inbox") {
-        const data = await nxApi.memory.list({ status: "inbox" });
-        setMemories(data);
-        setInboxCount(data.length);
-      } else {
-        const params: Record<string, string> = {};
-        if (statusFilter) params.status = statusFilter;
-        else {
-          // Library shows draft + published by default (not inbox, not archived)
-          // We filter client-side since API only supports single status
-        }
-        if (categoryFilter) params.category = categoryFilter;
-        if (zoneFilter) params.zone = zoneFilter;
-        const data = await nxApi.memory.list(params);
-        // Filter to only draft/published unless explicit filter
-        if (!statusFilter) {
-          setMemories(data.filter((m) => m.status === "draft" || m.status === "published"));
-        } else {
-          setMemories(data);
-        }
+    nxApi.memory
+      .list()
+      .then(setMemories)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadMemories();
+  }, [loadMemories]);
+
+  // Build tree
+  const tree = useMemo(() => buildTree(memories), [memories]);
+  const currentNode = useMemo(() => getNode(tree, currentPath), [tree, currentPath]);
+
+  // Breadcrumb
+  const breadcrumbs = useMemo(() => {
+    const crumbs = [{ name: "知識庫", path: "" }];
+    if (currentPath) {
+      const parts = currentPath.split("/");
+      let accumulated = "";
+      for (const part of parts) {
+        accumulated = accumulated ? `${accumulated}/${part}` : part;
+        crumbs.push({ name: part, path: accumulated });
       }
-    } catch {
-      setMemories([]);
-    } finally {
-      setLoading(false);
     }
-  }, [tab, statusFilter, categoryFilter, zoneFilter]);
+    return crumbs;
+  }, [currentPath]);
 
-  useEffect(() => {
-    loadAll();
-    loadCategories();
-  }, [loadAll, loadCategories]);
-
-  useEffect(() => {
-    if (tab === "library") loadInboxCount();
-  }, [tab, loadInboxCount]);
-
-  const handleSearch = async () => {
-    const q = query.trim();
-    if (q.length < 2) {
-      loadAll();
+  // Search
+  const handleSearch = useCallback(async () => {
+    if (!query.trim()) {
+      setSearchResults(null);
       return;
     }
-    setSearching(true);
     try {
-      const results = await nxApi.memory.search(q);
-      if (tab === "inbox") {
-        setMemories(results.filter((m) => m.status === "inbox" || !m.status));
-      } else {
-        setMemories(results.filter((m) => m.status === "draft" || m.status === "published"));
-      }
-    } catch {
-      setMemories([]);
+      const results = await nxApi.memory.search(query);
+      setSearchResults(results);
+    } catch (err) {
+      console.error(err);
+    }
+  }, [query]);
+
+  // AI ask
+  const handleAsk = async () => {
+    if (!askQuestion.trim() || askLoading) return;
+    setAskLoading(true);
+    setAskAnswer(null);
+    setAskSources([]);
+    try {
+      const res = await fetch("/api/nx/agent/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: askQuestion }),
+      });
+      const data = await res.json();
+      setAskAnswer(data.answer ?? "（無回答）");
+      setAskSources(data.sources ?? []);
+    } catch (err) {
+      setAskAnswer("發生錯誤，請稍後再試。");
+      console.error(err);
     } finally {
-      setSearching(false);
+      setAskLoading(false);
     }
   };
 
+  // Sync
   const handleSync = async () => {
     setSyncing(true);
     try {
       await nxApi.memory.syncAll();
-      await loadAll();
+      loadMemories();
+    } catch (err) {
+      console.error(err);
     } finally {
       setSyncing(false);
     }
   };
 
-  const openMemory = async (path: string) => {
+  // Delete file
+  const handleDelete = async (m: NxMemory) => {
+    if (!confirm(`確定要刪除「${m.title}」？`)) return;
     try {
-      const mem = await nxApi.memory.get(path);
-      setSelectedMemory(mem);
-      setEditBody(mem._body || "");
-      setViewMode("read");
-    } catch {
-      console.error("Failed to load memory");
+      await nxApi.memory.delete(m.path);
+      setMemories((prev) => prev.filter((x) => x.path !== m.path));
+      if (selectedFile?.path === m.path) setSelectedFile(null);
+    } catch (err) {
+      console.error(err);
     }
   };
 
-  const handleDelete = async (path: string) => {
-    if (!confirm("確定刪除？")) return;
+  // Create folder (create a placeholder file in the folder)
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setCreating(true);
     try {
-      await nxApi.memory.delete(path);
-      setViewMode("list");
-      setSelectedMemory(null);
-      loadAll();
-    } catch {
-      console.error("Failed to delete");
-    }
-  };
-
-  const handleArchive = async (path: string) => {
-    try {
-      await nxApi.memory.updateStatus(path, "archived");
-      loadAll();
-    } catch {
-      console.error("Failed to archive");
-    }
-  };
-
-  const handleStatusChange = async (path: string, status: string) => {
-    try {
-      await nxApi.memory.updateStatus(path, status);
-      if (selectedMemory?.path === path) {
-        setSelectedMemory({ ...selectedMemory, status });
-      }
-      loadAll();
-    } catch {
-      console.error("Failed to update status");
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    if (!selectedMemory) return;
-    try {
-      const updated = await nxApi.memory.update(selectedMemory.path, {
-        body: editBody,
+      const folder = currentPath
+        ? `${currentPath}/${newFolderName.trim()}`
+        : newFolderName.trim();
+      await nxApi.memory.create({
+        title: "README",
+        type: "manual",
+        scope: "long-term",
+        body: `# ${newFolderName.trim()}\n\n資料夾建立於 ${new Date().toLocaleDateString("zh-TW")}`,
+        folder,
       });
-      setSelectedMemory({ ...selectedMemory, _body: editBody, ...updated });
-      setViewMode("read");
-      loadAll();
-    } catch {
-      console.error("Failed to save");
+      setShowNewFolder(false);
+      setNewFolderName("");
+      loadMemories();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCreating(false);
     }
   };
 
-  const openPromoteModal = (mem: NxMemory) => {
-    setPromoteSource(mem);
-    setShowPromote(true);
+  // File upload
+  const handleFiles = async (files: FileList | File[]) => {
+    const fileArr = Array.from(files);
+    if (fileArr.length === 0) return;
+    setUploading(true);
+    setUploadProgress([]);
+
+    for (const file of fileArr) {
+      setUploadProgress((prev) => [...prev, `上傳 ${file.name}...`]);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("file_type", "knowledge");
+        await nxApi.files.upload(formData);
+        setUploadProgress((prev) => [
+          ...prev.slice(0, -1),
+          `✅ ${file.name} — 已上傳，排入解析佇列`,
+        ]);
+      } catch (err) {
+        console.error(err);
+        setUploadProgress((prev) => [
+          ...prev.slice(0, -1),
+          `❌ ${file.name} — 上傳失敗`,
+        ]);
+      }
+    }
+
+    setUploading(false);
+    // Refresh after sync so new file-summary memories appear
+    setTimeout(() => {
+      nxApi.memory.syncAll().then(loadMemories).catch(console.error);
+    }, 1000);
   };
 
-  // Read / Edit view
-  if (viewMode === "read" && selectedMemory) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <button
-            onClick={() => {
-              setViewMode("list");
-              setSelectedMemory(null);
-            }}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer transition-colors"
-          >
-            <ArrowLeft size={16} />
-            返回
-          </button>
-          <div className="flex items-center gap-2">
-            {selectedMemory.status === "draft" && (
-              <button
-                onClick={() => handleStatusChange(selectedMemory.path, "published")}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-green-500/10 text-green-600 hover:bg-green-500/20 cursor-pointer transition-colors"
-              >
-                <CheckCircle2 size={12} />
-                發布
-              </button>
-            )}
-            {selectedMemory.status === "published" && (
-              <button
-                onClick={() => handleStatusChange(selectedMemory.path, "draft")}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 cursor-pointer transition-colors"
-              >
-                <Clock size={12} />
-                退回草稿
-              </button>
-            )}
-            <button
-              onClick={() => setViewMode("edit")}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-            >
-              <Pencil size={12} />
-              編輯
-            </button>
-            <button
-              onClick={() => handleDelete(selectedMemory.path)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 cursor-pointer transition-colors"
-            >
-              <Trash2 size={12} />
-              刪除
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 px-4 py-4 overflow-auto max-w-3xl mx-auto w-full">
-          {/* Metadata badges */}
-          <div className="mb-4 flex flex-wrap gap-2 items-center">
-            <TypeBadge type={selectedMemory.type} />
-            {selectedMemory.status && <StatusBadge status={selectedMemory.status} />}
-            {selectedMemory.category && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 font-medium">
-                {selectedMemory.category}
-              </span>
-            )}
-            {selectedMemory.client && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                {selectedMemory.client}
-              </span>
-            )}
-            {selectedMemory.source === "auto" && (
-              <span className="text-[10px] text-slate-400">
-                auto from {selectedMemory.source_type} #{selectedMemory.source_id}
-              </span>
-            )}
-            {selectedMemory.source === "promoted" && selectedMemory.promoted_from && (
-              <span className="text-[10px] text-slate-400">
-                promoted from {selectedMemory.promoted_from}
-              </span>
-            )}
-          </div>
-          {selectedMemory.tags && selectedMemory.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-3">
-              {selectedMemory.tags.map((tag) => (
-                <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="text-xs text-slate-400 mb-4">
-            建立: {selectedMemory.created} | 更新: {selectedMemory.updated}
-          </div>
-          {/* Related items */}
-          {selectedMemory.related && selectedMemory.related.length > 0 && (
-            <div className="mb-4 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-              <div className="text-xs font-medium text-slate-500 mb-1">相關知識</div>
-              {selectedMemory.related.map((r) => (
-                <button key={r} onClick={() => openMemory(r)} className="block text-xs text-blue-500 hover:underline cursor-pointer">
-                  {r}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Markdown body */}
-          <article className="prose prose-sm dark:prose-invert max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {selectedMemory._body || ""}
-            </ReactMarkdown>
-          </article>
-        </div>
-      </div>
-    );
-  }
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    handleFiles(e.dataTransfer.files);
+  };
 
-  // Edit view
-  if (viewMode === "edit" && selectedMemory) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <button
-            onClick={() => setViewMode("read")}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer transition-colors"
-          >
-            <ArrowLeft size={16} />
-            取消
-          </button>
-          <button
-            onClick={handleSaveEdit}
-            className="px-4 py-1.5 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors"
-          >
-            儲存
-          </button>
-        </div>
-        <div className="flex-1 p-4 overflow-auto">
-          <textarea
-            value={editBody}
-            onChange={(e) => setEditBody(e.target.value)}
-            className="w-full h-full min-h-[60vh] p-4 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 resize-none"
-          />
-        </div>
-      </div>
-    );
-  }
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(true);
+  };
 
-  // List view (default)
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only set false if leaving the container, not entering a child
+    if (e.currentTarget === e.target) setDragging(false);
+  };
+
+  // Navigate
+  const navigateTo = (path: string) => {
+    setCurrentPath(path);
+    setSelectedFile(null);
+    setSearchResults(null);
+    setQuery("");
+  };
+
+  // Items to display
+  const displayItems = searchResults || (currentNode ? currentNode.files : []);
+  const folders = currentNode
+    ? Array.from(currentNode.children.values()).sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center gap-2">
-          <Brain size={20} className="text-blue-500" />
-          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50">
-            知識管理
-          </h1>
+    <div
+      className="flex flex-col h-full relative"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
+      {/* Drag overlay */}
+      {dragging && (
+        <div className="absolute inset-0 z-50 bg-purple-500/10 border-2 border-dashed border-purple-500 rounded-xl flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <Upload size={48} className="text-purple-500 mx-auto mb-2" />
+            <p className="text-lg font-semibold text-purple-600 dark:text-purple-400">拖放檔案到這裡</p>
+            <p className="text-sm text-purple-500/70">支援 PDF、Word、PowerPoint、Excel</p>
+          </div>
         </div>
+      )}
+
+      {/* Header */}
+      <div className="h-14 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-center gap-2">
+          <Brain size={20} className="text-purple-500" />
+          <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50">知識庫</h1>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setViewMode("icon")}
+            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+              viewMode === "icon" ? "text-blue-500 bg-blue-500/10" : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            <LayoutGrid size={16} />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+              viewMode === "list" ? "text-blue-500 bg-blue-500/10" : "text-slate-400 hover:text-slate-600"
+            }`}
+          >
+            <LayoutList size={16} />
+          </button>
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-purple-500 hover:bg-purple-500/10 cursor-pointer transition-colors disabled:opacity-50"
+            title="同步知識庫 (RAG)"
           >
-            <RefreshCw size={12} className={syncing ? "animate-spin" : ""} />
-            同步
+            <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
           </button>
-          {tab === "library" && (
+        </div>
+      </div>
+
+      {/* Toolbar: breadcrumb + search + new folder */}
+      <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 shrink-0">
+        <div className="flex items-center gap-3 max-w-4xl mx-auto">
+          {/* Breadcrumb */}
+          <nav className="flex items-center gap-1 text-sm flex-1 min-w-0 overflow-hidden">
+            {breadcrumbs.map((crumb, i) => (
+              <span key={crumb.path} className="flex items-center gap-1 shrink-0">
+                {i > 0 && <ChevronRight size={12} className="text-slate-300" />}
+                <button
+                  onClick={() => navigateTo(crumb.path)}
+                  className={`hover:text-blue-500 cursor-pointer transition-colors truncate max-w-32 ${
+                    i === breadcrumbs.length - 1
+                      ? "text-slate-900 dark:text-slate-50 font-medium"
+                      : "text-slate-400"
+                  }`}
+                >
+                  {crumb.name}
+                </button>
+              </span>
+            ))}
+          </nav>
+
+          {/* Search */}
+          <div className="relative w-48">
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (!e.target.value) setSearchResults(null);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="搜尋..."
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Upload button */}
+          <label
+            className="p-1.5 rounded-lg text-slate-400 hover:text-purple-500 hover:bg-purple-500/10 cursor-pointer transition-colors"
+            title="上傳檔案"
+          >
+            <Upload size={16} />
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.docx,.pptx,.xlsx,.xls,.doc,.txt,.md,.csv"
+              className="hidden"
+              onChange={(e) => e.target.files && handleFiles(e.target.files)}
+            />
+          </label>
+
+          {/* New folder */}
+          <button
+            onClick={() => setShowNewFolder(true)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors"
+            title="新增資料夾"
+          >
+            <FolderPlus size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Upload progress */}
+      {uploadProgress.length > 0 && (
+        <div className="px-4 py-2 bg-purple-500/5 border-b border-purple-500/20 shrink-0">
+          <div className="max-w-4xl mx-auto space-y-1">
+            {uploadProgress.map((msg, i) => (
+              <p key={i} className="text-xs text-purple-600 dark:text-purple-400">{msg}</p>
+            ))}
+            {uploading && (
+              <div className="flex items-center gap-2 text-xs text-purple-500">
+                <Loader2 size={12} className="animate-spin" />
+                上傳中...
+              </div>
+            )}
+            {!uploading && (
+              <button
+                onClick={() => setUploadProgress([])}
+                className="text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer mt-1"
+              >
+                關閉
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 size={20} className="animate-spin text-purple-500" />
+            </div>
+          ) : searchResults ? (
+            /* Search results */
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-slate-400">搜尋「{query}」— {searchResults.length} 筆結果</p>
+                <button
+                  onClick={() => { setSearchResults(null); setQuery(""); }}
+                  className="text-xs text-blue-500 cursor-pointer hover:underline"
+                >
+                  清除搜尋
+                </button>
+              </div>
+              {viewMode === "list" ? (
+                <ListView items={searchResults} onOpen={setSelectedFile} onDelete={handleDelete} />
+              ) : (
+                <IconView items={searchResults} folders={[]} onOpen={setSelectedFile} onNavigate={navigateTo} />
+              )}
+            </div>
+          ) : (
+            /* Folder contents */
             <>
-              <button
-                onClick={() => setShowTemplate(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer transition-colors"
-              >
-                <FilePlus2 size={12} />
-                從模板建立
-              </button>
-              <button
-                onClick={() => setShowCreate(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors"
-              >
-                <Plus size={12} />
-                新增
-              </button>
+              {folders.length === 0 && displayItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+                  <FolderOpen size={40} className="mb-3 opacity-30" />
+                  <p className="text-sm">此資料夾為空</p>
+                  <p className="text-xs mt-1">點擊同步按鈕匯入資料，或新增資料夾</p>
+                </div>
+              ) : viewMode === "list" ? (
+                <div>
+                  {/* List view header */}
+                  <div className="flex items-center text-[11px] text-slate-400 uppercase tracking-wide px-3 py-2 border-b border-slate-200 dark:border-slate-700">
+                    <span className="flex-1">名稱</span>
+                    <span className="w-20 text-right">大小</span>
+                    <span className="w-24 text-center">類型</span>
+                    <span className="w-28 text-right">新增日期</span>
+                    <span className="w-10" />
+                  </div>
+
+                  {/* Folders */}
+                  {folders.map((folder) => {
+                    const totalFiles = countFiles(folder);
+                    return (
+                      <button
+                        key={folder.path}
+                        onClick={() => navigateTo(folder.path)}
+                        className="w-full flex items-center px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer transition-colors text-left group"
+                      >
+                        <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                          <Folder size={18} className="text-blue-400 shrink-0" />
+                          <span className="text-sm text-slate-900 dark:text-slate-50 truncate">
+                            {folder.name}
+                          </span>
+                        </div>
+                        <span className="w-20 text-right text-xs text-slate-400">{totalFiles} 項目</span>
+                        <span className="w-24 text-center text-xs text-slate-400">資料夾</span>
+                        <span className="w-28" />
+                        <span className="w-10 flex justify-end">
+                          <ChevronRight size={14} className="text-slate-300" />
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {/* Files */}
+                  <ListView items={displayItems} onOpen={setSelectedFile} onDelete={handleDelete} />
+                </div>
+              ) : (
+                <IconView
+                  items={displayItems}
+                  folders={folders}
+                  onOpen={setSelectedFile}
+                  onNavigate={navigateTo}
+                />
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="px-4 pt-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-        <div className="flex gap-1">
-          <button
-            onClick={() => setTab("inbox")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors cursor-pointer ${
-              tab === "inbox"
-                ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-500/10"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            }`}
-          >
-            <Inbox size={14} />
-            收件匣
-            {inboxCount > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-orange-500 text-white">
-                {inboxCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("library")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors cursor-pointer ${
-              tab === "library"
-                ? "border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-500/10"
-                : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            }`}
-          >
-            <BookOpen size={14} />
-            知識庫
-          </button>
-        </div>
-      </div>
+      {/* File preview panel */}
+      {selectedFile && (
+        <FilePreview
+          file={selectedFile}
+          onClose={() => setSelectedFile(null)}
+          onDelete={() => handleDelete(selectedFile)}
+        />
+      )}
 
-      <div className="flex-1 px-4 py-4 overflow-auto max-w-3xl mx-auto w-full space-y-4">
-        {/* Search */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      {/* New folder dialog */}
+      {showNewFolder && (
+        <div className="fixed inset-0 bg-slate-950/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-sm mx-4 space-y-4">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">新增資料夾</h3>
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder={tab === "inbox" ? "搜尋素材..." : "搜尋知識..."}
-              className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+              placeholder="資料夾名稱"
+              autoFocus
+              className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => { setShowNewFolder(false); setNewFolderName(""); }}
+                className="px-3 py-1.5 text-xs text-slate-500 cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleCreateFolder}
+                disabled={!newFolderName.trim() || creating}
+                className="px-4 py-1.5 text-xs bg-blue-500 text-white rounded-lg disabled:opacity-50 cursor-pointer"
+              >
+                {creating ? "建立中..." : "建立"}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handleSearch}
-            disabled={searching}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors disabled:opacity-50"
-          >
-            {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-            搜尋
-          </button>
+        </div>
+      )}
+
+      {/* Ask AI FAB */}
+      <button
+        onClick={() => { setShowAsk(true); setTimeout(() => askInputRef.current?.focus(), 50); }}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-full shadow-lg transition-colors text-sm font-medium"
+        title="問 AI"
+      >
+        <Sparkles size={16} />
+        問 AI
+      </button>
+
+      {/* Ask AI dialog */}
+      {showAsk && (
+        <div className="fixed inset-0 bg-slate-950/60 flex items-end sm:items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl flex flex-col max-h-[80vh] shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-purple-500" />
+                <span className="font-semibold text-slate-900 dark:text-slate-50 text-sm">問 AI 顧問</span>
+                <span className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">Graph Agentic</span>
+              </div>
+              <button
+                onClick={() => { setShowAsk(false); setAskAnswer(null); setAskSources([]); setAskQuestion(""); }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Answer area */}
+            <div className="flex-1 overflow-auto px-5 py-4 space-y-4 min-h-0">
+              {!askAnswer && !askLoading && (
+                <div className="text-center py-8 text-slate-400">
+                  <MessageSquare size={32} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">輸入問題，AI 會查詢圖譜後回答</p>
+                  <p className="text-xs mt-1">例：「喬山目前有哪些進行中商機？」</p>
+                </div>
+              )}
+
+              {askLoading && (
+                <div className="flex items-center gap-3 py-6">
+                  <Loader2 size={20} className="animate-spin text-purple-500 shrink-0" />
+                  <div>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">AI 正在查詢知識圖譜...</p>
+                    <p className="text-xs text-slate-400 mt-0.5">可能需要 10–30 秒</p>
+                  </div>
+                </div>
+              )}
+
+              {askAnswer && (
+                <div className="space-y-4">
+                  {/* Answer */}
+                  <div className="bg-purple-50 dark:bg-purple-950/30 rounded-xl p-4">
+                    <p className="text-[11px] text-purple-500 font-medium uppercase tracking-wide mb-2">AI 回答</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-slate-800 dark:text-slate-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{askAnswer}</ReactMarkdown>
+                    </div>
+                  </div>
+
+                  {/* Sources */}
+                  {askSources.length > 0 && (
+                    <div>
+                      <p className="text-[11px] text-slate-400 uppercase tracking-wide mb-2">來源 ({askSources.length})</p>
+                      <div className="space-y-2">
+                        {askSources.map((s, i) => (
+                          <div
+                            key={i}
+                            className="flex items-start gap-2.5 px-3 py-2.5 bg-slate-50 dark:bg-slate-800 rounded-lg"
+                          >
+                            <span className="text-base shrink-0">
+                              {s.source_type === "intel" ? "🔍" : "📄"}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-2">{s.text}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-slate-400">
+                                  {s.source_type === "intel" ? "情報" : "知識庫"} #{s.id}
+                                </span>
+                                <span className="text-[10px] text-purple-400">
+                                  相似度 {(s.score * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Input area */}
+            <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded-xl px-3 py-2 border border-slate-200 dark:border-slate-700 focus-within:ring-1 focus-within:ring-purple-500">
+                <input
+                  ref={askInputRef}
+                  type="text"
+                  value={askQuestion}
+                  onChange={(e) => setAskQuestion(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleAsk()}
+                  placeholder="輸入問題... (Enter 送出)"
+                  disabled={askLoading}
+                  className="flex-1 bg-transparent text-sm text-slate-900 dark:text-slate-50 placeholder-slate-400 focus:outline-none disabled:opacity-50"
+                />
+                <button
+                  onClick={handleAsk}
+                  disabled={!askQuestion.trim() || askLoading}
+                  className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors shrink-0"
+                >
+                  <Send size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Count total files recursively
+function countFiles(node: FolderNode): number {
+  let count = node.files.length;
+  for (const child of node.children.values()) {
+    count += countFiles(child);
+  }
+  return count;
+}
+
+// List view component
+function ListView({
+  items,
+  onOpen,
+  onDelete,
+}: {
+  items: NxMemory[];
+  onOpen: (m: NxMemory) => void;
+  onDelete: (m: NxMemory) => void;
+}) {
+  return (
+    <>
+      {items.map((m) => (
+        <div
+          key={m.path}
+          onClick={() => onOpen(m)}
+          className="flex items-center px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg cursor-pointer transition-colors group"
+        >
+          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+            <span className="text-base shrink-0">{TYPE_ICONS[m.type] || "📄"}</span>
+            <div className="min-w-0">
+              <p className="text-sm text-slate-900 dark:text-slate-50 truncate">{m.title}</p>
+              {m.client && (
+                <p className="text-[10px] text-slate-400 truncate">{m.client}</p>
+              )}
+            </div>
+          </div>
+          <span className="w-20 text-right text-xs text-slate-400">{formatSize(m)}</span>
+          <span className="w-24 text-center text-xs text-slate-400">{TYPE_LABELS[m.type] || m.type}</span>
+          <span className="w-28 text-right text-xs text-slate-400">
+            {new Date(m.created).toLocaleDateString("zh-TW")}
+          </span>
+          <span className="w-10 flex justify-end">
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(m); }}
+              className="p-1 rounded opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 transition-all"
+            >
+              <Trash2 size={12} />
+            </button>
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// Icon view component
+function IconView({
+  items,
+  folders,
+  onOpen,
+  onNavigate,
+}: {
+  items: NxMemory[];
+  folders: FolderNode[];
+  onOpen: (m: NxMemory) => void;
+  onNavigate: (path: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
+      {/* Folders */}
+      {folders.map((folder) => (
+        <button
+          key={folder.path}
+          onClick={() => onNavigate(folder.path)}
+          className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+        >
+          <Folder size={36} className="text-blue-400" />
+          <span className="text-[11px] text-slate-700 dark:text-slate-300 text-center line-clamp-2 leading-tight">
+            {folder.name}
+          </span>
+        </button>
+      ))}
+
+      {/* Files */}
+      {items.map((m) => (
+        <button
+          key={m.path}
+          onClick={() => onOpen(m)}
+          className="flex flex-col items-center gap-1.5 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+        >
+          <span className="text-3xl">{TYPE_ICONS[m.type] || "📄"}</span>
+          <span className="text-[11px] text-slate-700 dark:text-slate-300 text-center line-clamp-2 leading-tight">
+            {m.title}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// File preview panel (slide-in from right)
+function FilePreview({
+  file,
+  onClose,
+  onDelete,
+}: {
+  file: NxMemory;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    nxApi.memory
+      .get(file.path)
+      .then((full) => setContent(full._body || full.snippet || "(無內容)"))
+      .catch(() => setContent(file.snippet || "(無法載入)"))
+      .finally(() => setLoading(false));
+  }, [file.path, file.snippet]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="flex-1 bg-slate-950/30" onClick={onClose} />
+
+      {/* Panel */}
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-lg">{TYPE_ICONS[file.type] || "📄"}</span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 truncate">
+                {file.title}
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                {TYPE_LABELS[file.type] || file.type}
+                {file.client && ` · ${file.client}`}
+                {` · ${new Date(file.created).toLocaleDateString("zh-TW")}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={onDelete}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 cursor-pointer transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* Library filters */}
-        {tab === "library" && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={zoneFilter}
-              onChange={(e) => setZoneFilter(e.target.value)}
-              className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500"
-            >
-              <option value="">所有範圍</option>
-              <option value="domain">領域知識</option>
-              <option value="deals">案件知識</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500"
-            >
-              <option value="">草稿 + 已發布</option>
-              <option value="draft">草稿</option>
-              <option value="published">已發布</option>
-              <option value="archived">已封存</option>
-            </select>
-            {categories.length > 0 && (
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-1.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:border-blue-500"
+        {/* Tags */}
+        {file.tags && file.tags.length > 0 && (
+          <div className="px-4 py-2 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
+            {file.tags.map((tag) => (
+              <span
+                key={tag}
+                className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500"
               >
-                <option value="">所有分類</option>
-                {categories.map((c) => (
-                  <option key={c.name} value={c.name}>
-                    {c.name} ({c.count})
-                  </option>
-                ))}
-              </select>
-            )}
+                {tag}
+              </span>
+            ))}
           </div>
         )}
 
         {/* Content */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 size={20} className="animate-spin text-blue-500" />
-          </div>
-        ) : memories.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-sm">
-            {tab === "inbox"
-              ? "收件匣是空的。點擊「同步」從資料庫匯入素材。"
-              : "知識庫是空的。從收件匣提煉素材，或直接新增。"}
-          </div>
-        ) : tab === "inbox" ? (
-          <InboxList
-            memories={memories}
-            onOpen={openMemory}
-            onPromote={openPromoteModal}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-          />
-        ) : (
-          <LibraryList memories={memories} onOpen={openMemory} />
-        )}
-      </div>
-
-      {/* Promote Modal */}
-      {showPromote && promoteSource && (
-        <PromoteModal
-          source={promoteSource}
-          categories={categories}
-          onClose={() => {
-            setShowPromote(false);
-            setPromoteSource(null);
-          }}
-          onPromoted={() => {
-            setShowPromote(false);
-            setPromoteSource(null);
-            loadAll();
-            loadCategories();
-          }}
-        />
-      )}
-
-      {/* Template Picker */}
-      {showTemplate && (
-        <TemplatePicker
-          categories={categories}
-          onClose={() => setShowTemplate(false)}
-          onCreated={() => {
-            setShowTemplate(false);
-            loadAll();
-            loadCategories();
-          }}
-        />
-      )}
-
-      {/* Create Modal */}
-      {showCreate && (
-        <CreateModal
-          categories={categories}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => {
-            setShowCreate(false);
-            loadAll();
-            loadCategories();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// --- Inbox list ---
-function InboxList({
-  memories,
-  onOpen,
-  onPromote,
-  onArchive,
-  onDelete,
-}: {
-  memories: NxMemory[];
-  onOpen: (path: string) => void;
-  onPromote: (mem: NxMemory) => void;
-  onArchive: (path: string) => void;
-  onDelete: (path: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      {memories.map((mem) => (
-        <div
-          key={mem.path}
-          className="px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-700 transition-colors"
-        >
-          <div className="flex items-center justify-between gap-2">
-            <button
-              onClick={() => onOpen(mem.path)}
-              className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer"
-            >
-              <FileText size={14} className="text-orange-500 flex-shrink-0" />
-              <span className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">
-                {mem.title}
-              </span>
-            </button>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <button
-                onClick={() => onPromote(mem)}
-                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors"
-              >
-                <ArrowUpRight size={10} />
-                加入知識庫
-              </button>
-              <button
-                onClick={() => onArchive(mem.path)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer transition-colors"
-                title="封存"
-              >
-                <Archive size={12} />
-              </button>
-              <button
-                onClick={() => onDelete(mem.path)}
-                className="p-1.5 text-slate-400 hover:text-red-500 cursor-pointer transition-colors"
-                title="刪除"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mt-1.5 ml-6">
-            <TypeBadge type={mem.type} />
-            {mem.client && (
-              <span className="text-[10px] text-emerald-600">{mem.client}</span>
-            )}
-            <span className="text-[10px] text-slate-400 ml-auto">{mem.updated}</span>
-          </div>
-          {mem.tags && mem.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
-              {mem.tags.slice(0, 5).map((tag, i) => (
-                <span key={`${tag}-${i}`} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                  <Tag size={8} className="inline mr-0.5" />
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// --- Library list ---
-function LibraryList({
-  memories,
-  onOpen,
-}: {
-  memories: NxMemory[];
-  onOpen: (path: string) => void;
-}) {
-  // Group by category
-  const grouped = memories.reduce<Record<string, NxMemory[]>>((acc, mem) => {
-    const cat = mem.category || "未分類";
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(mem);
-    return acc;
-  }, {});
-
-  return (
-    <div className="space-y-6">
-      {Object.entries(grouped).map(([cat, mems]) => (
-        <CategoryGroup key={cat} category={cat} memories={mems} onOpen={onOpen} />
-      ))}
-    </div>
-  );
-}
-
-function CategoryGroup({
-  category,
-  memories,
-  onOpen,
-}: {
-  category: string;
-  memories: NxMemory[];
-  onOpen: (path: string) => void;
-}) {
-  const [collapsed, setCollapsed] = useState(false);
-
-  return (
-    <div>
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        className="flex items-center gap-2 mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-      >
-        {collapsed ? (
-          <ChevronRight size={14} className="text-slate-400" />
-        ) : (
-          <ChevronDown size={14} className="text-slate-400" />
-        )}
-        <FolderOpen size={14} className="text-indigo-500" />
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-          {category}
-        </span>
-        <span className="text-[10px] text-slate-400">{memories.length}</span>
-      </button>
-      {!collapsed && (
-        <div className="space-y-1.5">
-          {memories.map((mem) => (
-            <button
-              key={mem.path}
-              onClick={() => onOpen(mem.path)}
-              className="w-full text-left px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-700 cursor-pointer transition-colors"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText size={14} className="text-blue-500 flex-shrink-0" />
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-50 truncate">
-                    {mem.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <TypeBadge type={mem.type} />
-                  {mem.status && <StatusBadge status={mem.status} />}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-1.5 ml-6">
-                {mem.client && (
-                  <span className="text-[10px] text-emerald-600">{mem.client}</span>
-                )}
-                <span className="text-[10px] text-slate-400 ml-auto">{mem.updated}</span>
-              </div>
-              {mem.tags && mem.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5 ml-6">
-                  {mem.tags.slice(0, 5).map((tag) => (
-                    <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500">
-                      <Tag size={8} className="inline mr-0.5" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// --- Badges ---
-function TypeBadge({ type }: { type: string }) {
-  const label = TYPE_LABELS[type] || type;
-  return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-500 font-medium">
-      {label}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-slate-500/10 text-slate-500" };
-  return (
-    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.color}`}>
-      {cfg.label}
-    </span>
-  );
-}
-
-// --- Promote Modal ---
-function PromoteModal({
-  source,
-  categories,
-  onClose,
-  onPromoted,
-}: {
-  source: NxMemory;
-  categories: NxMemoryCategory[];
-  onClose: () => void;
-  onPromoted: () => void;
-}) {
-  const [targetZone, setTargetZone] = useState<"domain" | "deals">("domain");
-  const [category, setCategory] = useState("");
-  const [newCategory, setNewCategory] = useState("");
-  const [title, setTitle] = useState(source.title);
-  const [body, setBody] = useState(source._body || "");
-  const [tags, setTags] = useState(source.tags?.join(", ") || "");
-  const [saving, setSaving] = useState(false);
-  const [loadingBody, setLoadingBody] = useState(!source._body);
-
-  // Load body if not present
-  useEffect(() => {
-    if (!source._body) {
-      nxApi.memory.get(source.path).then((full) => {
-        setBody(full._body || "");
-        setLoadingBody(false);
-      }).catch(() => setLoadingBody(false));
-    }
-  }, [source]);
-
-  const finalCategory = newCategory.trim() || category;
-
-  const handlePromote = async () => {
-    if (!title.trim() || !finalCategory) return;
-    setSaving(true);
-    try {
-      await nxApi.memory.promote({
-        source_path: source.path,
-        target_zone: targetZone,
-        category: finalCategory,
-        new_title: title.trim(),
-        new_body: body,
-        tags: tags
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean),
-      });
-      onPromoted();
-    } catch (e) {
-      console.error("Promote failed", e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">
-            加入知識庫
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left: source preview */}
-          <div className="w-1/2 border-r border-slate-200 dark:border-slate-700 p-4 overflow-auto">
-            <div className="text-xs font-medium text-slate-500 mb-2">原始素材</div>
-            <div className="text-sm font-medium text-slate-900 dark:text-slate-50 mb-2">
-              {source.title}
-            </div>
-            <div className="flex flex-wrap gap-1 mb-3">
-              <TypeBadge type={source.type} />
-              {source.client && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600">
-                  {source.client}
-                </span>
-              )}
-            </div>
-            {loadingBody ? (
-              <Loader2 size={16} className="animate-spin text-blue-500" />
-            ) : (
-              <article className="prose prose-xs dark:prose-invert max-w-none text-xs">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
-              </article>
-            )}
-          </div>
-
-          {/* Right: promote form */}
-          <div className="w-1/2 p-4 overflow-auto space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                目標
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTargetZone("domain")}
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                    targetZone === "domain"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                      : "border-slate-200 dark:border-slate-700 text-slate-500"
-                  }`}
-                >
-                  領域知識
-                </button>
-                <button
-                  onClick={() => setTargetZone("deals")}
-                  className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                    targetZone === "deals"
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                      : "border-slate-200 dark:border-slate-700 text-slate-500"
-                  }`}
-                >
-                  案件知識
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                分類
-              </label>
-              {categories.length > 0 && (
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 mb-2"
-                >
-                  <option value="">選擇現有分類...</option>
-                  {categories.map((c) => (
-                    <option key={c.name} value={c.name}>
-                      {c.name} ({c.count})
-                    </option>
-                  ))}
-                </select>
-              )}
-              <input
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                placeholder="或輸入新分類..."
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                標題
-              </label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                內容（可編輯）
-              </label>
-              <textarea
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                rows={10}
-                className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 resize-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                標籤（逗號分隔）
-              </label>
-              <input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-                placeholder="AI, 食品製造, ..."
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-            取消
-          </button>
-          <button
-            onClick={handlePromote}
-            disabled={!title.trim() || !finalCategory || saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : "提煉為知識"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Template Picker Modal ---
-function TemplatePicker({
-  categories,
-  onClose,
-  onCreated,
-}: {
-  categories: NxMemoryCategory[];
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [templates, setTemplates] = useState<NxMemoryTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [targetZone, setTargetZone] = useState<"domain" | "deals">("domain");
-  const [category, setCategory] = useState("");
-  const [newCategory, setNewCategory] = useState("");
-  const [title, setTitle] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    nxApi.memory
-      .templates()
-      .then((t) => {
-        setTemplates(t);
-        if (t.length > 0) setSelectedTemplate(t[0].name);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  const finalCategory = newCategory.trim() || category;
-
-  const handleCreate = async () => {
-    if (!selectedTemplate || !title.trim() || !finalCategory) return;
-    setSaving(true);
-    try {
-      await nxApi.memory.fromTemplate({
-        template_name: selectedTemplate,
-        target_zone: targetZone,
-        category: finalCategory,
-        title: title.trim(),
-      });
-      onCreated();
-    } catch (e) {
-      console.error("From template failed", e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">從模板建立</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
+        <div className="flex-1 overflow-auto px-4 py-4">
           {loading ? (
-            <div className="flex justify-center py-4">
-              <Loader2 size={20} className="animate-spin text-blue-500" />
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={16} className="animate-spin text-purple-500" />
             </div>
           ) : (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">模板</label>
-                <div className="space-y-2">
-                  {templates.map((t) => (
-                    <button
-                      key={t.name}
-                      onClick={() => setSelectedTemplate(t.name)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
-                        selectedTemplate === t.name
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10"
-                          : "border-slate-200 dark:border-slate-700 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="text-sm font-medium text-slate-900 dark:text-slate-50">{t.title}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{t.description}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">目標</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setTargetZone("domain")}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                      targetZone === "domain"
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                        : "border-slate-200 dark:border-slate-700 text-slate-500"
-                    }`}
-                  >
-                    領域知識
-                  </button>
-                  <button
-                    onClick={() => setTargetZone("deals")}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                      targetZone === "deals"
-                        ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                        : "border-slate-200 dark:border-slate-700 text-slate-500"
-                    }`}
-                  >
-                    案件知識
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">分類</label>
-                {categories.length > 0 && (
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 mb-2"
-                  >
-                    <option value="">選擇現有分類...</option>
-                    {categories.map((c) => (
-                      <option key={c.name} value={c.name}>{c.name} ({c.count})</option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                  placeholder="或輸入新分類..."
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">標題 *</label>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-                  placeholder="知識標題"
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-            取消
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!selectedTemplate || !title.trim() || !finalCategory || saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : "建立"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// --- Create Modal (direct) ---
-function CreateModal({
-  categories,
-  onClose,
-  onCreated,
-}: {
-  categories: NxMemoryCategory[];
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [targetZone, setTargetZone] = useState<"domain" | "deals">("domain");
-  const [category, setCategory] = useState("");
-  const [newCategory, setNewCategory] = useState("");
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [tags, setTags] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const finalCategory = newCategory.trim() || category;
-
-  const handleCreate = async () => {
-    if (!title.trim() || !finalCategory) return;
-    setSaving(true);
-    try {
-      const catSlug = finalCategory.replace(/[\s/\\:*?"<>|]+/g, "-").replace(/^-+|-+$/g, "");
-      const folder = targetZone === "domain" ? `domain/${catSlug}` : `deals/${catSlug}`;
-      await nxApi.memory.create({
-        title: title.trim(),
-        type: targetZone === "domain" ? "domain-insight" : "deal-note",
-        scope: targetZone === "domain" ? "long-term" : "short-term",
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-        body,
-        folder,
-      });
-      onCreated();
-    } catch (e) {
-      console.error("Create failed", e);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-auto">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50">新增知識</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">目標</label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setTargetZone("domain")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                  targetZone === "domain"
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                    : "border-slate-200 dark:border-slate-700 text-slate-500"
-                }`}
-              >
-                領域知識
-              </button>
-              <button
-                onClick={() => setTargetZone("deals")}
-                className={`flex-1 py-2 text-sm font-medium rounded-lg border cursor-pointer transition-colors ${
-                  targetZone === "deals"
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-500/10 text-blue-600"
-                    : "border-slate-200 dark:border-slate-700 text-slate-500"
-                }`}
-              >
-                案件知識
-              </button>
+            <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-300">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {content || ""}
+              </ReactMarkdown>
             </div>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">分類</label>
-            {categories.length > 0 && (
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 mb-2"
-              >
-                <option value="">選擇現有分類...</option>
-                {categories.map((c) => (
-                  <option key={c.name} value={c.name}>{c.name} ({c.count})</option>
-                ))}
-              </select>
-            )}
-            <input
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value)}
-              placeholder="或輸入新分類..."
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">標題 *</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-              placeholder="知識標題"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">標籤（逗號分隔）</label>
-            <input
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500"
-              placeholder="AI, 食品製造, ..."
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">內容（Markdown）</label>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 focus:outline-none focus:border-blue-500 resize-none"
-              placeholder="# 標題&#10;&#10;內容..."
-            />
-          </div>
-        </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-200 dark:border-slate-700">
-          <button onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors">
-            取消
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={!title.trim() || !finalCategory || saving}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-500 text-white hover:bg-blue-600 cursor-pointer transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={14} className="animate-spin" /> : "建立"}
-          </button>
+          )}
         </div>
       </div>
     </div>

@@ -6,8 +6,6 @@ import os
 from pathlib import Path
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
-from services.ai_provider import generate_ai_response, check_ai_available
-from services.nexus.prompts import KNOWLEDGE_SUMMARIZE_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +96,15 @@ def create_knowledge_chunk(
                     json.dumps(metadata) if metadata else None,
                 ),
             )
-            return row_to_dict(cur)
+            chunk = row_to_dict(cur)
+    # Auto-sync to knowledge graph
+    if client_id and chunk:
+        try:
+            from services.nexus.graph import add_edge
+            add_edge("client", client_id, "knowledge", chunk["id"], "HAS_KNOWLEDGE")
+        except Exception:
+            pass
+    return chunk
 
 
 def get_knowledge_by_file(file_id: int) -> list[dict]:
@@ -346,40 +352,3 @@ def _extract_docx(path: Path) -> list[dict]:
     return chunks
 
 
-# ---------------------------------------------------------------------------
-# AI summarization
-# ---------------------------------------------------------------------------
-
-def summarize_chunk(content: str) -> dict:
-    """Use AI to generate summary and tags for a chunk.
-
-    Returns {"summary": str | None, "tags": list[str]}.
-    Falls back gracefully on failure.
-    """
-    available, _ = check_ai_available()
-    if not available:
-        return {"summary": None, "tags": []}
-
-    try:
-        # Truncate very long content
-        truncated = content[:3000] if len(content) > 3000 else content
-        response = generate_ai_response(KNOWLEDGE_SUMMARIZE_PROMPT, truncated)
-
-        # Try to parse JSON from response
-        # Strip markdown code fences if present
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            lines = cleaned.split("\n")
-            cleaned = "\n".join(lines[1:])
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            cleaned = cleaned.strip()
-
-        parsed = json.loads(cleaned)
-        return {
-            "summary": parsed.get("summary"),
-            "tags": parsed.get("tags", []),
-        }
-    except Exception as e:
-        logger.warning("AI summarize failed: %s", e)
-        return {"summary": None, "tags": []}

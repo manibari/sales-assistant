@@ -4,7 +4,7 @@ import json
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
-VALID_STAGES = {"L0", "L1", "L2", "L3", "L4", "closed"}
+VALID_STAGES = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "LOST", "HOLD"}
 MEDDIC_KEYS = {
     "metrics",
     "economic_buyer",
@@ -45,6 +45,12 @@ def create_deal(
     try:
         from services.nexus.memory import sync_from_deal
         sync_from_deal(deal["id"])
+    except Exception:
+        pass
+    # Auto-sync to knowledge graph
+    try:
+        from services.nexus.graph import add_edge
+        add_edge("client", client_id, "deal", deal["id"], "HAS_DEAL")
     except Exception:
         pass
     return deal
@@ -164,10 +170,38 @@ def close_deal(deal_id: int, reason: str, notes: str | None = None) -> dict | No
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """UPDATE nx_deal SET stage = 'closed', status = 'closed',
+                """UPDATE nx_deal SET stage = 'LOST', status = 'closed',
                    close_reason = %s, close_notes = %s,
                    updated_at = NOW() WHERE id = %s RETURNING *""",
                 (reason, notes, deal_id),
+            )
+            return row_to_dict(cur)
+
+
+def hold_deal(deal_id: int, notes: str | None = None) -> dict | None:
+    """Put a deal on hold."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE nx_deal SET stage = 'HOLD', status = 'hold',
+                   close_notes = %s, updated_at = NOW()
+                   WHERE id = %s RETURNING *""",
+                (notes, deal_id),
+            )
+            return row_to_dict(cur)
+
+
+def unhold_deal(deal_id: int, resume_stage: str = "L0") -> dict | None:
+    """Resume a held deal back to active."""
+    if resume_stage not in VALID_STAGES or resume_stage in ("LOST", "HOLD"):
+        raise ValueError(f"Invalid resume stage: {resume_stage}")
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE nx_deal SET stage = %s, status = 'active',
+                   close_notes = NULL, last_activity_at = NOW(),
+                   updated_at = NOW() WHERE id = %s RETURNING *""",
+                (resume_stage, deal_id),
             )
             return row_to_dict(cur)
 
@@ -311,7 +345,14 @@ def link_intel_to_deal(deal_id: int, intel_id: int) -> dict:
                 "UPDATE nx_deal SET last_activity_at = NOW() WHERE id = %s",
                 (deal_id,),
             )
-            return result
+    # Auto-sync to knowledge graph
+    try:
+        from services.nexus.graph import add_edge
+        add_edge("deal", deal_id, "intel", intel_id, "HAS_INTEL")
+        add_edge("intel", intel_id, "deal", deal_id, "AFFECTS")
+    except Exception:
+        pass
+    return result
 
 
 def get_deal_intel(deal_id: int) -> list[dict]:

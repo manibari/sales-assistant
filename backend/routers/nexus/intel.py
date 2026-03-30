@@ -6,7 +6,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from services.ai_provider import check_ai_available, generate_ai_response, generate_ai_chat
+from services.ai_provider import check_ai_available
+from services.nexus.ai.intel_ai import parse_raw_intel, summarize_intel_records, chat_intel
 from services.nexus.intel import (
     create_intel,
     get_intel,
@@ -25,7 +26,7 @@ from services.nexus.documents import get_files_by_intel
 from services.nexus.intel import get_intel_linked_deals, get_intel_linked_meetings, link_intel_entity
 from services.nexus.materialize import materialize_intel, _normalize_company_name
 from services.nexus.partners import find_partner_by_name
-from services.nexus.prompts import INTEL_PARSE_PROMPT, FOLLOWUP_PROMPT, INTEL_SUMMARIZE_PROMPT
+from services.nexus.prompts import FOLLOWUP_PROMPT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -164,7 +165,7 @@ def summarize_intel(body: IntelSummarize):
     if len(user_prompt) > 8000:
         user_prompt = user_prompt[:8000] + "\n\n（內容已截斷）"
 
-    summary = generate_ai_response(INTEL_SUMMARIZE_PROMPT, user_prompt)
+    summary = summarize_intel_records(user_prompt)
 
     return {
         "summary": summary.strip(),
@@ -257,16 +258,7 @@ def initial_parse(intel_id: int):
         raise HTTPException(503, "AI service not available")
 
     raw = intel["raw_input"]
-    ai_raw = generate_ai_response(INTEL_PARSE_PROMPT, raw)
-
-    parsed = {}
-    try:
-        cleaned = ai_raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1].rsplit("```", 1)[0]
-        parsed = json.loads(cleaned)
-    except (json.JSONDecodeError, IndexError):
-        logger.warning("Initial parse failed for intel #%d: %s", intel_id, ai_raw[:200])
+    parsed = parse_raw_intel(raw)
 
     # Enrich from DB
     parsed, db_context = _enrich_from_db(parsed)
@@ -285,7 +277,7 @@ def initial_parse(intel_id: int):
         {"role": "user", "content": raw + context_note},
     ]
 
-    greeting_raw = generate_ai_chat(system, messages)
+    greeting_raw = chat_intel(system, messages)
 
     # Split on --- to get reply part
     ai_reply = (
@@ -351,7 +343,7 @@ def chat_followup(intel_id: int, body: ChatMessage):
     # Build system prompt
     system = FOLLOWUP_PROMPT
 
-    ai_raw = generate_ai_chat(system, api_messages)
+    ai_raw = chat_intel(system, api_messages)
 
     ai_reply = ai_raw.strip()
     new_fields = {}

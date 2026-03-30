@@ -23,7 +23,15 @@ def create_plan(
                    RETURNING *""",
                 (title, plan_type, fiscal_year, body, deal_id, client_id, notes),
             )
-            return row_to_dict(cur)
+            plan = row_to_dict(cur)
+    # Auto-sync to knowledge graph
+    if client_id and plan:
+        try:
+            from services.nexus.graph import add_edge
+            add_edge("client", client_id, "plan", plan["id"], "HAS_PLAN")
+        except Exception:
+            pass
+    return plan
 
 
 def get_plan(plan_id: int) -> dict | None:

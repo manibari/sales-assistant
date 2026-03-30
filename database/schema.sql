@@ -665,3 +665,32 @@ CREATE TABLE IF NOT EXISTS nx_plan (
     updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_nx_plan_type_status ON nx_plan(plan_type, status);
+
+-- 28. Graph edges (adjacency list for relationship graph)
+CREATE TABLE IF NOT EXISTS nx_graph_edge (
+    id         SERIAL PRIMARY KEY,
+    from_type  TEXT NOT NULL,
+    from_id    INT  NOT NULL,
+    to_type    TEXT NOT NULL,
+    to_id      INT  NOT NULL,
+    relation   TEXT NOT NULL,
+    weight     FLOAT DEFAULT 1.0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (from_type, from_id, to_type, to_id, relation)
+);
+CREATE INDEX IF NOT EXISTS idx_graph_from ON nx_graph_edge(from_type, from_id);
+CREATE INDEX IF NOT EXISTS idx_graph_to   ON nx_graph_edge(to_type, to_id);
+
+-- S40: Add embedding columns (JSONB for float array storage)
+ALTER TABLE nx_intel ADD COLUMN IF NOT EXISTS embedding JSONB;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'nx_knowledge' AND column_name = 'embedding'
+          AND data_type = 'text'
+    ) THEN
+        ALTER TABLE nx_knowledge ALTER COLUMN embedding TYPE JSONB USING NULL;
+    END IF;
+END$$;

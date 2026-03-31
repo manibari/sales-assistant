@@ -28,7 +28,10 @@ export function AssistantChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
-  const [sessionId, setSessionId] = useState(() => generateSessionId());
+  const [sessionId, setSessionId] = useState<string>("");
+  useEffect(() => {
+    setSessionId(generateSessionId());
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

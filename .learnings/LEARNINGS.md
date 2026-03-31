@@ -31,6 +31,21 @@
 - **Fix:** Moved command detection before active session check.
 - **Lesson:** Commands are the user's escape hatch — always check them first in intent routing.
 
+## 2026-04-01: Playwright tests outdated — intel page UI refactored from Feed to Chat
+
+- **Category:** knowledge_gap
+- **Area:** tests
+- **Context:** `tests/test_06_intel.py` asserts existence of "情報 Feed" heading, `.rounded-xl` cards with "已確認|草稿" badges — all remnants of the old list UI. Current UI is a chat-style interface (sidebar + conversation). All 6 intel tests fail.
+- **Lesson:** When the intel page UI was refactored (Sprint ~S37+), the Playwright tests were not updated. Before running QA, check if test assertions match the current UI shape.
+- **Action needed:** Rewrite `tests/test_06_intel.py` to match the chat-style UI: sidebar list, conversation area, input box with Mic button, "情報紀錄" heading.
+
+## 2026-04-01: Playwright tests all fail when Docker DB is not running
+
+- **Category:** best_practice
+- **Area:** tests
+- **Context:** All Playwright tests (test_02 through test_10) fail when Docker (`spms-postgres`) is not started — backend returns 500 on every data endpoint, causing pages to crash or show empty state.
+- **Lesson:** Before running `pytest`, always ensure Docker is up: `docker start spms-postgres`. Add a preflight check to `conftest.py` or `run_qa.sh`.
+
 ## 2026-03-26: DB schema vs live DB divergence (nx_meeting.deal_id)
 - **Category:** bug_discovery
 - **Context:** `schema.sql` had `deal_id INTEGER REFERENCES nx_deal(id)` (nullable) but live DB had NOT NULL.

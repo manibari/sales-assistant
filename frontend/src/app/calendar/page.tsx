@@ -51,7 +51,10 @@ function getDefaultView(): ViewType {
 
 export default function CalendarPage() {
   const today = new Date();
-  const [view, setView] = useState<ViewType>(getDefaultView);
+  const [view, setView] = useState<ViewType>("month");
+  useEffect(() => {
+    setView(getDefaultView());
+  }, []);
   const [viewAnchor, setViewAnchor] = useState(today);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());

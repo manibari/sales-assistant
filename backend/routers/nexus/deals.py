@@ -18,6 +18,8 @@ from services.nexus.deals import (
     update_deal,
     advance_stage,
     close_deal,
+    hold_deal,
+    unhold_deal,
     get_meddic_progress,
     add_partner_to_deal,
     get_deal_partners,
@@ -59,6 +61,14 @@ class DealUpdate(BaseModel):
 class DealClose(BaseModel):
     reason: str
     notes: str | None = None
+
+
+class DealHold(BaseModel):
+    notes: str | None = None
+
+
+class DealUnhold(BaseModel):
+    resume_stage: str = "L0"
 
 
 class DealPartnerAdd(BaseModel):
@@ -133,6 +143,25 @@ def advance(deal_id: int, stage: str):
 @router.post("/{deal_id}/close")
 def close(deal_id: int, body: DealClose):
     result = close_deal(deal_id, body.reason, body.notes)
+    if not result:
+        raise HTTPException(404, "Deal not found")
+    return result
+
+
+@router.post("/{deal_id}/hold")
+def hold(deal_id: int, body: DealHold):
+    result = hold_deal(deal_id, body.notes)
+    if not result:
+        raise HTTPException(404, "Deal not found")
+    return result
+
+
+@router.post("/{deal_id}/unhold")
+def unhold(deal_id: int, body: DealUnhold):
+    try:
+        result = unhold_deal(deal_id, body.resume_stage)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if not result:
         raise HTTPException(404, "Deal not found")
     return result

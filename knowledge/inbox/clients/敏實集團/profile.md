@@ -8,13 +8,13 @@ source_id: 30
 source_type: nx_client
 status: inbox
 tags:
-- manufacturing
+- C30 汽車及零件製造業
 title: 敏實集團 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 敏實集團
 
-- **產業**: manufacturing
+- **產業**: C30 汽車及零件製造業
 - **狀態**: active

@@ -7,12 +7,14 @@ source: auto
 source_id: 110
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- K64 金融服務業
 title: 和潤企業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 和潤企業股份有限公司
 
+- **產業**: K64 金融服務業
 - **狀態**: active

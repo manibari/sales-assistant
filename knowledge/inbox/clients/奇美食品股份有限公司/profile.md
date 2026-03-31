@@ -11,7 +11,7 @@ tags:
 - C08 食品製造業
 title: 奇美食品股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 奇美食品股份有限公司

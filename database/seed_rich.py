@@ -314,12 +314,12 @@ def seed():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE nx_deal SET status = 'closed', stage = 'closed' WHERE id = %s",
+                "UPDATE nx_deal SET status = 'closed', stage = 'LOST' WHERE id = %s",
                 (d5["id"],),
             )
         conn.commit()
 
-    print("Deals: d1(L2), d2(L1 idle), d3(L0), d4(L1), d5(closed)")
+    print("Deals: d1(L2), d2(L1 idle), d3(L0), d4(L1), d5(LOST)")
 
     # --- Meetings ---
     today_str = today.strftime("%Y-%m-%d")

@@ -18,3 +18,21 @@
 - **Root cause:** `redirect_slashes=False` + middleware adding `/` = routes with no trailing-slash definition become unreachable
 - **Fix:** Remove custom middleware, use FastAPI default `redirect_slashes=True`
 - **Lesson:** Don't override FastAPI's built-in slash handling with custom middleware. The default behavior handles both with and without `/` correctly
+
+## 2026-03-26: FOLLOWUP_PROMPT missing format placeholders
+- **Category:** bug_discovery
+- **Context:** `FOLLOWUP_PROMPT.format(current_json=..., user_msg=..., chat_history_section=...)` was called but the template had no `{current_json}` / `{user_msg}` / `{chat_history_section}` placeholders. Python's `str.format()` silently ignores missing placeholders — AI received zero context about the conversation.
+- **Fix:** Added placeholders at end of prompt template.
+- **Lesson:** Always verify format templates contain expected placeholders. `str.format()` with no matching `{}` is a silent no-op.
+
+## 2026-03-26: Command priority in intent detection
+- **Category:** bug_discovery
+- **Context:** `detect_intent()` checked `has_active_conversation` first, returning FOLLOWUP before slash commands. `/done` was swallowed during active sessions.
+- **Fix:** Moved command detection before active session check.
+- **Lesson:** Commands are the user's escape hatch — always check them first in intent routing.
+
+## 2026-03-26: DB schema vs live DB divergence (nx_meeting.deal_id)
+- **Category:** bug_discovery
+- **Context:** `schema.sql` had `deal_id INTEGER REFERENCES nx_deal(id)` (nullable) but live DB had NOT NULL.
+- **Fix:** `ALTER TABLE nx_meeting ALTER COLUMN deal_id DROP NOT NULL`
+- **Lesson:** Always verify live DB constraints match schema.sql — they can diverge from manual changes.

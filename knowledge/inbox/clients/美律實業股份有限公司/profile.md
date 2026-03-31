@@ -8,15 +8,15 @@ source_id: 65
 source_type: nx_client
 status: inbox
 tags:
-- tech
+- C27 電腦電子光學製品製造業
 title: 美律實業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 美律實業股份有限公司
 
-- **產業**: tech
+- **產業**: C27 電腦電子光學製品製造業
 - **狀態**: active
 
 ## 備註

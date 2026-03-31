@@ -8,15 +8,15 @@ source_id: 45
 source_type: nx_client
 status: inbox
 tags:
-- petrochemical
+- C18 化學材料製造業
 title: 德淵企業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 德淵企業股份有限公司
 
-- **產業**: petrochemical
+- **產業**: C18 化學材料製造業
 - **狀態**: active
 
 ## 備註

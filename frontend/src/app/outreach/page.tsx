@@ -17,10 +17,15 @@ import {
   ChevronRight,
   Users,
   Briefcase,
+  MapPin,
+  CheckSquare,
+  Square,
+  ClipboardList,
+  Search,
 } from "lucide-react";
 import { nxApi } from "@/lib/nexus-api";
 
-type Step = "industry" | "review" | "target" | "pitch";
+type Step = "filter" | "review" | "target" | "summary";
 
 interface IndustryInfo {
   industry: string;
@@ -28,13 +33,28 @@ interface IndustryInfo {
   solutions: number;
 }
 
+interface RegionInfo {
+  region: string;
+  count: number;
+}
+
 interface TargetCompany {
   id: number;
   name: string;
   industry: string | null;
+  region: string | null;
   status: string;
   deal_count: number;
   contact_count: number;
+}
+
+interface BatchCompany {
+  id: number;
+  name: string;
+  industry: string | null;
+  region: string | null;
+  deal_count: number;
+  contacts: { name: string; title: string | null; phone: string | null; email: string | null }[];
 }
 
 interface Contact {
@@ -49,41 +69,53 @@ interface Contact {
 
 export default function OutreachPage() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("industry");
+  const [step, setStep] = useState<Step>("filter");
   const [industries, setIndustries] = useState<IndustryInfo[]>([]);
+  const [regions, setRegions] = useState<RegionInfo[]>([]);
   const [selectedIndustry, setSelectedIndustry] = useState("");
+  const [selectedRegion, setSelectedRegion] = useState("");
   const [caseStudies, setCaseStudies] = useState<Record<string, unknown>[]>([]);
   const [solutions, setSolutions] = useState<Record<string, unknown>[]>([]);
   const [targets, setTargets] = useState<TargetCompany[]>([]);
-  const [selectedTarget, setSelectedTarget] = useState<TargetCompany | null>(null);
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [pitch, setPitch] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchData, setBatchData] = useState<BatchCompany[]>([]);
+  const [visitPlan, setVisitPlan] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generatingPitch, setGeneratingPitch] = useState<number | null>(null);
+  const [pitches, setPitches] = useState<Record<number, string>>({});
   const [copied, setCopied] = useState(false);
 
-  // Load industries on mount
+  // Load industries + regions on mount
   useEffect(() => {
     setLoading(true);
-    nxApi.outreach
-      .industries()
-      .then(setIndustries)
+    Promise.all([
+      nxApi.outreach.industries(),
+      nxApi.outreach.regions(),
+    ])
+      .then(([ind, reg]) => {
+        setIndustries(ind);
+        setRegions(reg);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSelectIndustry = async (industry: string) => {
-    setSelectedIndustry(industry);
+  const canSearch = selectedIndustry || selectedRegion;
+
+  const handleSearch = async () => {
+    if (!canSearch) return;
     setLoading(true);
     try {
       const [cs, sol, tgt] = await Promise.all([
-        nxApi.outreach.caseStudies(industry),
-        nxApi.outreach.solutions(industry),
-        nxApi.outreach.targets(industry),
+        selectedIndustry ? nxApi.outreach.caseStudies(selectedIndustry) : Promise.resolve([]),
+        selectedIndustry ? nxApi.outreach.solutions(selectedIndustry) : Promise.resolve([]),
+        nxApi.outreach.targets(selectedIndustry || undefined, selectedRegion || undefined),
       ]);
       setCaseStudies(cs);
       setSolutions(sol);
       setTargets(tgt);
+      setSelectedIds(new Set());
       setStep("review");
     } catch (err) {
       console.error(err);
@@ -92,29 +124,48 @@ export default function OutreachPage() {
     }
   };
 
-  const handleSelectTarget = async (target: TargetCompany) => {
-    setSelectedTarget(target);
-    setStep("target");
-    try {
-      const ct = await nxApi.outreach.contacts(target.id);
-      setContacts(ct);
-    } catch {
-      setContacts([]);
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === targets.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(targets.map((t) => t.id)));
     }
   };
 
-  const handleGeneratePitch = async () => {
-    if (!selectedTarget) return;
-    setGenerating(true);
-    setPitch(null);
+  const handleViewSummary = async () => {
+    if (selectedIds.size === 0) return;
+    setLoading(true);
     try {
-      const result = await nxApi.outreach.generatePitch({
-        target_company: selectedTarget.name,
-        target_industry: selectedIndustry,
-        include_knowledge: true,
+      const data = await nxApi.outreach.batchSummary(Array.from(selectedIds));
+      setBatchData(data);
+      setVisitPlan(null);
+      setStep("summary");
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateVisitPlan = async () => {
+    setGenerating(true);
+    setVisitPlan(null);
+    try {
+      const result = await nxApi.outreach.generateVisitPlan({
+        client_ids: Array.from(selectedIds),
+        region: selectedRegion || undefined,
+        industry: selectedIndustry || undefined,
       });
-      setPitch(result.pitch);
-      setStep("pitch");
+      setVisitPlan(result.plan);
     } catch (err) {
       console.error(err);
     } finally {
@@ -122,19 +173,41 @@ export default function OutreachPage() {
     }
   };
 
-  const handleCopy = () => {
-    if (pitch) {
-      navigator.clipboard.writeText(pitch);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleGeneratePitch = async (company: BatchCompany) => {
+    setGeneratingPitch(company.id);
+    try {
+      const result = await nxApi.outreach.generatePitch({
+        target_company: company.name,
+        target_industry: company.industry || selectedIndustry || "",
+        include_knowledge: true,
+      });
+      if (result.pitch) {
+        setPitches((prev) => ({ ...prev, [company.id]: result.pitch! }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGeneratingPitch(null);
     }
   };
 
+  const handleCopyList = () => {
+    const lines = batchData.map((c) => {
+      const contactStr = c.contacts
+        .map((ct) => `${ct.name}${ct.title ? `(${ct.title})` : ""}${ct.phone ? ` ${ct.phone}` : ""}`)
+        .join(", ");
+      return `${c.name}｜${c.industry || "-"}｜${c.region || "-"}｜${c.deal_count} 商機｜${contactStr || "無聯絡人"}`;
+    });
+    navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleSchedule = () => {
-    if (!selectedTarget) return;
     const today = new Date().toISOString().slice(0, 10);
+    const names = batchData.map((c) => c.name).join("、");
     router.push(
-      `/calendar/meeting/new?date=${today}&title=${encodeURIComponent(`陌開：${selectedTarget.name}`)}`
+      `/calendar/meeting/new?date=${today}&title=${encodeURIComponent(`出訪：${names.slice(0, 50)}`)}`
     );
   };
 
@@ -157,55 +230,103 @@ export default function OutreachPage() {
           </div>
         )}
 
-        {/* Step 1: Select Industry */}
-        {!loading && step === "industry" && (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-500">選擇目標產業，系統會配對案例和方案</p>
-            {industries.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 text-sm">
-                尚無案例資料，請先在 materials/case-studies/ 新增案例
-              </div>
-            ) : (
-              <div className="grid gap-2">
-                {industries.map((ind) => (
-                  <button
-                    key={ind.industry}
-                    onClick={() => handleSelectIndustry(ind.industry)}
-                    className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 cursor-pointer transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                        <Building2 size={18} className="text-blue-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
-                          {ind.industry}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {ind.case_studies} 案例 · {ind.solutions} 方案
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronRight size={16} className="text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* Step 1: Filter — Industry + Region */}
+        {!loading && step === "filter" && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">選擇產業和/或區域，至少選一個</p>
+
+            {/* Industry buttons */}
+            <div>
+              <h3 className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1.5">
+                <Building2 size={12} />
+                產業
+              </h3>
+              {industries.length === 0 ? (
+                <p className="text-xs text-slate-400">尚無案例資料</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {industries.map((ind) => (
+                    <button
+                      key={ind.industry}
+                      onClick={() =>
+                        setSelectedIndustry((prev) =>
+                          prev === ind.industry ? "" : ind.industry
+                        )
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors ${
+                        selectedIndustry === ind.industry
+                          ? "bg-blue-500 text-white border-blue-500"
+                          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-400"
+                      }`}
+                    >
+                      {ind.industry}
+                      <span className="ml-1 text-[10px] opacity-70">
+                        {ind.case_studies}例
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Region buttons */}
+            <div>
+              <h3 className="text-xs font-medium text-slate-500 mb-2 flex items-center gap-1.5">
+                <MapPin size={12} />
+                區域
+              </h3>
+              {regions.length === 0 ? (
+                <p className="text-xs text-slate-400">尚無區域資料（請在客戶資料中設定 region）</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {regions.map((r) => (
+                    <button
+                      key={r.region}
+                      onClick={() =>
+                        setSelectedRegion((prev) =>
+                          prev === r.region ? "" : r.region
+                        )
+                      }
+                      className={`px-3 py-1.5 text-sm rounded-lg border cursor-pointer transition-colors ${
+                        selectedRegion === r.region
+                          ? "bg-emerald-500 text-white border-emerald-500"
+                          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400"
+                      }`}
+                    >
+                      {r.region}
+                      <span className="ml-1 text-[10px] opacity-70">
+                        {r.count}家
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Search button */}
+            <button
+              onClick={handleSearch}
+              disabled={!canSearch}
+              className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-xl cursor-pointer transition-colors"
+            >
+              <Search size={18} />
+              搜尋目標
+            </button>
           </div>
         )}
 
-        {/* Step 2: Review case studies + solutions */}
+        {/* Step 2: Review weapons + targets with multi-select */}
         {!loading && step === "review" && (
           <div className="space-y-4">
             <button
-              onClick={() => setStep("industry")}
+              onClick={() => setStep("filter")}
               className="text-xs text-blue-500 cursor-pointer hover:underline"
             >
-              ← 返回選產業
+              ← 返回篩選
             </button>
 
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
-              {selectedIndustry} — 可用武器
+              {[selectedIndustry, selectedRegion].filter(Boolean).join(" · ")} — 可用武器
             </h2>
 
             {/* Case studies */}
@@ -263,55 +384,89 @@ export default function OutreachPage() {
               </div>
             )}
 
-            {/* Target companies */}
+            {/* Target companies with checkboxes */}
             <div className="space-y-2">
-              <h3 className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
-                <Target size={12} />
-                目標公司 ({targets.length})
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-slate-500 flex items-center gap-1.5">
+                  <Target size={12} />
+                  目標公司 ({targets.length})
+                </h3>
+                {targets.length > 0 && (
+                  <button
+                    onClick={selectAll}
+                    className="text-[10px] text-blue-500 cursor-pointer hover:underline"
+                  >
+                    {selectedIds.size === targets.length ? "取消全選" : "全選"}
+                  </button>
+                )}
+              </div>
               {targets.length === 0 ? (
                 <p className="text-xs text-slate-400 py-4 text-center">
-                  尚無 {selectedIndustry} 的客戶資料
+                  無符合條件的客戶
                 </p>
               ) : (
                 targets.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => handleSelectTarget(t)}
-                    className="w-full flex items-center justify-between p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 cursor-pointer transition-colors text-left"
+                    onClick={() => toggleSelect(t.id)}
+                    className={`w-full flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors text-left ${
+                      selectedIds.has(t.id)
+                        ? "bg-blue-500/5 border-blue-500/40"
+                        : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-blue-400"
+                    }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <Building2 size={14} className="text-slate-400" />
-                      <div>
-                        <p className="text-sm text-slate-900 dark:text-slate-50">
-                          {t.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {t.deal_count > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-green-500">
-                              <Briefcase size={8} />
-                              {t.deal_count} 商機
-                            </span>
-                          )}
-                          {t.contact_count > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400">
-                              <Users size={8} />
-                              {t.contact_count} 聯絡人
-                            </span>
-                          )}
-                        </div>
+                    {selectedIds.has(t.id) ? (
+                      <CheckSquare size={16} className="text-blue-500 shrink-0" />
+                    ) : (
+                      <Square size={16} className="text-slate-300 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-900 dark:text-slate-50">
+                        {t.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {t.region && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-500">
+                            <MapPin size={8} />
+                            {t.region}
+                          </span>
+                        )}
+                        {t.deal_count > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-green-500">
+                            <Briefcase size={8} />
+                            {t.deal_count} 商機
+                          </span>
+                        )}
+                        {t.contact_count > 0 && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400">
+                            <Users size={8} />
+                            {t.contact_count} 聯絡人
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <ChevronRight size={14} className="text-slate-400" />
                   </button>
                 ))
               )}
             </div>
+
+            {/* Bottom bar */}
+            {selectedIds.size > 0 && (
+              <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 -mx-4 px-4 py-3">
+                <button
+                  onClick={handleViewSummary}
+                  className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-6 py-3 rounded-xl cursor-pointer transition-colors"
+                >
+                  <ClipboardList size={18} />
+                  已選 {selectedIds.size} 家 → 查看出訪總覽
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Step 3: Target detail + contacts */}
-        {!loading && step === "target" && selectedTarget && (
+        {/* Step 3: Target detail — individual company (kept for single-company pitch) */}
+        {!loading && step === "target" && (
           <div className="space-y-4">
             <button
               onClick={() => setStep("review")}
@@ -319,138 +474,189 @@ export default function OutreachPage() {
             >
               ← 返回列表
             </button>
-
-            <div className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Building2 size={18} className="text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-base font-medium text-slate-900 dark:text-slate-50">
-                    {selectedTarget.name}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {selectedTarget.industry || selectedIndustry}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Contacts */}
-            {contacts.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-xs font-medium text-slate-500">聯絡人</h3>
-                {contacts.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
-                          {c.name}
-                        </p>
-                        {c.title && (
-                          <p className="text-[11px] text-slate-400">{c.title}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {c.phone && (
-                          <a
-                            href={`tel:${c.phone}`}
-                            className="p-1.5 rounded-lg bg-green-500/10 text-green-500 hover:bg-green-500/20 transition-colors"
-                          >
-                            <Phone size={14} />
-                          </a>
-                        )}
-                        {c.email && (
-                          <a
-                            href={`mailto:${c.email}`}
-                            className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors"
-                          >
-                            <Mail size={14} />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {contacts.length === 0 && (
-              <p className="text-xs text-slate-400 text-center py-4">
-                尚無聯絡人資料
-              </p>
-            )}
-
-            {/* Generate pitch button */}
-            <button
-              onClick={handleGeneratePitch}
-              disabled={generating}
-              className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold px-6 py-3 rounded-xl cursor-pointer transition-colors"
-            >
-              {generating ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <Sparkles size={18} />
-              )}
-              {generating ? "生成說帖中..." : "AI 生成說帖"}
-            </button>
+            <p className="text-sm text-slate-400">（個別公司模式已整合到批次總覽中）</p>
           </div>
         )}
 
-        {/* Step 4: Pitch result */}
-        {!loading && step === "pitch" && pitch && (
+        {/* Step 4: Batch Summary */}
+        {!loading && step === "summary" && (
           <div className="space-y-4">
             <button
-              onClick={() => setStep("target")}
+              onClick={() => setStep("review")}
               className="text-xs text-blue-500 cursor-pointer hover:underline"
             >
-              ← 返回
+              ← 返回目標選擇
             </button>
 
-            <div className="p-4 bg-white dark:bg-slate-900 border border-blue-500/30 rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-1.5">
-                  <Sparkles size={14} className="text-blue-500" />
-                  說帖 — {selectedTarget?.name}
-                </h3>
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-500 cursor-pointer transition-colors"
-                >
-                  {copied ? <Check size={12} /> : <Copy size={12} />}
-                  {copied ? "已複製" : "複製"}
-                </button>
-              </div>
-              <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
-                {pitch}
-              </div>
-            </div>
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              出訪總覽（{batchData.length} 家）
+            </h2>
 
-            {/* Actions */}
+            {/* Company cards */}
+            {batchData.map((c) => (
+              <div
+                key={c.id}
+                className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                      <Building2 size={16} className="text-blue-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
+                        {c.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {c.industry && (
+                          <span className="text-[10px] text-slate-400">{c.industry}</span>
+                        )}
+                        {c.region && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-500">
+                            <MapPin size={8} />
+                            {c.region}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">{c.deal_count} 商機</span>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleGeneratePitch(c)}
+                    disabled={generatingPitch === c.id}
+                    className="text-xs text-blue-500 hover:text-blue-600 cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {generatingPitch === c.id ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Sparkles size={12} />
+                    )}
+                    生成說帖
+                  </button>
+                </div>
+
+                {/* Contacts */}
+                {c.contacts.length > 0 && (
+                  <div className="space-y-1">
+                    {c.contacts.map((ct, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <span className="text-slate-700 dark:text-slate-300">
+                          {ct.name}
+                          {ct.title && (
+                            <span className="text-slate-400 ml-1">({ct.title})</span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          {ct.phone && (
+                            <a
+                              href={`tel:${ct.phone}`}
+                              className="text-green-500 hover:text-green-600 flex items-center gap-0.5"
+                            >
+                              <Phone size={10} />
+                              {ct.phone}
+                            </a>
+                          )}
+                          {ct.email && (
+                            <a
+                              href={`mailto:${ct.email}`}
+                              className="text-blue-500 hover:text-blue-600"
+                            >
+                              <Mail size={10} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {c.contacts.length === 0 && (
+                  <p className="text-[10px] text-slate-400">無聯絡人</p>
+                )}
+
+                {/* Per-company pitch */}
+                {pitches[c.id] && (
+                  <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-blue-500 font-medium flex items-center gap-1">
+                        <Sparkles size={10} />
+                        說帖
+                      </span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(pitches[c.id]);
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 2000);
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-blue-500 cursor-pointer"
+                      >
+                        複製
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                      {pitches[c.id]}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Action buttons */}
             <div className="flex gap-2">
               <button
-                onClick={handleSchedule}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-xl cursor-pointer transition-colors"
-              >
-                <Calendar size={16} />
-                排程拜訪
-              </button>
-              <button
-                onClick={handleGeneratePitch}
+                onClick={handleGenerateVisitPlan}
                 disabled={generating}
-                className="flex items-center justify-center gap-2 px-4 py-3 border border-blue-500/30 text-blue-500 font-medium rounded-xl cursor-pointer hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold px-4 py-3 rounded-xl cursor-pointer transition-colors"
               >
                 {generating ? (
                   <Loader2 size={16} className="animate-spin" />
                 ) : (
                   <Sparkles size={16} />
                 )}
-                重新生成
+                {generating ? "生成中..." : "AI 生成出訪計畫"}
+              </button>
+              <button
+                onClick={handleCopyList}
+                className="flex items-center justify-center gap-2 px-4 py-3 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                {copied ? "已複製" : "複製清單"}
               </button>
             </div>
+
+            {/* Visit plan */}
+            {visitPlan && (
+              <div className="p-4 bg-white dark:bg-slate-900 border border-blue-500/30 rounded-xl">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-blue-500" />
+                    出訪計畫
+                  </h3>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(visitPlan);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-blue-500 cursor-pointer transition-colors"
+                  >
+                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                    {copied ? "已複製" : "複製"}
+                  </button>
+                </div>
+                <div className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  {visitPlan}
+                </div>
+              </div>
+            )}
+
+            {/* Schedule button */}
+            <button
+              onClick={handleSchedule}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-xl cursor-pointer transition-colors"
+            >
+              <Calendar size={16} />
+              排程拜訪
+            </button>
           </div>
         )}
       </div>
@@ -460,31 +666,40 @@ export default function OutreachPage() {
 
 function StepIndicator({ current }: { current: Step }) {
   const steps: { key: Step; label: string }[] = [
-    { key: "industry", label: "產業" },
+    { key: "filter", label: "篩選" },
     { key: "review", label: "武器" },
     { key: "target", label: "目標" },
-    { key: "pitch", label: "說帖" },
+    { key: "summary", label: "總覽" },
   ];
-  const idx = steps.findIndex((s) => s.key === current);
+  const currentIdx = steps.findIndex((s) => s.key === current);
+  // Map "target" step to "review" visually since target is now merged into review
+  const idx = current === "target" ? 1 : currentIdx;
 
   return (
     <div className="flex items-center gap-1">
-      {steps.map((s, i) => (
-        <div key={s.key} className="flex items-center gap-1">
-          <span
-            className={`text-[10px] px-2 py-0.5 rounded-full ${
-              i <= idx
-                ? "bg-blue-500/10 text-blue-500 font-medium"
-                : "bg-slate-100 dark:bg-slate-800 text-slate-400"
-            }`}
-          >
-            {s.label}
-          </span>
-          {i < steps.length - 1 && (
-            <ChevronRight size={10} className="text-slate-300" />
-          )}
-        </div>
-      ))}
+      {steps
+        .filter((s) => s.key !== "target")
+        .map((s, i) => (
+          <div key={s.key} className="flex items-center gap-1">
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full ${
+                i <=
+                (current === "summary"
+                  ? 2
+                  : current === "review" || current === "target"
+                    ? 1
+                    : 0)
+                  ? "bg-blue-500/10 text-blue-500 font-medium"
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-400"
+              }`}
+            >
+              {s.label}
+            </span>
+            {i < 2 && (
+              <ChevronRight size={10} className="text-slate-300" />
+            )}
+          </div>
+        ))}
     </div>
   );
 }

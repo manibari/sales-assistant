@@ -7,12 +7,14 @@ source: auto
 source_id: 163
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- C24 基本金屬製造業
 title: 日照鋼鐵控股集團有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 日照鋼鐵控股集團有限公司
 
+- **產業**: C24 基本金屬製造業
 - **狀態**: active

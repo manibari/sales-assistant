@@ -6,9 +6,10 @@ import type { NxMeeting } from "@/lib/nexus-api";
 import Link from "next/link";
 
 const HOUR_HEIGHT = 60; // px per hour
-const START_HOUR = 7;
-const END_HOUR = 22;
+const START_HOUR = 0;
+const END_HOUR = 24;
 const TOTAL_HOURS = END_HOUR - START_HOUR;
+const DEFAULT_SCROLL_HOUR = 8; // auto-scroll to 8:00 on load
 const SNAP_MINUTES = 15;
 
 function formatDate(d: Date): string {
@@ -64,7 +65,7 @@ export function TimeGrid({ days, meetings }: TimeGridProps) {
   // Auto-scroll to current time on mount
   useEffect(() => {
     if (gridRef.current) {
-      const scrollTo = minuteToY(Math.max(nowMinute - 60, START_HOUR * 60));
+      const scrollTo = minuteToY(Math.max(nowMinute - 60, DEFAULT_SCROLL_HOUR * 60));
       gridRef.current.scrollTop = scrollTo;
     }
   }, []);

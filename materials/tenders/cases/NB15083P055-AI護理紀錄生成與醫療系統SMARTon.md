@@ -9,7 +9,7 @@ job_number: NB15083P055
 opening_date: '2026-03-31'
 scraped_date: '2026-03-18'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=3.5.11&job_number=NB15083P055
-status: active
+status: archived
 tags:
 - AI
 - 醫療
@@ -18,6 +18,7 @@ type: 公開招標
 unit_id: 3.5.11
 unit_name: 國防部軍醫局
 ---
+
 
 # AI護理紀錄生成與醫療系統SMART on FHIR串接服務
 

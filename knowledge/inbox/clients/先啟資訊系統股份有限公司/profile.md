@@ -11,7 +11,7 @@ tags:
 - J62 電腦程式設計及資訊服務業
 title: 先啟資訊系統股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 先啟資訊系統股份有限公司

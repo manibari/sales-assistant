@@ -8,13 +8,13 @@ source_id: 12
 source_type: nx_client
 status: inbox
 tags:
-- C15 印刷及資料儲存媒體複製業
+- C16 印刷及資料儲存媒體複製業
 title: 智瀚印刷科技有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 智瀚印刷科技有限公司
 
-- **產業**: C15 印刷及資料儲存媒體複製業
+- **產業**: C16 印刷及資料儲存媒體複製業
 - **狀態**: active

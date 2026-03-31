@@ -9,7 +9,7 @@ job_number: 115A008-02
 opening_date: '2026-03-27'
 scraped_date: '2026-03-18'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=A.19.10&job_number=115A008-02
-status: active
+status: archived
 tags:
 - AI
 title: 攜帶型葉面積指數(Leaf Area Index, LAI）量測儀一套
@@ -17,6 +17,7 @@ type: 公開取得報價單或企劃書
 unit_id: A.19.10
 unit_name: 農業部林業試驗所
 ---
+
 
 # 攜帶型葉面積指數(Leaf Area Index, LAI）量測儀一套
 

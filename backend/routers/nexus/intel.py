@@ -3,7 +3,9 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Response
+import pathlib
+
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from pydantic import BaseModel
 
 from services.ai_provider import check_ai_available
@@ -394,6 +396,86 @@ def chat_followup(intel_id: int, body: ChatMessage):
 
 class BulkDeleteRequest(BaseModel):
     ids: list[int]
+
+
+@router.post("/{intel_id}/transcribe")
+async def transcribe(intel_id: int, audio: UploadFile = File(...)):
+    """Upload audio → Whisper transcription → auto-parse intel.
+
+    Validates format (.m4a/.mp3/.mp4/.wav) and size (≤ 25 MB) before calling Whisper.
+    On success, updates raw_input + parsed_json + chat_history and returns the transcript.
+    """
+    from services.nexus.ai.transcription_ai import (
+        ALLOWED_EXTENSIONS,
+        MAX_FILE_SIZE,
+        check_openai_available,
+        transcribe_audio,
+    )
+
+    if not check_openai_available():
+        raise HTTPException(503, "請在 .env 設定 OPENAI_API_KEY 以啟用語音轉錄")
+
+    intel = get_intel(intel_id)
+    if not intel:
+        raise HTTPException(404, "Intel not found")
+
+    # Validate format
+    suffix = pathlib.Path(audio.filename or "").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            422,
+            f"不支援此格式，請上傳 m4a / mp3 / mp4 / wav（收到 '{suffix}'）",
+        )
+
+    file_bytes = await audio.read()
+
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(422, "檔案過大，請壓縮後再試（上限 25 MB）")
+
+    # Transcribe
+    try:
+        transcript = transcribe_audio(file_bytes, audio.filename or "audio.m4a")
+    except RuntimeError as e:
+        raise HTTPException(500, str(e)) from e
+
+    # Save transcript as raw_input and mark input_type as voice
+    update_intel(intel_id, raw_input=transcript, input_type="voice")
+
+    # Parse + AI greeting (same logic as initial_parse)
+    if not check_ai_available():
+        return {"transcript": transcript, "parsed": {}, "ai_reply": ""}
+
+    parsed = parse_raw_intel(transcript)
+    parsed, db_context = _enrich_from_db(parsed)
+    update_intel(intel_id, parsed_json=json.dumps(parsed, ensure_ascii=False))
+
+    system = FOLLOWUP_PROMPT
+    if db_context:
+        system += (
+            f"\n\n[SYSTEM NOTE] 以下是系統自動從資料庫補齊的資訊，不需要再問這些：\n{db_context}"
+        )
+
+    context_note = f"\n\n[已解析欄位]\n{json.dumps(parsed, ensure_ascii=False, indent=2)}"
+    chat_messages = [{"role": "user", "content": transcript + context_note}]
+    greeting_raw = chat_intel(system, chat_messages)
+
+    ai_reply = (
+        greeting_raw.split("---")[0].strip()
+        if "---" in greeting_raw
+        else greeting_raw.strip()
+    )
+
+    if db_context:
+        system_note = db_context.replace("[系統] ", "✅ ")
+        ai_reply = f"{system_note}\n\n{ai_reply}"
+
+    chat_history = [
+        {"role": "user", "text": transcript},
+        {"role": "assistant", "text": ai_reply},
+    ]
+    update_intel(intel_id, chat_history=json.dumps(chat_history, ensure_ascii=False))
+
+    return {"transcript": transcript, "parsed": parsed, "ai_reply": ai_reply}
 
 
 @router.post("/bulk-delete", status_code=204)

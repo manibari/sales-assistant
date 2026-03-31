@@ -8,13 +8,13 @@ source_id: 68
 source_type: nx_client
 status: inbox
 tags:
-- manufacturing
+- C11 紡織業
 title: 宏遠興業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 宏遠興業股份有限公司
 
-- **產業**: manufacturing
+- **產業**: C11 紡織業
 - **狀態**: active

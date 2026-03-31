@@ -9,17 +9,17 @@ source_id: 14
 source_type: nx_deal
 status: inbox
 tags:
-- active
-- L0
+- closed
+- LOST
 title: 穩德 - 智慧產線導入案
 type: deal-overview
-updated: '2026-03-24'
+updated: '2026-04-01'
 ---
 
 # 穩德 - 智慧產線導入案
 
 - **客戶**: 穩德文具印刷工業有限公司
-- **階段**: L0
-- **狀態**: active
+- **階段**: LOST
+- **狀態**: closed
 - **預算金額**: 300000.0
 - **時程**: next_quarter

@@ -10,7 +10,7 @@ status: inbox
 tags: []
 title: 奇美食品 — 客戶情蒐報告
 type: intel
-updated: '2026-03-24'
+updated: '2026-04-01'
 ---
 
 # 奇美食品 — 客戶情蒐報告

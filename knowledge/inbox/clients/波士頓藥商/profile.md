@@ -7,12 +7,14 @@ source: auto
 source_id: 111
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- C24 藥品製造業
 title: 波士頓藥商 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 波士頓藥商
 
+- **產業**: C24 藥品製造業
 - **狀態**: active

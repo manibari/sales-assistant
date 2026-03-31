@@ -614,6 +614,20 @@ export const nxApi = {
         "/intel/summarize",
         { intel_ids: intelIds },
       ),
+    transcribe: async (id: number, file: File): Promise<{ transcript: string; parsed: Record<string, unknown>; ai_reply: string }> => {
+      const formData = new FormData();
+      formData.append("audio", file);
+      const res = await fetch(`${UPLOAD_BASE}/intel/${id}/transcribe`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        let msg = `API error: ${res.status}`;
+        try { msg = (await res.json()).detail || msg; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      return res.json();
+    },
   },
   deals: {
     list: (view?: string) => fetchAPI<NxDeal[]>(`/deals/?view=${view || "urgency"}`),

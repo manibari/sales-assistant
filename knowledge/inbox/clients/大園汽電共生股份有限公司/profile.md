@@ -7,12 +7,14 @@ source: auto
 source_id: 108
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- D01 電力供應業
 title: 大園汽電共生股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 大園汽電共生股份有限公司
 
+- **產業**: D01 電力供應業
 - **狀態**: active

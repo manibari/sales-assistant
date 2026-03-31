@@ -7,12 +7,14 @@ source: auto
 source_id: 148
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- J62 電腦程式設計及資訊服務業
 title: 咖米股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 咖米股份有限公司
 
+- **產業**: J62 電腦程式設計及資訊服務業
 - **狀態**: active

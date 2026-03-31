@@ -7,12 +7,14 @@ source: auto
 source_id: 129
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- C24 基本金屬製造業
 title: 台灣鋼聯股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 台灣鋼聯股份有限公司
 
+- **產業**: C24 基本金屬製造業
 - **狀態**: active

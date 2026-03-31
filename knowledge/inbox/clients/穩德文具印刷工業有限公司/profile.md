@@ -8,15 +8,15 @@ source_id: 22
 source_type: nx_client
 status: inbox
 tags:
-- C18 印刷及資料儲存媒體複製業
+- C16 印刷及資料儲存媒體複製業
 title: 穩德文具印刷工業有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 穩德文具印刷工業有限公司
 
-- **產業**: C18 印刷及資料儲存媒體複製業
+- **產業**: C16 印刷及資料儲存媒體複製業
 - **預算範圍**: sme
 - **狀態**: active
 

@@ -7,12 +7,14 @@ source: auto
 source_id: 23
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- C25 金屬製品製造業
 title: 東隆興業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 東隆興業股份有限公司
 
+- **產業**: C25 金屬製品製造業
 - **狀態**: active

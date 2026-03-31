@@ -8,15 +8,15 @@ source_id: 56
 source_type: nx_client
 status: inbox
 tags:
-- manufacturing
+- C23 非金屬礦物製品製造業
 title: 台灣玻璃工業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 台灣玻璃工業股份有限公司
 
-- **產業**: manufacturing
+- **產業**: C23 非金屬礦物製品製造業
 - **狀態**: active
 
 ## 備註

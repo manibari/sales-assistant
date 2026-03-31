@@ -7,12 +7,14 @@ source: auto
 source_id: 168
 source_type: nx_client
 status: inbox
-tags: []
+tags:
+- O84 公共行政
 title: 大南方矽谷計畫 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 大南方矽谷計畫
 
+- **產業**: O84 公共行政
 - **狀態**: active

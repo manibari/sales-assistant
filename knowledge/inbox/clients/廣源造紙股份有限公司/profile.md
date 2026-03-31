@@ -8,13 +8,13 @@ source_id: 78
 source_type: nx_client
 status: inbox
 tags:
-- manufacturing
+- C15 紙漿紙製品製造業
 title: 廣源造紙股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-03-26'
+updated: '2026-04-01'
 ---
 
 # 廣源造紙股份有限公司
 
-- **產業**: manufacturing
+- **產業**: C15 紙漿紙製品製造業
 - **狀態**: active

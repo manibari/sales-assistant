@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup — Audio Transcription → Intel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: {
+            surface: { DEFAULT: '#0f172a', raised: '#1e293b', border: '#334155' },
+          }
+        }
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .phone-frame {
+      width: 375px;
+      height: 812px;
+      border-radius: 2.5rem;
+      border: 3px solid #334155;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      background: #0f172a;
+      position: relative;
+    }
+    .screen-content { flex: 1; overflow-y: auto; scrollbar-width: none; }
+    .screen-content::-webkit-scrollbar { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse-opacity { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .spinner { animation: spin 1s linear infinite; }
+    .pulse { animation: pulse-opacity 1.5s ease-in-out infinite; }
+    .upload-zone {
+      border: 2px dashed #334155;
+      border-radius: 0.75rem;
+      transition: all 0.2s;
+    }
+    .upload-zone:hover { border-color: #3b82f6; background: rgba(59,130,246,0.05); }
+    .step-active { color: #3b82f6; }
+    .step-done { color: #22c55e; }
+    .step-idle { color: #475569; }
+    .step-error { color: #ef4444; }
+    .progress-line-done { background: #22c55e; }
+    .progress-line-active { background: linear-gradient(90deg, #22c55e, #3b82f6); }
+    .progress-line-idle { background: #1e293b; }
+    textarea { font-size: 16px !important; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-50 min-h-screen">
+
+  <!-- Header -->
+  <div class="text-center pt-8 pb-4">
+    <h1 class="text-xl font-bold text-slate-50">Audio Transcription → Intel</h1>
+    <p class="text-sm text-slate-400 mt-1">Interactive mockup · L3 · 2026-03-31</p>
+    <!-- Theme Toggle -->
+    <button onclick="toggleTheme()" class="mt-3 px-3 py-1 rounded-lg text-xs bg-slate-800 text-slate-400 hover:bg-slate-700 transition-colors">
+      切換明暗模式
+    </button>
+  </div>
+
+  <!-- Flow Legend -->
+  <div class="flex justify-center gap-6 pb-6 text-xs text-slate-500">
+    <span>← 左右捲動查看各畫面</span>
+  </div>
+
+  <!-- Screens Container -->
+  <div class="flex gap-10 overflow-x-auto snap-x snap-mandatory px-12 pb-12" id="screens">
+
+    <!-- ─────────────────── SCREEN 1: Intel 詳情頁（待上傳）─────────────────── -->
+    <div class="snap-center shrink-0">
+      <p class="text-center text-sm text-slate-400 mb-3 font-medium">S1 — Intel 詳情頁（點擊上傳）</p>
+      <div class="phone-frame">
+        <!-- Status Bar -->
+        <div class="h-11 flex items-end justify-between px-6 pb-1 text-xs text-slate-400 shrink-0">
+          <span>9:41</span>
+          <div class="flex gap-1 items-center">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5a13 13 0 0121 0M5 12a10 10 0 0114 0M8.5 15.5a6 6 0 017 0M12 19h.01"/></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2"/><path d="M22 11v2a2 2 0 000-2z"/></svg>
+          </div>
+        </div>
+        <!-- Nav Bar -->
+        <div class="flex items-center px-4 pb-3 gap-2 shrink-0">
+          <button class="p-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="flex-1">
+            <p class="text-base font-semibold">情報詳情</p>
+            <p class="text-xs text-slate-400">草稿 · 2 分鐘前</p>
+          </div>
+          <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2 py-0.5">草稿</span>
+        </div>
+        <!-- Content -->
+        <div class="screen-content px-4 pb-24">
+          <!-- Raw Input Section -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-3">
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-sm font-semibold text-slate-50">原始輸入</p>
+              <span class="text-xs text-slate-500">空白</span>
+            </div>
+            <!-- Upload Zone -->
+            <div class="upload-zone p-5 text-center cursor-pointer mb-3" onclick="goToScreen(2)">
+              <div class="flex justify-center mb-3">
+                <div class="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                  <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+                  </svg>
+                </div>
+              </div>
+              <p class="text-sm font-medium text-slate-300 mb-1">上傳會議錄音</p>
+              <p class="text-xs text-slate-500">m4a · mp3 · mp4 · wav，最大 25MB</p>
+              <button class="mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200">
+                選擇檔案
+              </button>
+            </div>
+            <!-- Or manual input hint -->
+            <div class="flex items-center gap-2 text-xs text-slate-600">
+              <div class="flex-1 h-px bg-slate-700"></div>
+              <span>或直接輸入文字</span>
+              <div class="flex-1 h-px bg-slate-700"></div>
+            </div>
+            <textarea class="w-full mt-3 bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm text-slate-300 placeholder-slate-600 resize-none focus:outline-none focus:border-blue-500 transition-colors" rows="3" placeholder="貼上逐字稿或輸入情報..."></textarea>
+          </div>
+          <!-- Parsed Fields (empty state) -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-3">
+            <p class="text-sm font-semibold text-slate-50 mb-2">解析欄位</p>
+            <p class="text-xs text-slate-600">上傳錄音或輸入文字後，AI 將自動解析</p>
+          </div>
+        </div>
+        <!-- Bottom Nav -->
+        <div class="h-14 border-t border-slate-800 flex items-center justify-around px-6 shrink-0 bg-slate-950">
+          <NavItem icon="home" label="首頁" />
+          <NavItem icon="activity" label="情報" active />
+          <NavItem icon="users" label="客戶" />
+          <NavItem icon="briefcase" label="商機" />
+        </div>
+        <div class="h-5 flex justify-center items-center shrink-0">
+          <div class="w-32 h-1 bg-slate-700 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="flex items-center shrink-0 self-center">
+      <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+    </div>
+
+    <!-- ─────────────────── SCREEN 2: 上傳中 / 轉錄中 ─────────────────── -->
+    <div class="snap-center shrink-0">
+      <p class="text-center text-sm text-slate-400 mb-3 font-medium">S2 — 進度狀態（轉錄中）</p>
+      <div class="phone-frame">
+        <div class="h-11 flex items-end justify-between px-6 pb-1 text-xs text-slate-400 shrink-0">
+          <span>9:42</span>
+          <div class="flex gap-1 items-center">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5a13 13 0 0121 0M5 12a10 10 0 0114 0M8.5 15.5a6 6 0 017 0M12 19h.01"/></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2"/><path d="M22 11v2a2 2 0 000-2z"/></svg>
+          </div>
+        </div>
+        <div class="flex items-center px-4 pb-3 gap-2 shrink-0">
+          <button class="p-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="flex-1">
+            <p class="text-base font-semibold">情報詳情</p>
+            <p class="text-xs text-slate-400">草稿 · 處理中</p>
+          </div>
+          <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2 py-0.5">草稿</span>
+        </div>
+        <div class="screen-content px-4 pb-24">
+          <!-- Raw Input Section with progress -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-3">
+            <div class="flex items-center justify-between mb-4">
+              <p class="text-sm font-semibold text-slate-50">原始輸入</p>
+              <span class="text-xs text-blue-400 pulse">處理中...</span>
+            </div>
+
+            <!-- File Info -->
+            <div class="flex items-center gap-3 bg-slate-800 rounded-lg px-3 py-2.5 mb-4">
+              <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"/>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-xs font-medium text-slate-200 truncate">會議錄音_2026-03-31.m4a</p>
+                <p class="text-xs text-slate-500">8.4 MB · iPhone Voice Memos</p>
+              </div>
+            </div>
+
+            <!-- Progress Steps -->
+            <div class="space-y-0">
+              <!-- Step 1: Upload Done -->
+              <div class="flex items-start gap-3">
+                <div class="flex flex-col items-center">
+                  <div class="w-7 h-7 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                  </div>
+                  <div class="w-0.5 h-6 progress-line-done mt-0.5"></div>
+                </div>
+                <div class="pt-1 pb-6">
+                  <p class="text-sm font-medium text-green-400">上傳完成</p>
+                  <p class="text-xs text-slate-500">檔案已上傳至伺服器</p>
+                </div>
+              </div>
+              <!-- Step 2: Transcribing Active -->
+              <div class="flex items-start gap-3">
+                <div class="flex flex-col items-center">
+                  <div class="w-7 h-7 rounded-full bg-blue-500/10 border border-blue-500/40 flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-blue-400 spinner" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                  </div>
+                  <div class="w-0.5 h-6 progress-line-idle mt-0.5"></div>
+                </div>
+                <div class="pt-1 pb-6">
+                  <p class="text-sm font-medium text-blue-400">轉錄中</p>
+                  <p class="text-xs text-slate-500">Whisper AI 語音辨識中...</p>
+                </div>
+              </div>
+              <!-- Step 3: Parse Idle -->
+              <div class="flex items-start gap-3">
+                <div class="flex flex-col items-center">
+                  <div class="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+                  </div>
+                  <div class="w-0.5 h-1 progress-line-idle mt-0.5"></div>
+                </div>
+                <div class="pt-1">
+                  <p class="text-sm font-medium text-slate-600">AI 解析</p>
+                  <p class="text-xs text-slate-700">等待轉錄完成後啟動</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Slow hint -->
+            <div class="mt-4 flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-lg px-3 py-2">
+              <svg class="w-4 h-4 text-amber-400 shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <p class="text-xs text-amber-300">錄音較長，請稍候...</p>
+            </div>
+
+          </div>
+        </div>
+        <div class="h-14 border-t border-slate-800 flex items-center justify-around px-6 shrink-0 bg-slate-950">
+        </div>
+        <div class="h-5 flex justify-center items-center shrink-0">
+          <div class="w-32 h-1 bg-slate-700 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="flex items-center shrink-0 self-center">
+      <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+    </div>
+
+    <!-- ─────────────────── SCREEN 3: 逐字稿預覽 + 編輯 ─────────────────── -->
+    <div class="snap-center shrink-0">
+      <p class="text-center text-sm text-slate-400 mb-3 font-medium">S3 — 逐字稿預覽（可編輯）</p>
+      <div class="phone-frame">
+        <div class="h-11 flex items-end justify-between px-6 pb-1 text-xs text-slate-400 shrink-0">
+          <span>9:44</span>
+          <div class="flex gap-1 items-center">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5a13 13 0 0121 0M5 12a10 10 0 0114 0M8.5 15.5a6 6 0 017 0M12 19h.01"/></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2"/><path d="M22 11v2a2 2 0 000-2z"/></svg>
+          </div>
+        </div>
+        <div class="flex items-center px-4 pb-3 gap-2 shrink-0">
+          <button class="p-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="flex-1">
+            <p class="text-base font-semibold">情報詳情</p>
+            <p class="text-xs text-green-400">✓ 轉錄完成</p>
+          </div>
+          <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2 py-0.5">草稿</span>
+        </div>
+        <div class="screen-content px-4 pb-24">
+          <!-- All steps done badge -->
+          <div class="flex gap-2 mb-3">
+            <span class="text-xs bg-green-500/10 text-green-400 border border-green-500/20 rounded-full px-2 py-0.5 flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+              上傳
+            </span>
+            <span class="text-xs bg-green-500/10 text-green-400 border border-green-500/20 rounded-full px-2 py-0.5 flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+              轉錄
+            </span>
+            <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full px-2 py-0.5 flex items-center gap-1 pulse">
+              <svg class="w-3 h-3 spinner" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+              解析中
+            </span>
+          </div>
+          <!-- Transcript Box -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-3">
+            <div class="flex items-center justify-between mb-3">
+              <p class="text-sm font-semibold text-slate-50">逐字稿</p>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">中文 · 1,240字</span>
+                <button class="text-xs text-blue-400 hover:text-blue-300 transition-colors">編輯</button>
+              </div>
+            </div>
+            <div class="bg-slate-800 rounded-lg p-3 max-h-52 overflow-y-auto">
+              <p class="text-sm text-slate-300 leading-relaxed">
+                好，我們今天主要討論 AOI 自動化的需求。目前我們台中廠的生產線，每天大概有 3% 的不良品率，人工目檢已經跟不上產能了。
+              </p>
+              <p class="text-sm text-slate-300 leading-relaxed mt-2">
+                OK, so the budget we're looking at is around 500 萬，timeline is Q3 this year. We need the system up and running before the peak season.
+              </p>
+              <p class="text-sm text-slate-300 leading-relaxed mt-2">
+                對，我們的採購主管王雅婷也有參與這個評估，她下週二可以再開一次會。競爭對手目前也在看 A 公司和 B 公司的方案。
+              </p>
+              <p class="text-sm text-slate-300 leading-relaxed mt-2">
+                另外提一下，我們也有在考慮找中華電信一起合作，他們有 IoT 那邊的資源...
+              </p>
+            </div>
+            <!-- Resend parse button -->
+            <button onclick="goToScreen(4)" class="mt-3 w-full py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+              送出 AI 解析
+            </button>
+          </div>
+        </div>
+        <div class="h-14 border-t border-slate-800 flex items-center justify-around px-6 shrink-0 bg-slate-950"></div>
+        <div class="h-5 flex justify-center items-center shrink-0">
+          <div class="w-32 h-1 bg-slate-700 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="flex items-center shrink-0 self-center">
+      <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+    </div>
+
+    <!-- ─────────────────── SCREEN 4: AI 解析結果 ─────────────────── -->
+    <div class="snap-center shrink-0">
+      <p class="text-center text-sm text-slate-400 mb-3 font-medium">S4 — AI 解析結果（確認欄位）</p>
+      <div class="phone-frame">
+        <div class="h-11 flex items-end justify-between px-6 pb-1 text-xs text-slate-400 shrink-0">
+          <span>9:45</span>
+          <div class="flex gap-1 items-center">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5a13 13 0 0121 0M5 12a10 10 0 0114 0M8.5 15.5a6 6 0 017 0M12 19h.01"/></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2"/><path d="M22 11v2a2 2 0 000-2z"/></svg>
+          </div>
+        </div>
+        <div class="flex items-center px-4 pb-3 gap-2 shrink-0">
+          <button class="p-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="flex-1">
+            <p class="text-base font-semibold">情報詳情</p>
+            <p class="text-xs text-green-400">✓ AI 解析完成</p>
+          </div>
+          <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2 py-0.5">草稿</span>
+        </div>
+        <div class="screen-content px-4 pb-6">
+          <!-- AI Reply -->
+          <div class="bg-slate-900 border border-blue-500/20 rounded-xl p-4 mb-3">
+            <div class="flex items-center gap-2 mb-2">
+              <div class="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <svg class="w-3 h-3 text-blue-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+              </div>
+              <p class="text-xs font-medium text-blue-400">AI 助理</p>
+            </div>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              ✅ 已匹配客戶「某製造業客戶」<br/>
+              已解析到高潛力商機！預算 500 萬、Q3 時程、AOI 需求明確。請確認聯絡人資訊是否正確。
+            </p>
+          </div>
+
+          <!-- Parsed Fields -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4 mb-3">
+            <p class="text-sm font-semibold text-slate-50 mb-3">解析欄位</p>
+            <div class="space-y-2.5">
+              <Field label="公司名稱" value="某製造業股份有限公司" />
+              <Field label="角色" value="客戶" badge="bg-cyan-500/10 text-cyan-400 border-cyan-500/20" />
+              <Field label="產業" value="製造業" badge="bg-amber-500/10 text-amber-400 border-amber-500/20" />
+              <Field label="痛點" tags='["aoi", "automation"]' />
+              <Field label="預算" value="NT$ 5,000,000" />
+              <Field label="下次會議" value="下週二" />
+              <Field label="聯絡人" value="王雅婷（採購主管）" />
+              <Field label="競爭對手" value="A 公司、B 公司" />
+              <Field label="夥伴" value="中華電信" badge="bg-blue-500/10 text-blue-400 border-blue-500/20" />
+              <Field label="商機潛力" badge="bg-green-500/10 text-green-400 border-green-500/20" value="高" />
+            </div>
+          </div>
+
+          <!-- Confirm Button -->
+          <button class="w-full py-3 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-xl min-h-[44px] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-2 mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+            確認並建立情報
+          </button>
+          <button class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl min-h-[44px] active:scale-[0.98] transition-all duration-200">
+            繼續編輯
+          </button>
+        </div>
+        <div class="h-5 flex justify-center items-center shrink-0 mt-1">
+          <div class="w-32 h-1 bg-slate-700 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="flex items-center shrink-0 self-center">
+      <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+    </div>
+
+    <!-- ─────────────────── SCREEN 5: 錯誤態 ─────────────────── -->
+    <div class="snap-center shrink-0">
+      <p class="text-center text-sm text-slate-400 mb-3 font-medium">S5 — 錯誤態（Whisper 失敗）</p>
+      <div class="phone-frame">
+        <div class="h-11 flex items-end justify-between px-6 pb-1 text-xs text-slate-400 shrink-0">
+          <span>9:43</span>
+          <div class="flex gap-1 items-center">
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.5a13 13 0 0121 0M5 12a10 10 0 0114 0M8.5 15.5a6 6 0 017 0M12 19h.01"/></svg>
+            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2"/><path d="M22 11v2a2 2 0 000-2z"/></svg>
+          </div>
+        </div>
+        <div class="flex items-center px-4 pb-3 gap-2 shrink-0">
+          <button class="p-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <div class="flex-1">
+            <p class="text-base font-semibold">情報詳情</p>
+            <p class="text-xs text-red-400">✗ 轉錄失敗</p>
+          </div>
+          <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full px-2 py-0.5">草稿</span>
+        </div>
+        <div class="screen-content px-4 pb-24">
+          <!-- Error Card -->
+          <div class="bg-slate-900 border border-red-500/30 rounded-xl p-4 mb-3">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              </div>
+              <div class="flex-1">
+                <p class="text-sm font-semibold text-red-400 mb-1">轉錄失敗</p>
+                <p class="text-xs text-slate-400 leading-relaxed">Whisper API 發生錯誤。請重試，或直接輸入文字。</p>
+                <p class="text-xs text-slate-600 mt-1">錯誤代碼：429 Rate limit exceeded</p>
+              </div>
+            </div>
+
+            <!-- Step visualization with error -->
+            <div class="mt-4 space-y-0">
+              <div class="flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
+                  <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                </div>
+                <p class="text-xs text-green-400">上傳完成</p>
+              </div>
+              <div class="ml-3 w-0.5 h-4 bg-slate-700"></div>
+              <div class="flex items-center gap-3">
+                <div class="w-6 h-6 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center shrink-0">
+                  <svg class="w-3 h-3 text-red-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </div>
+                <p class="text-xs text-red-400">轉錄失敗 ←</p>
+              </div>
+            </div>
+
+            <div class="mt-4 flex gap-2">
+              <button class="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+                重試
+              </button>
+              <button class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg min-h-[44px] active:scale-[0.98] transition-all duration-200">
+                手動輸入
+              </button>
+            </div>
+          </div>
+
+          <!-- Format error variant -->
+          <div class="bg-slate-900 border border-slate-700 rounded-xl p-4">
+            <p class="text-xs font-medium text-slate-400 mb-3">格式/大小錯誤提示（前端驗證）</p>
+            <div class="bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2.5 flex items-start gap-2">
+              <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <p class="text-xs text-red-300">檔案過大，請壓縮後再試（上限 25 MB）</p>
+            </div>
+            <div class="mt-2 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2.5 flex items-start gap-2">
+              <svg class="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+              <p class="text-xs text-red-300">不支援此格式，請上傳 m4a / mp3 / mp4 / wav</p>
+            </div>
+          </div>
+        </div>
+        <div class="h-14 border-t border-slate-800 flex items-center justify-around px-6 shrink-0 bg-slate-950"></div>
+        <div class="h-5 flex justify-center items-center shrink-0">
+          <div class="w-32 h-1 bg-slate-700 rounded-full"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Screen navigation dots -->
+  <div class="flex justify-center gap-2 pb-8" id="dots">
+    <button onclick="goToScreen(1)" class="dot w-2 h-2 rounded-full bg-blue-500 transition-all duration-200"></button>
+    <button onclick="goToScreen(2)" class="dot w-2 h-2 rounded-full bg-slate-700 transition-all duration-200"></button>
+    <button onclick="goToScreen(3)" class="dot w-2 h-2 rounded-full bg-slate-700 transition-all duration-200"></button>
+    <button onclick="goToScreen(4)" class="dot w-2 h-2 rounded-full bg-slate-700 transition-all duration-200"></button>
+    <button onclick="goToScreen(5)" class="dot w-2 h-2 rounded-full bg-slate-700 transition-all duration-200"></button>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      html.classList.toggle('dark');
+      localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    // Restore theme
+    if (localStorage.getItem('theme') === 'light') {
+      document.documentElement.classList.remove('dark');
+    }
+
+    let currentScreen = 1;
+
+    function goToScreen(n) {
+      currentScreen = n;
+      const container = document.getElementById('screens');
+      const items = container.querySelectorAll('.snap-center');
+      // Each screen + arrow is 2 items; screen index = (n-1)*2
+      const screenEl = items[(n - 1) * 2];
+      if (screenEl) {
+        screenEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+      // Update dots
+      document.querySelectorAll('.dot').forEach((dot, i) => {
+        dot.classList.toggle('bg-blue-500', i === n - 1);
+        dot.classList.toggle('bg-slate-700', i !== n - 1);
+        dot.classList.toggle('w-4', i === n - 1);
+        dot.classList.toggle('w-2', i !== n - 1);
+      });
+    }
+  </script>
+</body>
+</html>

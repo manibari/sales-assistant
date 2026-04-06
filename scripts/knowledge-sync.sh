@@ -14,11 +14,13 @@ TIMESTAMP=$(date +%H:%M)
 LOG_DIR="${PROJECT_DIR}/logs"
 mkdir -p "$LOG_DIR"
 
-# Source exec-lib for dashboard run recording
+# Source exec-lib for dashboard run recording (optional — skip on failure)
 RIVENDELL_DIR="$HOME/Documents/Projects/rivendell"
 if [ -f "$RIVENDELL_DIR/bin/sk-exec-lib" ]; then
   export SK_EXEC_REPO_DIR="$RIVENDELL_DIR"
-  source "$RIVENDELL_DIR/bin/sk-exec-lib"
+  set +e
+  source "$RIVENDELL_DIR/bin/sk-exec-lib" 2>/dev/null || true
+  set -e
 fi
 
 echo "=== Knowledge Sync — ${DATE} ${TIMESTAMP} ==="

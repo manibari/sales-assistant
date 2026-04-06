@@ -9,9 +9,8 @@ from pathlib import Path
 # Add project root to sys.path so we can import services/database
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from database.connection import init_db
 from backend.routers import crm, projects, network
@@ -38,26 +37,9 @@ from backend.routers.nexus import (
     agent as nx_agent,
 )
 
-app = FastAPI(title="Project Nexus API", version="0.2.0", redirect_slashes=False)
+app = FastAPI(title="Project Nexus API", version="0.2.0")
 
 
-class TrailingSlashMiddleware(BaseHTTPMiddleware):
-    """Normalize paths to always have trailing slash without HTTP redirect.
-
-    Next.js rewrites strip trailing slashes before proxying. FastAPI routes are
-    defined with trailing slashes, so this middleware adds the slash in-place
-    to avoid 404s when the proxy omits it.
-    """
-    async def dispatch(self, request: Request, call_next):
-        if not request.url.path.endswith("/"):
-            scope = request.scope
-            scope["path"] = scope["path"] + "/"
-            if scope.get("raw_path"):
-                scope["raw_path"] = scope["raw_path"] + b"/"
-        return await call_next(request)
-
-
-app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -112,11 +94,11 @@ def _knowledge_worker_loop():
         update_file_parse_status,
         delete_knowledge_by_file,
         extract_text_from_file,
-        summarize_chunk,
         create_knowledge_chunk,
         PARSEABLE_EXTENSIONS,
         _get_file_extension,
     )
+    from services.nexus.ai.knowledge_ai import summarize_chunk
     from services.nexus.documents import get_file
 
     _logger.info("Knowledge worker thread started.")

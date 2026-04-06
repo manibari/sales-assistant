@@ -4,7 +4,7 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+RUN rm -rf node_modules && npm ci && npm run build
 
 # Stage 2: Python backend + static frontend
 FROM python:3.11-slim
@@ -18,12 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn
 COPY backend/ ./backend/
 COPY services/ ./services/
 COPY database/ ./database/
-COPY config/ ./config/ 2>/dev/null || true
+RUN mkdir -p ./config
 COPY prompts.yml rules.yml constants.py ./
 
 # Copy built frontend
 COPY --from=frontend-build /app/frontend/.next ./frontend/.next
-COPY --from=frontend-build /app/frontend/public ./frontend/public
 COPY --from=frontend-build /app/frontend/package.json ./frontend/
 COPY --from=frontend-build /app/frontend/node_modules ./frontend/node_modules
 

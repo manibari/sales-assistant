@@ -18,7 +18,6 @@ Internal:
 """
 
 from datetime import date
-import streamlit as st
 from database.connection import (
     get_connection,
     read_sql_file,
@@ -101,7 +100,6 @@ def find_or_create_client(company_name: str) -> str | None:
             return new_client_id
 
 
-@st.cache_data
 def get_all():
     """Get all clients with DM and champion names from normalized tables (LEFT JOIN)."""
     with get_connection() as conn:

@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16
+    container_name: spms-postgres
+    environment:
+      POSTGRES_USER: spms_user
+      POSTGRES_PASSWORD: spms_pass
+      POSTGRES_DB: spms
+    volumes:
+      - spms-pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spms_user -d spms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: backend
+    container_name: nexus-backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://spms_user:spms_pass@db:5432/spms
+    volumes:
+      - ./backend:/app/backend
+      - ./services:/app/services
+      - ./database:/app/database
+      - ./prompts.yml:/app/prompts.yml
+      - ./rules.yml:/app/rules.yml
+      - ./constants.py:/app/constants.py
+    ports:
+      - "8002:8002"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8002 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: nexus-frontend
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8002
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    ports:
+      - "3002:3002"
+    depends_on:
+      - backend
+
+volumes:
+  spms-pgdata:
+    external: true

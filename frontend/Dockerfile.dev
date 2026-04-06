@@ -1,0 +1,11 @@
+# Frontend dev image (hot reload via volume mount)
+FROM node:20-alpine
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# src/ and public/ come from volume mounts at runtime
+EXPOSE 3002
+
+CMD ["npm", "run", "dev"]

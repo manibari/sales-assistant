@@ -22,7 +22,7 @@ industry_tags: [科技業, 服務業, 設計業]
 company_size: all
 reference_url: "https://gcis.nat.gov.tw/neo-s"
 source_id: "SIIR"
-last_scraped: "2026-03-26"
+last_scraped: "2026-04-06"
 status: active
 ---
 

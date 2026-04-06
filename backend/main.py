@@ -1,6 +1,7 @@
 """FastAPI entry point — wraps existing services layer as REST API."""
 
 import logging
+import os
 import sys
 import threading
 import time
@@ -234,6 +235,41 @@ def _auto_close_expired_subsidies():
         _logger.warning("Auto-close expired subsidies failed: %s", e)
 
 
+def _morning_briefing_loop():
+    """Background thread: send morning briefing at 08:30 local time, once per day."""
+    import asyncio
+    from datetime import datetime
+
+    sent_today: str | None = None
+    briefing_hour = int(os.environ.get("MORNING_BRIEFING_HOUR", "8"))
+    briefing_minute = int(os.environ.get("MORNING_BRIEFING_MINUTE", "30"))
+
+    _logger.info(
+        "Morning briefing scheduler started (fires at %02d:%02d local time).",
+        briefing_hour,
+        briefing_minute,
+    )
+
+    while True:
+        now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
+
+        at_or_after = now.hour > briefing_hour or (
+            now.hour == briefing_hour and now.minute >= briefing_minute
+        )
+
+        if at_or_after and sent_today != today_str:
+            try:
+                from services.nexus.morning_briefing import send_morning_briefing_async
+                stats = asyncio.run(send_morning_briefing_async())
+                _logger.info("Morning briefing dispatched: %s", stats)
+            except Exception as e:
+                _logger.error("Morning briefing error: %s", e)
+            sent_today = today_str
+
+        time.sleep(60)  # check every minute
+
+
 @app.on_event("startup")
 def startup():
     try:
@@ -259,6 +295,11 @@ def startup():
     t = threading.Thread(target=_knowledge_worker_loop, daemon=True)
     t.start()
     _logger.info("Knowledge worker thread launched.")
+
+    # Start morning briefing scheduler
+    t2 = threading.Thread(target=_morning_briefing_loop, daemon=True)
+    t2.start()
+    _logger.info("Morning briefing scheduler launched.")
 
 
 @app.get("/api/health")

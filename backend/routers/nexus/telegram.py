@@ -1309,3 +1309,27 @@ async def send_daily_digest(chat_id: int | None = Query(None)):
         await _send_reply(t, text)
 
     return {"ok": True, "date": data["date"], "sent_to": targets}
+
+
+@router.post("/morning-briefing")
+async def send_morning_briefing(chat_id: int | None = Query(None)):
+    """Send morning briefing (action-oriented, priorities-first format).
+
+    - Without chat_id: broadcast to all registered chats
+    - With chat_id: send to that specific chat only
+    """
+    from services.nexus.morning_briefing import format_morning_briefing
+    from services.nexus.daily_digest import build_daily_digest
+
+    data = await asyncio.to_thread(build_daily_digest)
+    text = format_morning_briefing(data)
+
+    targets: list[int] = [chat_id] if chat_id else sorted(_registered_chats)
+
+    if not targets:
+        raise HTTPException(400, "No targets: pass chat_id or /register in Telegram first")
+
+    for t in targets:
+        await _send_reply(t, text)
+
+    return {"ok": True, "date": data["date"], "sent_to": targets}

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export type UserRole = "admin" | "sales" | "finance";
 
@@ -30,7 +29,6 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   const fetchMe = async () => {
     try {
@@ -52,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await fetch("/api/nx/auth/logout", { method: "POST", credentials: "include" });
     setUser(null);
-    router.push("/login");
+    window.location.replace("/login");
   };
 
   return (

@@ -75,9 +75,9 @@ class UpdateUserRequest(BaseModel):
 def login(body: LoginRequest, response: Response):
     user = get_user_by_email(body.email)
     if not user or not user["is_active"]:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
     if not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="帳號或密碼錯誤")
     token = create_jwt(user["id"], user["role"])
     response.set_cookie(
         key=_COOKIE,

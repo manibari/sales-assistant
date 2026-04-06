@@ -12,8 +12,11 @@ test.use({ storageState: "tests/.auth/admin.json" });
 
 test.describe("Desktop sidebar", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/home");
     await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/home");
+    // Wait for the user footer (logout button) in the sidebar — this only renders after
+    // React hydration AND auth/me resolves, guaranteeing sidebar event handlers are live.
+    await page.getByRole("button", { name: "登出" }).waitFor({ state: "visible", timeout: 30_000 });
   });
 
   test("sidebar is visible on desktop viewport", async ({ page }) => {
@@ -21,7 +24,9 @@ test.describe("Desktop sidebar", () => {
   });
 
   test("sidebar shows Project Nexus brand", async ({ page }) => {
-    await expect(page.getByText("Project Nexus")).toBeVisible();
+    // Scope to sidebar to avoid matching "系統管理員 · Project Nexus" on the home page
+    const sidebar = page.getByRole("complementary");
+    await expect(sidebar.getByRole("heading", { name: "Project Nexus" })).toBeVisible();
   });
 
   test("sidebar shows 主畫面 link", async ({ page }) => {
@@ -49,28 +54,31 @@ test.describe("Desktop sidebar", () => {
   });
 
   test("sidebar hides on mobile viewport", async ({ page }) => {
-    await page.goto("/home");
+    // Shrink viewport — beforeEach already loaded /home at 1280px
     await page.setViewportSize({ width: 375, height: 812 });
     const sidebar = page.getByRole("complementary");
     // Sidebar uses hidden md:flex — should not be visible on mobile
-    await expect(sidebar).toBeHidden();
+    await expect(sidebar).toBeHidden({ timeout: 5_000 });
   });
 
   test("業務與銷售 section is collapsible", async ({ page }) => {
+    // Scope to sidebar to avoid matching home page headings
+    const sidebar = page.getByRole("complementary");
+
     // Section header button
-    const sectionBtn = page.getByRole("button", { name: /業務與銷售/ });
-    await expect(sectionBtn).toBeVisible();
+    const sectionBtn = sidebar.getByRole("button", { name: /業務與銷售/ });
+    await expect(sectionBtn).toBeVisible({ timeout: 10_000 });
 
     // Deals link should initially be visible
-    const dealsLink = page.getByRole("link", { name: /商機 Pipeline/ });
+    const dealsLink = sidebar.getByRole("link", { name: /商機 Pipeline/ });
     await expect(dealsLink).toBeVisible();
 
-    // Click to collapse
+    // Click to collapse — wait for animation/state to settle
     await sectionBtn.click();
-    await expect(dealsLink).toBeHidden();
+    await expect(dealsLink).toBeHidden({ timeout: 8_000 });
 
     // Click again to expand
     await sectionBtn.click();
-    await expect(dealsLink).toBeVisible();
+    await expect(dealsLink).toBeVisible({ timeout: 8_000 });
   });
 });

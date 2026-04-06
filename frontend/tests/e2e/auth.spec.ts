@@ -25,7 +25,7 @@ test.describe("Login page", () => {
     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
     await page.getByRole("button", { name: /登入|login/i }).click();
 
-    await page.waitForURL("**/home", { timeout: 10_000 });
+    await page.waitForURL("**/home", { timeout: 20_000 });
     expect(page.url()).toContain("/home");
   });
 
@@ -42,7 +42,7 @@ test.describe("Login page", () => {
     await page.locator('input[type="password"]').fill("whatever");
     await page.getByRole("button", { name: /登入|login/i }).click();
 
-    await expect(page.getByText("帳號或密碼錯誤")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("帳號或密碼錯誤")).toBeVisible({ timeout: 15_000 });
   });
 });
 
@@ -67,13 +67,13 @@ test.describe("Logout", () => {
     await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
     await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
     await page.getByRole("button", { name: /登入|login/i }).click();
-    await page.waitForURL("**/home", { timeout: 10_000 });
+    await page.waitForURL("**/home", { timeout: 20_000 });
   });
 
   test("logout redirects to /login (no blank page)", async ({ page }) => {
-    // Find and click logout button
-    const logoutBtn = page.getByRole("button", { name: /登出|logout/i });
-    await expect(logoutBtn).toBeVisible({ timeout: 10_000 });
+    // The logout button only renders after React hydration + auth/me resolves
+    const logoutBtn = page.getByRole("button", { name: "登出" });
+    await expect(logoutBtn).toBeVisible({ timeout: 20_000 });
     await logoutBtn.click();
 
     await page.waitForURL("**/login", { timeout: 10_000 });

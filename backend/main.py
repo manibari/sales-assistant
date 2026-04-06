@@ -37,6 +37,8 @@ from backend.routers.nexus import (
     assistant as nx_assistant,
     plans as nx_plans,
     agent as nx_agent,
+    invoices as nx_invoices,
+    projects_nx as nx_projects,
 )
 
 app = FastAPI(title="Project Nexus API", version="0.2.0")
@@ -86,6 +88,8 @@ app.include_router(nx_memory.router, prefix="/api/nx/memory", tags=["Memory"])
 app.include_router(nx_assistant.router, prefix="/api/nx/assistant", tags=["Assistant"])
 app.include_router(nx_plans.router, prefix="/api/nx/plans", tags=["Plans"])
 app.include_router(nx_agent.router, prefix="/api/nx/agent", tags=["Agent"])
+app.include_router(nx_invoices.router, prefix="/api/nx/invoices", tags=["Invoices"])
+app.include_router(nx_projects.router, prefix="/api/nx/projects", tags=["Projects (Nexus)"])
 
 
 _logger = logging.getLogger(__name__)

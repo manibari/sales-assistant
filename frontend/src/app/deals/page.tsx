@@ -42,7 +42,7 @@ export default function DealsPage() {
   // Set default filter once user is known
   useEffect(() => {
     if (user && ownerFilter === "init") {
-      setOwnerFilter(user.role === "sales" ? user.id : null);
+      setOwnerFilter(user.role === "manager" ? user.id : null);
     }
   }, [user, ownerFilter]);
 

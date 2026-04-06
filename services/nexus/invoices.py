@@ -1,0 +1,104 @@
+"""Invoice service — create, read, and update invoices linked to deals."""
+
+from database.connection import get_connection, row_to_dict, rows_to_dicts
+
+VALID_STATUSES = {"draft", "issued", "paid", "cancelled"}
+
+
+def create_invoice(
+    deal_id: int,
+    client_id: int,
+    invoice_no: str,
+    amount: float,
+    created_by: int,
+    tax_rate: float = 0.05,
+    issue_date: str | None = None,
+    due_date: str | None = None,
+    notes: str | None = None,
+) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO nx_invoice
+                   (deal_id, client_id, invoice_no, amount, tax_rate,
+                    status, issue_date, due_date, notes, created_by)
+                   VALUES (%s, %s, %s, %s, %s, 'draft', %s, %s, %s, %s)
+                   RETURNING *""",
+                (deal_id, client_id, invoice_no, amount, tax_rate,
+                 issue_date, due_date, notes, created_by),
+            )
+            return row_to_dict(cur)
+
+
+def get_invoice(invoice_id: int) -> dict | None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM nx_invoice WHERE id = %s", (invoice_id,))
+            return row_to_dict(cur)
+
+
+def list_invoices(
+    deal_id: int | None = None,
+    client_id: int | None = None,
+    status: str | None = None,
+) -> list[dict]:
+    clauses = []
+    params: list = []
+    if deal_id is not None:
+        clauses.append("deal_id = %s")
+        params.append(deal_id)
+    if client_id is not None:
+        clauses.append("client_id = %s")
+        params.append(client_id)
+    if status is not None:
+        clauses.append("status = %s")
+        params.append(status)
+
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT * FROM nx_invoice {where} ORDER BY created_at DESC", params)
+            return rows_to_dicts(cur)
+
+
+def update_invoice(
+    invoice_id: int,
+    status: str | None = None,
+    paid_date: str | None = None,
+    issue_date: str | None = None,
+    due_date: str | None = None,
+    notes: str | None = None,
+) -> dict | None:
+    fields: list[str] = []
+    params: list = []
+
+    if status is not None:
+        if status not in VALID_STATUSES:
+            raise ValueError(f"Invalid status: {status}")
+        fields.append("status = %s")
+        params.append(status)
+    if paid_date is not None:
+        fields.append("paid_date = %s")
+        params.append(paid_date)
+    if issue_date is not None:
+        fields.append("issue_date = %s")
+        params.append(issue_date)
+    if due_date is not None:
+        fields.append("due_date = %s")
+        params.append(due_date)
+    if notes is not None:
+        fields.append("notes = %s")
+        params.append(notes)
+
+    if not fields:
+        return get_invoice(invoice_id)
+
+    fields.append("updated_at = NOW()")
+    params.append(invoice_id)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE nx_invoice SET {', '.join(fields)} WHERE id = %s RETURNING *",
+                params,
+            )
+            return row_to_dict(cur)

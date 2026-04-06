@@ -648,8 +648,8 @@ export const nxApi = {
       patchAPI<NxDeal>(`/deals/${id}`, data),
     advance: (id: number, stage: string) =>
       postAPI<NxDeal>(`/deals/${id}/advance?stage=${stage}`, {}),
-    close: (id: number, reason: string, notes?: string) =>
-      postAPI<NxDeal>(`/deals/${id}/close`, { reason, notes }),
+    close: (id: number, reason: string, outcome: "won" | "lost", notes?: string) =>
+      postAPI<NxDeal>(`/deals/${id}/close`, { reason, outcome, notes }),
     hold: (id: number, notes?: string) =>
       postAPI<NxDeal>(`/deals/${id}/hold`, { notes }),
     unhold: (id: number, resumeStage?: string) =>

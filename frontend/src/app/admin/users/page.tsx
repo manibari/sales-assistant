@@ -15,8 +15,8 @@ interface NxUser {
   created_at: string;
 }
 
-const ROLES = ["admin", "sales", "finance"];
-const ROLE_LABELS: Record<string, string> = { admin: "管理員", sales: "業務", finance: "財務" };
+const ROLES = ["admin", "manager", "user"];
+const ROLE_LABELS: Record<string, string> = { admin: "管理員", manager: "管理者", user: "使用者" };
 
 export default function AdminUsersPage() {
   const { user, loading } = useAuth();
@@ -27,7 +27,7 @@ export default function AdminUsersPage() {
   const [editRole, setEditRole] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "manager" });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function AdminUsersPage() {
       return;
     }
     setCreating(false);
-    setForm({ name: "", email: "", password: "", role: "sales" });
+    setForm({ name: "", email: "", password: "", role: "manager" });
     fetchUsers();
   };
 

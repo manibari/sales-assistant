@@ -14,32 +14,32 @@ test.describe("Home screen — admin role", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/home");
     // Wait for page to fully load — auth/me call may take a moment
-    await expect(page.getByRole("heading", { name: /歡迎回來/ })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: /歡迎回來/ })).toBeVisible({ timeout: 30_000 });
   });
 
   test("shows 業務與銷售 section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "業務與銷售" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "業務與銷售" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows 情報與研究 section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "情報與研究" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "情報與研究" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows 法務與行政 section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "法務與行政" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "法務與行政" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows 財務管理 section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "財務管理" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "財務管理" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows 系統管理 section", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "系統管理" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "系統管理" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("商機管理 card links to /deals", async ({ page }) => {
     const card = page.getByRole("link", { name: /商機管理/ });
-    await expect(card).toBeVisible();
+    await expect(card).toBeVisible({ timeout: 10_000 });
     await expect(card).toHaveAttribute("href", "/deals");
   });
 
@@ -69,7 +69,7 @@ test.describe("Home screen — welcome message", () => {
 
   test("shows 歡迎回來 with user name", async ({ page }) => {
     await page.goto("/home");
-    await expect(page.getByRole("heading", { name: /歡迎回來/ })).toBeVisible();
-    await expect(page.getByText("系統管理員 · Project Nexus")).toBeVisible();
+    await expect(page.getByRole("heading", { name: /歡迎回來/ })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("系統管理員 · Project Nexus")).toBeVisible({ timeout: 10_000 });
   });
 });

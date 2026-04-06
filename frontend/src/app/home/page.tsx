@@ -42,7 +42,7 @@ interface Section {
 
 const SECTIONS: Section[] = [
   {
-    id: "sales",
+    id: "manager",
     label: "業務與銷售",
     emoji: "📈",
     modules: [
@@ -52,7 +52,7 @@ const SECTIONS: Section[] = [
         href: "/dashboard",
         icon: LayoutDashboard,
         color: "bg-blue-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       {
         label: "商機管理",
@@ -60,7 +60,7 @@ const SECTIONS: Section[] = [
         href: "/deals",
         icon: TrendingUp,
         color: "bg-indigo-500",
-        roles: ["admin", "sales", "finance"],
+        roles: ["admin", "manager", "user"],
       },
       {
         label: "行事曆",
@@ -68,7 +68,7 @@ const SECTIONS: Section[] = [
         href: "/calendar",
         icon: Calendar,
         color: "bg-violet-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       {
         label: "關係網",
@@ -76,7 +76,7 @@ const SECTIONS: Section[] = [
         href: "/contacts",
         icon: BookUser,
         color: "bg-cyan-500",
-        roles: ["admin", "sales", "finance"],
+        roles: ["admin", "manager", "user"],
       },
       {
         label: "陌開工作台",
@@ -84,7 +84,7 @@ const SECTIONS: Section[] = [
         href: "/outreach",
         icon: Target,
         color: "bg-pink-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
     ],
   },
@@ -99,7 +99,7 @@ const SECTIONS: Section[] = [
         href: "/intel",
         icon: Zap,
         color: "bg-amber-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       {
         label: "知識庫",
@@ -107,7 +107,7 @@ const SECTIONS: Section[] = [
         href: "/knowledge",
         icon: Brain,
         color: "bg-emerald-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       {
         label: "補助案",
@@ -115,7 +115,7 @@ const SECTIONS: Section[] = [
         href: "/subsidies",
         icon: Landmark,
         color: "bg-teal-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       {
         label: "政府標案",
@@ -123,7 +123,7 @@ const SECTIONS: Section[] = [
         href: "/tenders",
         icon: Gavel,
         color: "bg-orange-500",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
     ],
   },
@@ -138,7 +138,7 @@ const SECTIONS: Section[] = [
         href: "/documents",
         icon: FileCheck,
         color: "bg-slate-500",
-        roles: ["admin", "sales", "finance"],
+        roles: ["admin", "manager", "user"],
       },
       {
         label: "報價單",
@@ -146,7 +146,7 @@ const SECTIONS: Section[] = [
         href: "/quotes",
         icon: Receipt,
         color: "bg-lime-600",
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
         comingSoon: true,
       },
       {
@@ -155,13 +155,13 @@ const SECTIONS: Section[] = [
         href: "/contracts",
         icon: Scale,
         color: "bg-rose-500",
-        roles: ["admin", "finance"],
+        roles: ["admin", "user"],
         comingSoon: true,
       },
     ],
   },
   {
-    id: "finance",
+    id: "user",
     label: "財務管理",
     emoji: "💰",
     modules: [
@@ -171,7 +171,7 @@ const SECTIONS: Section[] = [
         href: "/invoices",
         icon: Receipt,
         color: "bg-red-500",
-        roles: ["admin", "finance"],
+        roles: ["admin", "user"],
         comingSoon: true,
       },
       {
@@ -180,7 +180,7 @@ const SECTIONS: Section[] = [
         href: "/billing",
         icon: FileText,
         color: "bg-orange-600",
-        roles: ["admin", "finance"],
+        roles: ["admin", "user"],
         comingSoon: true,
       },
     ],
@@ -265,8 +265,8 @@ export default function HomePage() {
 
   const roleLabel: Record<string, string> = {
     admin: "系統管理員",
-    sales: "業務",
-    finance: "財務",
+    manager: "管理者",
+    user: "使用者",
   };
 
   const visibleSections = SECTIONS

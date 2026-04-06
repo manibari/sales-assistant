@@ -86,7 +86,7 @@ def list_users() -> list[dict]:
     ]
 
 
-def create_user(name: str, email: str, password: str, role: str = "sales") -> dict:
+def create_user(name: str, email: str, password: str, role: str = "manager") -> dict:
     hashed = hash_password(password)
     with get_connection() as conn:
         with conn.cursor() as cur:

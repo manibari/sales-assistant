@@ -687,7 +687,7 @@ CREATE TABLE IF NOT EXISTS nx_user (
     name          TEXT NOT NULL,
     email         TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL DEFAULT 'sales',  -- admin | sales | finance
+    role          TEXT NOT NULL DEFAULT 'manager',  -- admin | manager | user
     is_active     BOOLEAN NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMPTZ DEFAULT NOW(),
     updated_at    TIMESTAMPTZ DEFAULT NOW()
@@ -695,6 +695,44 @@ CREATE TABLE IF NOT EXISTS nx_user (
 
 ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES nx_user(id);
 ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS outcome TEXT;  -- 'won' | 'lost' | 'hold'
+
+-- Invoice management (Finance)
+CREATE TABLE IF NOT EXISTS nx_invoice (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER REFERENCES nx_deal(id),
+    client_id       INTEGER REFERENCES nx_client(id),
+    invoice_no      TEXT UNIQUE NOT NULL,
+    amount          NUMERIC NOT NULL,
+    tax_rate        NUMERIC NOT NULL DEFAULT 0.05,
+    status          TEXT NOT NULL DEFAULT 'draft',  -- draft | issued | paid | cancelled
+    issue_date      DATE,
+    due_date        DATE,
+    paid_date       DATE,
+    notes           TEXT,
+    created_by      INTEGER REFERENCES nx_user(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_invoice_deal ON nx_invoice(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_invoice_client ON nx_invoice(client_id);
+CREATE INDEX IF NOT EXISTS idx_nx_invoice_status ON nx_invoice(status);
+
+-- Delivery projects (created automatically on deal Won)
+CREATE TABLE IF NOT EXISTS nx_project (
+    id              SERIAL PRIMARY KEY,
+    deal_id         INTEGER REFERENCES nx_deal(id),
+    client_id       INTEGER REFERENCES nx_client(id),
+    name            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'planning',  -- planning | active | completed | paused
+    postsale_owner  INTEGER REFERENCES nx_user(id),
+    start_date      DATE,
+    end_date        DATE,
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_project_deal ON nx_project(deal_id);
+CREATE INDEX IF NOT EXISTS idx_nx_project_status ON nx_project(status);
 
 -- Audit log for financially significant operations
 CREATE TABLE IF NOT EXISTS nx_audit_log (

@@ -45,7 +45,8 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 
 
 def require_finance(current_user: dict = Depends(get_current_user)) -> dict:
-    if current_user["role"] not in ("admin", "finance"):
+    """Finance-equivalent: admin or user role."""
+    if current_user["role"] not in ("admin", "user"):
         raise HTTPException(status_code=403, detail="Finance or admin only")
     return current_user
 
@@ -59,11 +60,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
+
 class CreateUserRequest(BaseModel):
     name: str
     email: str
     password: str
-    role: str = "sales"
+    role: str = "manager"
 
 
 class UpdateUserRequest(BaseModel):
@@ -76,6 +83,18 @@ class UpdateUserRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.post("/register", status_code=201)
+def register(body: RegisterRequest):
+    """Public self-registration — creates a 'manager' role account."""
+    try:
+        user = create_user(body.name, body.email, body.password, role="manager")
+    except Exception as e:
+        if "unique" in str(e).lower():
+            raise HTTPException(status_code=409, detail="此電子郵件已被使用")
+        raise
+    return {"id": user["id"], "name": user["name"], "email": user["email"], "role": user["role"]}
+
 
 @router.post("/login")
 def login(body: LoginRequest, response: Response):

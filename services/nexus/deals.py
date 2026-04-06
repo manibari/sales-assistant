@@ -240,6 +240,15 @@ def close_deal(
                 ),
             )
 
+            # Won deals: auto-create a delivery project
+            if outcome == "won" and result:
+                cur.execute(
+                    """INSERT INTO nx_project (deal_id, client_id, name, status)
+                       VALUES (%s, %s, %s, 'planning')
+                       ON CONFLICT DO NOTHING""",
+                    (deal_id, result["client_id"], result["name"]),
+                )
+
             return result
 
 

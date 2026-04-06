@@ -21,8 +21,11 @@ frontend/.next/
 frontend/out/
 *.tsbuildinfo
 
-# Test screenshots
+# Test screenshots and Playwright output
 tests/screenshots/
+test-results/
+frontend/test-results/
+frontend/playwright-report/
 
 # Uploaded files
 uploads/

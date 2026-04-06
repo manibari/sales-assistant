@@ -102,9 +102,9 @@ export default function DealDetailPage() {
     }
   };
 
-  const handleClose = async (reason: string, notes?: string) => {
+  const handleClose = async (reason: string, outcome: "won" | "lost", notes?: string) => {
     try {
-      await nxApi.deals.close(dealId, reason, notes);
+      await nxApi.deals.close(dealId, reason, outcome, notes);
       setShowCloseModal(false);
       loadDeal();
     } catch (err) {
@@ -141,7 +141,7 @@ export default function DealDetailPage() {
   }
 
   const progress: MeddicProgress = deal.meddic_progress || { completed: 0, total: 6, missing: [] };
-  const isClosed = deal.status === "closed";
+  const isClosed = deal.status === "won" || deal.status === "lost";
   const isHold = deal.stage === "HOLD";
   const isInactive = isClosed || isHold;
 

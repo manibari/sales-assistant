@@ -51,7 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
         label: "控制台",
         href: "/dashboard",
         icon: LayoutDashboard,
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
     ],
   },
@@ -65,14 +65,14 @@ const NAV_SECTIONS: NavSection[] = [
         label: "行事曆",
         href: "/calendar",
         icon: Calendar,
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
       { label: "關係網", href: "/contacts", icon: BookUser },
       {
         label: "陌開工作台",
         href: "/outreach",
         icon: Target,
-        roles: ["admin", "sales"],
+        roles: ["admin", "manager"],
       },
     ],
   },
@@ -80,7 +80,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "情報與研究",
     collapsible: true,
-    roles: ["admin", "sales"],
+    roles: ["admin", "manager"],
     items: [
       { label: "新增情報", href: "/capture", icon: Plus },
       { label: "情報紀錄", href: "/intel", icon: Zap },
@@ -93,7 +93,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "法務與行政",
     collapsible: true,
-    roles: ["admin", "sales", "finance"],
+    roles: ["admin", "manager", "user"],
     items: [
       { label: "文件追蹤", href: "/documents", icon: FileCheck },
     ],
@@ -118,7 +118,7 @@ export function DesktopSidebar() {
   const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({});
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, logout } = useAuth();
-  const role = (user?.role ?? "sales") as UserRole;
+  const role = (user?.role ?? "manager") as UserRole;
 
   // Restore sidebar collapsed state from localStorage
   useEffect(() => {
@@ -267,7 +267,7 @@ export function DesktopSidebar() {
                 {user.name}
               </p>
               <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
-                {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
+                {user.role === "admin" ? "管理員" : user.role === "manager" ? "管理者" : "使用者"}
               </p>
             </div>
           )}

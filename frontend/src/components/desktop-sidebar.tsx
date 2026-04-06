@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -22,6 +22,8 @@ import {
   Home,
   Users,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type UserRole } from "@/lib/auth-context";
@@ -109,31 +111,70 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+const SIDEBAR_STORAGE_KEY = "nexus_sidebar_collapsed";
+
 export function DesktopSidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, logout } = useAuth();
   const role = (user?.role ?? "sales") as UserRole;
 
+  // Restore sidebar collapsed state from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+    if (stored === "true") setSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
   const toggleSection = (key: string) => {
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+    setSectionCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const isActiveInSection = (items: NavItem[]) =>
     items.some((item) => pathname === item.href || (item.href !== "/home" && pathname.startsWith(item.href)));
 
   return (
-    <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex-col">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-        <h1 className="text-lg font-bold text-slate-900 dark:text-slate-50 tracking-tight">
-          Project Nexus
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Strategic Console
-        </p>
+    <aside
+      className={`hidden md:flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 transition-all duration-200 ${
+        sidebarCollapsed ? "w-[60px]" : "w-64"
+      }`}
+    >
+      {/* Header */}
+      <div className={`border-b border-slate-200 dark:border-slate-700 flex items-center ${sidebarCollapsed ? "p-3 justify-center" : "p-4 justify-between"}`}>
+        {!sidebarCollapsed && (
+          <div className="overflow-hidden">
+            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-50 tracking-tight truncate">
+              Project Nexus
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Strategic Console
+            </p>
+          </div>
+        )}
+        <button
+          onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? "展開側邊欄" : "收起側邊欄"}
+          title={sidebarCollapsed ? "展開側邊欄" : "收起側邊欄"}
+          className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+        >
+          {sidebarCollapsed ? (
+            <PanelLeftOpen size={18} strokeWidth={1.5} />
+          ) : (
+            <PanelLeftClose size={18} strokeWidth={1.5} />
+          )}
+        </button>
       </div>
 
-      <nav className="flex-1 p-3 overflow-auto">
+      {/* Nav */}
+      <nav className="flex-1 p-2 overflow-auto overflow-x-hidden">
         {NAV_SECTIONS.map((section, si) => {
           // Section-level role check
           if (section.roles && !section.roles.includes(role)) return null;
@@ -146,11 +187,12 @@ export function DesktopSidebar() {
 
           const key = section.title ? `${section.title}-${si}` : `section-${si}`;
           const sectionActive = isActiveInSection(visibleItems);
-          const isCollapsed = section.collapsible && collapsed[key] && !sectionActive;
+          const isSectionCollapsed = section.collapsible && sectionCollapsed[key] && !sectionActive;
 
           return (
-            <div key={key} className={si > 0 ? "mt-3" : ""}>
-              {section.title && (
+            <div key={key} className={si > 0 ? "mt-2" : ""}>
+              {/* Section title — hidden when sidebar is collapsed */}
+              {section.title && !sidebarCollapsed && (
                 <button
                   onClick={() => section.collapsible && toggleSection(key)}
                   className={`flex items-center gap-1 w-full px-3 mb-1 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -165,7 +207,7 @@ export function DesktopSidebar() {
                 >
                   {section.collapsible && (
                     <span className="text-slate-300 dark:text-slate-600">
-                      {isCollapsed ? (
+                      {isSectionCollapsed ? (
                         <ChevronRight size={14} />
                       ) : (
                         <ChevronDown size={14} />
@@ -175,7 +217,9 @@ export function DesktopSidebar() {
                   <span>{section.title}</span>
                 </button>
               )}
-              {!isCollapsed && (
+
+              {/* Items */}
+              {(!isSectionCollapsed || sidebarCollapsed) && (
                 <div className="space-y-0.5">
                   {visibleItems.map((item) => {
                     const active =
@@ -186,34 +230,47 @@ export function DesktopSidebar() {
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-200 cursor-pointer ${
+                        title={sidebarCollapsed ? item.label : undefined}
+                        className={`flex items-center rounded-lg text-sm transition-colors duration-200 cursor-pointer ${
+                          sidebarCollapsed
+                            ? "justify-center p-2.5"
+                            : "gap-3 px-3 py-2"
+                        } ${
                           active
                             ? "bg-blue-500/10 text-blue-500 dark:text-blue-400 font-medium"
                             : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                         }`}
                       >
                         <Icon size={18} strokeWidth={1.5} />
-                        {item.label}
+                        {!sidebarCollapsed && item.label}
                       </Link>
                     );
                   })}
                 </div>
+              )}
+
+              {/* Divider between sections in collapsed mode */}
+              {sidebarCollapsed && si < NAV_SECTIONS.length - 1 && (
+                <div className="my-1 border-b border-slate-100 dark:border-slate-800" />
               )}
             </div>
           );
         })}
       </nav>
 
+      {/* User footer */}
       {user && (
-        <div className="p-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-              {user.name}
-            </p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
-              {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
-            </p>
-          </div>
+        <div className={`border-t border-slate-200 dark:border-slate-700 flex items-center ${sidebarCollapsed ? "p-2 justify-center" : "p-3 justify-between"}`}>
+          {!sidebarCollapsed && (
+            <div className="overflow-hidden">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                {user.name}
+              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
+                {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
+              </p>
+            </div>
+          )}
           <button
             onClick={logout}
             aria-label="登出"

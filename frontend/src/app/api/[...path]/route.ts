@@ -16,6 +16,7 @@ async function proxy(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
+  try {
   const { path } = await params;
   const { search } = new URL(request.url);
 
@@ -29,21 +30,40 @@ async function proxy(
   headers.delete("host");
   headers.delete("connection");
 
-  const response = await fetch(targetUrl, {
-    method: request.method,
-    headers,
-    body: isBodyMethod ? request.body : undefined,
-    // @ts-expect-error — Node.js fetch supports duplex for streaming
-    duplex: isBodyMethod ? "half" : undefined,
-  });
+  // Read body as ArrayBuffer to avoid ReadableStream issues in Next.js 15
+  let body: ArrayBuffer | undefined;
+  if (isBodyMethod) {
+    body = await request.arrayBuffer();
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(targetUrl, {
+      method: request.method,
+      headers,
+      body: body,
+    });
+  } catch (err) {
+    console.error("[proxy] fetch error:", targetUrl, err);
+    return new NextResponse("Backend unreachable", { status: 502 });
+  }
 
   const responseHeaders = new Headers(response.headers);
   responseHeaders.delete("transfer-encoding");
+  // Stream the response body back (handles cookies, binary, JSON equally)
+  const responseBody = await response.arrayBuffer();
 
-  return new NextResponse(response.body, {
+  return new NextResponse(responseBody, {
     status: response.status,
     headers: responseHeaders,
   });
+  } catch (err) {
+    console.error("[proxy] unhandled error:", err);
+    return new NextResponse(JSON.stringify({ error: String(err) }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 }
 
 export const GET = proxy;

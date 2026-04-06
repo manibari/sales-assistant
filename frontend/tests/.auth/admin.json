@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "nexus_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc4MDkzOTg1fQ._alF7XV_4--5H-QsKUjrw9N2jBLcLGn9luSsEGO-_f8",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1778093985.616544,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

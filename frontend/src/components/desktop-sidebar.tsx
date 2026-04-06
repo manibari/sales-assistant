@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Home,
   Users,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type UserRole } from "@/lib/auth-context";
@@ -111,7 +112,7 @@ const NAV_SECTIONS: NavSection[] = [
 export function DesktopSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const role = (user?.role ?? "sales") as UserRole;
 
   const toggleSection = (key: string) => {
@@ -204,13 +205,23 @@ export function DesktopSidebar() {
       </nav>
 
       {user && (
-        <div className="p-3 border-t border-slate-200 dark:border-slate-700">
-          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-            {user.name}
-          </p>
-          <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
-            {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
-          </p>
+        <div className="p-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+              {user.name}
+            </p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
+              {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
+            </p>
+          </div>
+          <button
+            onClick={logout}
+            aria-label="登出"
+            title="登出"
+            className="p-1.5 rounded-lg text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <LogOut size={15} strokeWidth={1.5} />
+          </button>
         </div>
       )}
     </aside>

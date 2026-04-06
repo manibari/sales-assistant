@@ -9,7 +9,6 @@ Public API:
     get_summary_by_client(client_id) → dict  # {deal_count, total_amount, weighted_amount}
 """
 
-import streamlit as st
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
@@ -44,7 +43,6 @@ def create(
             return cur.fetchone()[0]
 
 
-@st.cache_data
 def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:

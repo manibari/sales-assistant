@@ -2,7 +2,6 @@
 S31: Refactored connection management to prevent nested connections.
 """
 
-import streamlit as st
 from constants import PRESALE_STATUS_CODES, POSTSALE_STATUS_CODES, VALID_TRANSITIONS
 from database.connection import (
     get_connection,
@@ -105,7 +104,6 @@ def find_or_create_project(
             return new_project_id
 
 
-@st.cache_data
 def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:

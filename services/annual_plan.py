@@ -8,7 +8,6 @@ Public API:
     delete(product_id) → None
 """
 
-import streamlit as st
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
 
@@ -47,7 +46,6 @@ def create(
             )
 
 
-@st.cache_data
 def get_all():
     with get_connection() as conn:
         with conn.cursor() as cur:

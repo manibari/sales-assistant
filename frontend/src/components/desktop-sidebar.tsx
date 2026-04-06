@@ -19,8 +19,11 @@ import {
   Gavel,
   ChevronDown,
   ChevronRight,
+  Home,
+  Users,
   type LucideIcon,
 } from "lucide-react";
+import { useAuth, type UserRole } from "@/lib/auth-context";
 
 interface NavItem {
   label: string;
@@ -31,18 +34,22 @@ interface NavItem {
 interface NavSection {
   title?: string;
   collapsible?: boolean;
+  roles?: UserRole[];
   items: NavItem[];
 }
 
 const NAV_SECTIONS: NavSection[] = [
   {
     items: [
+      { label: "主畫面", href: "/home", icon: Home },
       { label: "控制台", href: "/dashboard", icon: LayoutDashboard },
     ],
+    roles: ["admin", "sales"],
   },
   {
     title: "情資",
     collapsible: true,
+    roles: ["admin", "sales"],
     items: [
       { label: "新增情報", href: "/capture", icon: Plus },
       { label: "情報紀錄", href: "/intel", icon: Zap },
@@ -52,6 +59,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "商機開發",
     collapsible: true,
+    roles: ["admin", "sales"],
     items: [
       { label: "陌開工作台", href: "/outreach", icon: Target },
       { label: "補助案", href: "/subsidies", icon: Landmark },
@@ -61,6 +69,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "銷售",
     collapsible: true,
+    roles: ["admin", "sales"],
     items: [
       { label: "商機 Pipeline", href: "/deals", icon: TrendingUp },
       { label: "行事曆", href: "/calendar", icon: Calendar },
@@ -71,9 +80,19 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "系統",
     collapsible: true,
+    roles: ["admin"],
     items: [
+      { label: "使用者管理", href: "/admin/users", icon: Users },
       { label: "搜尋", href: "/search", icon: Search },
       { label: "設定", href: "/settings", icon: Settings },
+    ],
+  },
+  {
+    title: "系統",
+    collapsible: true,
+    roles: ["sales"],
+    items: [
+      { label: "搜尋", href: "/search", icon: Search },
     ],
   },
 ];
@@ -81,14 +100,19 @@ const NAV_SECTIONS: NavSection[] = [
 export function DesktopSidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const { user } = useAuth();
+  const role = (user?.role ?? "sales") as UserRole;
 
   const toggleSection = (title: string) => {
     setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
-  // Auto-expand the section containing the active page
   const isActiveInSection = (section: NavSection) =>
     section.items.some((item) => pathname.startsWith(item.href));
+
+  const visibleSections = NAV_SECTIONS.filter(
+    (s) => !s.roles || s.roles.includes(role)
+  );
 
   return (
     <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex-col">
@@ -101,8 +125,8 @@ export function DesktopSidebar() {
         </p>
       </div>
       <nav className="flex-1 p-3 overflow-auto">
-        {NAV_SECTIONS.map((section, si) => {
-          const key = section.title || `section-${si}`;
+        {visibleSections.map((section, si) => {
+          const key = section.title ? `${section.title}-${si}` : `section-${si}`;
           const isCollapsed = section.collapsible && collapsed[key] && !isActiveInSection(section);
 
           return (
@@ -129,7 +153,7 @@ export function DesktopSidebar() {
               {!isCollapsed && (
                 <div className="space-y-0.5">
                   {section.items.map((item) => {
-                    const active = pathname.startsWith(item.href);
+                    const active = pathname === item.href || (item.href !== "/home" && pathname.startsWith(item.href));
                     const Icon = item.icon;
                     return (
                       <Link
@@ -152,6 +176,16 @@ export function DesktopSidebar() {
           );
         })}
       </nav>
+      {user && (
+        <div className="p-3 border-t border-slate-200 dark:border-slate-700">
+          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            {user.name}
+          </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-600 capitalize">
+            {user.role === "admin" ? "管理員" : user.role === "sales" ? "業務" : "財務"}
+          </p>
+        </div>
+      )}
     </aside>
   );
 }

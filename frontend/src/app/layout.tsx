@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { BottomNav } from "@/components/bottom-nav";
 import { DesktopSidebar } from "@/components/desktop-sidebar";
 import { AssistantChat } from "@/components/assistant-chat";
+import { AuthProvider } from "@/lib/auth-context";
 
 export const metadata: Metadata = {
   title: "Project Nexus",
@@ -25,16 +26,18 @@ export default function RootLayout({
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans antialiased">
         <ThemeProvider>
-          <div className="flex h-screen">
-            <DesktopSidebar />
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <main className="flex-1 overflow-auto pb-20 md:pb-0">
-                {children}
-              </main>
+          <AuthProvider>
+            <div className="flex h-screen">
+              <DesktopSidebar />
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <main className="flex-1 overflow-auto pb-20 md:pb-0">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
-          <BottomNav />
-          <AssistantChat />
+            <BottomNav />
+            <AssistantChat />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

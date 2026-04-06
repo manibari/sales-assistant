@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database.connection import init_db
 from backend.routers import crm, projects, network
 from backend.routers.nexus import (
+    auth as nx_auth,
     clients as nx_clients,
     partners as nx_partners,
     contacts as nx_contacts,
@@ -54,6 +55,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Auth
+app.include_router(nx_auth.router, prefix="/api/nx/auth", tags=["Auth"])
 
 # Legacy SPMS routers
 app.include_router(crm.router, prefix="/api/crm", tags=["CRM (Legacy)"])

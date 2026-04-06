@@ -681,6 +681,20 @@ CREATE TABLE IF NOT EXISTS nx_graph_edge (
 CREATE INDEX IF NOT EXISTS idx_graph_from ON nx_graph_edge(from_type, from_id);
 CREATE INDEX IF NOT EXISTS idx_graph_to   ON nx_graph_edge(to_type, to_id);
 
+-- S41: Auth module — user table + deal owner
+CREATE TABLE IF NOT EXISTS nx_user (
+    id            SERIAL PRIMARY KEY,
+    name          TEXT NOT NULL,
+    email         TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'sales',  -- admin | sales | finance
+    is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES nx_user(id);
+
 -- S40: Add embedding columns (JSONB for float array storage)
 ALTER TABLE nx_intel ADD COLUMN IF NOT EXISTS embedding JSONB;
 

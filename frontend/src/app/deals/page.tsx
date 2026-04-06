@@ -6,8 +6,9 @@ import { nxApi, type NxDeal } from "@/lib/nexus-api";
 import { STAGE_LABELS } from "@/lib/deal-constants";
 import { DealCard } from "@/components/deal-card";
 import { TimelineView } from "@/components/deal-timeline";
-import { ChevronDown, ChevronRight, Plus, Search, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Search, X, User } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/lib/auth-context";
 
 const VIEW_LABELS: Record<string, string> = {
   urgency: "緊急度",
@@ -17,21 +18,44 @@ const VIEW_LABELS: Record<string, string> = {
 
 const VIEW_ORDER: Array<"urgency" | "stage" | "timeline"> = ["urgency", "stage", "timeline"];
 
+interface DealUser { id: number; name: string; role: string; }
+
 export default function DealsPage() {
+  const { user } = useAuth();
   const [deals, setDeals] = useState<NxDeal[]>([]);
   const [view, setView] = useState<"urgency" | "stage" | "timeline">("urgency");
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [users, setUsers] = useState<DealUser[]>([]);
+  // admin defaults to "全部" (null), sales defaults to own id
+  const [ownerFilter, setOwnerFilter] = useState<number | null | "init">("init");
 
+  // Load user list (for owner dropdown) — admin only
   useEffect(() => {
+    if (user?.role === "admin") {
+      nxApi.deals.listUsers().then(setUsers).catch(() => {});
+    }
+  }, [user]);
+
+  // Set default filter once user is known
+  useEffect(() => {
+    if (user && ownerFilter === "init") {
+      setOwnerFilter(user.role === "sales" ? user.id : null);
+    }
+  }, [user, ownerFilter]);
+
+  // Fetch deals whenever view or ownerFilter changes (skip while init)
+  useEffect(() => {
+    if (ownerFilter === "init") return;
+    setLoading(true);
     nxApi.deals
-      .list(view)
+      .list(view, ownerFilter)
       .then(setDeals)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [view]);
+  }, [view, ownerFilter]);
 
   const toggleCollapse = (stage: string) => {
     setCollapsed((prev) => ({ ...prev, [stage]: !prev[stage] }));
@@ -57,9 +81,28 @@ export default function DealsPage() {
 
   const stageOrder = ["L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "LOST", "HOLD"];
 
+  const ownerOptions = [
+    { id: null, name: "全部業務" },
+    ...users.map((u) => ({ id: u.id, name: u.name })),
+  ];
+
   return (
     <div className="flex flex-col h-full">
       <TopBar title="商機 Pipeline">
+        {user?.role === "admin" && users.length > 0 && (
+          <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+            <User size={13} className="text-slate-400 shrink-0" />
+            <select
+              value={ownerFilter ?? ""}
+              onChange={(e) => setOwnerFilter(e.target.value === "" ? null : Number(e.target.value))}
+              className="text-xs font-medium bg-transparent text-slate-600 dark:text-slate-300 focus:outline-none cursor-pointer"
+            >
+              {ownerOptions.map((o) => (
+                <option key={o.id ?? "all"} value={o.id ?? ""}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <button
           onClick={() => { setShowSearch((v) => !v); if (showSearch) setSearch(""); }}
           className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"

@@ -106,6 +106,8 @@ export interface NxDeal {
   client_id: number;
   client_name?: string;
   client_industry?: string;
+  owner_id?: number | null;
+  owner_name?: string | null;
   stage: string;
   budget_range: string | null;
   budget_amount: number | null;
@@ -630,12 +632,17 @@ export const nxApi = {
     },
   },
   deals: {
-    list: (view?: string) => fetchAPI<NxDeal[]>(`/deals/?view=${view || "urgency"}`),
+    list: (view?: string, ownerId?: number | null) => {
+      const params = new URLSearchParams({ view: view || "urgency" });
+      if (ownerId != null) params.set("owner_id", String(ownerId));
+      return fetchAPI<NxDeal[]>(`/deals/?${params}`);
+    },
     listByClient: (clientId: number) => fetchAPI<NxDeal[]>(`/deals/?client_id=${clientId}`),
     listByPartner: (partnerId: number) => fetchAPI<NxDeal[]>(`/deals/?partner_id=${partnerId}`),
     needsPush: (days?: number) => fetchAPI<NxDeal[]>(`/deals/needs-push${days ? `?threshold_days=${days}` : ""}`),
+    listUsers: () => fetchAPI<{ id: number; name: string; role: string }[]>("/deals/users"),
     get: (id: number) => fetchAPI<NxDeal>(`/deals/${id}`),
-    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string; budget_amount?: number; budget_year?: number }) =>
+    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string; budget_amount?: number; budget_year?: number; owner_id?: number }) =>
       postAPI<NxDeal>("/deals/", data),
     update: (id: number, data: Partial<NxDeal>) =>
       patchAPI<NxDeal>(`/deals/${id}`, data),

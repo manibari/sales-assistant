@@ -46,6 +46,7 @@ class DealCreate(BaseModel):
     timeline: str | None = None
     budget_amount: float | None = None
     budget_year: int | None = None
+    owner_id: int | None = None
 
 
 class DealUpdate(BaseModel):
@@ -56,6 +57,7 @@ class DealUpdate(BaseModel):
     budget_amount: float | None = None
     budget_year: int | None = None
     created_at: str | None = None
+    owner_id: int | None = None
 
 
 class DealClose(BaseModel):
@@ -80,20 +82,28 @@ class DealIntelLink(BaseModel):
     intel_id: int
 
 
+@router.get("/users")
+def list_deal_users():
+    """Return all active users for owner filter dropdown."""
+    from services.nexus.auth import list_users
+    return [u for u in list_users() if u["is_active"]]
+
+
 @router.get("/")
 def list_deals(
     status: str = "active",
     view: str = "urgency",
     client_id: int | None = None,
     partner_id: int | None = None,
+    owner_id: int | None = None,
 ):
     if client_id:
         return get_deals_by_client(client_id)
     if partner_id:
         return get_deals_by_partner(partner_id)
     if view == "urgency":
-        return get_deals_by_urgency()
-    return get_all_deals(status)
+        return get_deals_by_urgency(owner_id=owner_id)
+    return get_all_deals(status, owner_id=owner_id)
 
 
 @router.get("/needs-push")

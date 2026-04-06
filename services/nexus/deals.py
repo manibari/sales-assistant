@@ -22,13 +22,14 @@ def create_deal(
     timeline: str | None = None,
     budget_amount: float | None = None,
     budget_year: int | None = None,
+    owner_id: int | None = None,
 ) -> dict:
     meddic_init = json.dumps({k: None for k in MEDDIC_KEYS})
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year, owner_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (
                     name,
@@ -38,6 +39,7 @@ def create_deal(
                     meddic_init,
                     budget_amount,
                     budget_year,
+                    owner_id,
                 ),
             )
             deal = row_to_dict(cur)
@@ -60,40 +62,57 @@ def get_deal(deal_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT d.*, c.name AS client_name, c.industry AS client_industry
+                """SELECT d.*, c.name AS client_name, c.industry AS client_industry,
+                          u.name AS owner_name
                    FROM nx_deal d
                    JOIN nx_client c ON d.client_id = c.id
+                   LEFT JOIN nx_user u ON d.owner_id = u.id
                    WHERE d.id = %s""",
                 (deal_id,),
             )
             return row_to_dict(cur)
 
 
-def get_all_deals(status: str = "active") -> list[dict]:
+def get_all_deals(status: str = "active", owner_id: int | None = None) -> list[dict]:
+    where = "d.status = %s"
+    params: list = [status]
+    if owner_id is not None:
+        where += " AND d.owner_id = %s"
+        params.append(owner_id)
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT d.*, c.name AS client_name, c.industry AS client_industry
-                   FROM nx_deal d
-                   JOIN nx_client c ON d.client_id = c.id
-                   WHERE d.status = %s
-                   ORDER BY d.last_activity_at ASC""",
-                (status,),
+                f"""SELECT d.*, c.name AS client_name, c.industry AS client_industry,
+                           u.name AS owner_name
+                    FROM nx_deal d
+                    JOIN nx_client c ON d.client_id = c.id
+                    LEFT JOIN nx_user u ON d.owner_id = u.id
+                    WHERE {where}
+                    ORDER BY d.last_activity_at ASC""",
+                params,
             )
             return rows_to_dicts(cur)
 
 
-def get_deals_by_urgency() -> list[dict]:
+def get_deals_by_urgency(owner_id: int | None = None) -> list[dict]:
     """Get active deals sorted by idle days (most idle first)."""
+    where = "d.status = 'active'"
+    params: list = []
+    if owner_id is not None:
+        where += " AND d.owner_id = %s"
+        params.append(owner_id)
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT d.*, c.name AS client_name, c.industry AS client_industry,
-                          EXTRACT(DAY FROM NOW() - d.last_activity_at)::INTEGER AS idle_days
-                   FROM nx_deal d
-                   JOIN nx_client c ON d.client_id = c.id
-                   WHERE d.status = 'active'
-                   ORDER BY idle_days DESC"""
+                f"""SELECT d.*, c.name AS client_name, c.industry AS client_industry,
+                           u.name AS owner_name,
+                           EXTRACT(DAY FROM NOW() - d.last_activity_at)::INTEGER AS idle_days
+                    FROM nx_deal d
+                    JOIN nx_client c ON d.client_id = c.id
+                    LEFT JOIN nx_user u ON d.owner_id = u.id
+                    WHERE {where}
+                    ORDER BY idle_days DESC""",
+                params if params else None,
             )
             return rows_to_dicts(cur)
 
@@ -130,6 +149,7 @@ def update_deal(deal_id: int, **fields) -> dict | None:
         "budget_amount",
         "budget_year",
         "created_at",
+        "owner_id",
     }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:

@@ -9,8 +9,9 @@ from pathlib import Path
 # Add project root to sys.path so we can import services/database
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from database.connection import init_db
 from backend.routers import crm, projects, network
@@ -37,8 +38,26 @@ from backend.routers.nexus import (
     agent as nx_agent,
 )
 
-app = FastAPI(title="Project Nexus API", version="0.2.0")
+app = FastAPI(title="Project Nexus API", version="0.2.0", redirect_slashes=False)
 
+
+class TrailingSlashMiddleware(BaseHTTPMiddleware):
+    """Normalize paths to always have trailing slash without HTTP redirect.
+
+    Next.js rewrites strip trailing slashes before proxying. FastAPI routes are
+    defined with trailing slashes, so this middleware adds the slash in-place
+    to avoid 404s when the proxy omits it.
+    """
+    async def dispatch(self, request: Request, call_next):
+        if not request.url.path.endswith("/"):
+            scope = request.scope
+            scope["path"] = scope["path"] + "/"
+            if scope.get("raw_path"):
+                scope["raw_path"] = scope["raw_path"] + b"/"
+        return await call_next(request)
+
+
+app.add_middleware(TrailingSlashMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

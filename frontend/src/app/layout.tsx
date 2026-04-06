@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { BottomNav } from "@/components/bottom-nav";
-import { DesktopSidebar } from "@/components/desktop-sidebar";
-import { AssistantChat } from "@/components/assistant-chat";
-import { AuthProvider } from "@/lib/auth-context";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "Project Nexus",
@@ -26,18 +23,7 @@ export default function RootLayout({
       </head>
       <body className="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-sans antialiased">
         <ThemeProvider>
-          <AuthProvider>
-            <div className="flex h-screen">
-              <DesktopSidebar />
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <main className="flex-1 overflow-auto pb-20 md:pb-0">
-                  {children}
-                </main>
-              </div>
-            </div>
-            <BottomNav />
-            <AssistantChat />
-          </AuthProvider>
+          <AppShell>{children}</AppShell>
         </ThemeProvider>
       </body>
     </html>

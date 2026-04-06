@@ -121,6 +121,11 @@ def logout(response: Response):
     return {"ok": True}
 
 
+class UpdateMeRequest(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = None
+
+
 @router.get("/me")
 def me(nexus_token: Optional[str] = Cookie(default=None)):
     if not nexus_token:
@@ -132,6 +137,19 @@ def me(nexus_token: Optional[str] = Cookie(default=None)):
     if not user or not user["is_active"]:
         raise HTTPException(status_code=401, detail="User not found or inactive")
     return user
+
+
+@router.patch("/me")
+def update_me(body: UpdateMeRequest, current_user: dict = Depends(get_current_user)):
+    """Allow any authenticated user to update their own name or password."""
+    result = update_user(
+        current_user["id"],
+        name=body.name,
+        password=body.password,
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="User not found")
+    return result
 
 
 @router.get("/users")

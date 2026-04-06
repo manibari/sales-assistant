@@ -7,9 +7,11 @@ import { SettingsTabAI } from "@/components/settings/settings-tab-ai";
 import { SettingsTabTelegram } from "@/components/settings/settings-tab-telegram";
 import { SettingsTabGDrive } from "@/components/settings/settings-tab-gdrive";
 import { SettingsTabNotify } from "@/components/settings/settings-tab-notify";
-import { Mail, Brain, MessageCircle, HardDrive, Bell } from "lucide-react";
+import { SettingsTabAccount } from "@/components/settings/settings-tab-account";
+import { Mail, Brain, MessageCircle, HardDrive, Bell, UserCircle } from "lucide-react";
 
 const TABS = [
+  { id: "account", label: "我的帳號", icon: UserCircle },
   { id: "email", label: "郵件 / Outlook", icon: Mail },
   { id: "ai", label: "AI 引擎", icon: Brain },
   { id: "telegram", label: "Telegram", icon: MessageCircle },
@@ -20,7 +22,7 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("email");
+  const [activeTab, setActiveTab] = useState<TabId>("account");
 
   return (
     <div>
@@ -50,6 +52,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Tab content */}
+        {activeTab === "account" && <SettingsTabAccount />}
         {activeTab === "email" && <SettingsTabEmail />}
         {activeTab === "ai" && <SettingsTabAI />}
         {activeTab === "telegram" && <SettingsTabTelegram />}

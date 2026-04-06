@@ -6,8 +6,10 @@ const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8002";
  * Catch-all API proxy route.
  *
  * Forwards /api/* requests to the FastAPI backend, always with a trailing
- * slash before the query string (FastAPI collection routes require it, and
- * Next.js strips it during request normalization).
+ * slash before the query string (FastAPI collection routes require it).
+ *
+ * Body is buffered (not streamed) so that FastAPI's automatic redirect_slashes
+ * 307 redirect can be followed without losing the request body.
  */
 async function proxy(
   request: NextRequest,
@@ -26,12 +28,15 @@ async function proxy(
 
   const isBodyMethod = ["POST", "PUT", "PATCH"].includes(request.method);
 
+  // Buffer body as ArrayBuffer — this allows Node fetch to resend the body
+  // when FastAPI's redirect_slashes issues a 307 redirect (streaming body
+  // cannot be rewound and resent, causing the request to hang).
+  const body = isBodyMethod ? await request.arrayBuffer() : undefined;
+
   const response = await fetch(targetUrl, {
     method: request.method,
     headers,
-    body: isBodyMethod ? request.body : undefined,
-    // @ts-expect-error — Node.js fetch supports duplex for streaming
-    duplex: isBodyMethod ? "half" : undefined,
+    body,
   });
 
   const responseHeaders = new Headers(response.headers);

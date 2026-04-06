@@ -11,7 +11,7 @@ tags:
 - C28 電力設備製造業
 title: 璨揚企業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 璨揚企業股份有限公司

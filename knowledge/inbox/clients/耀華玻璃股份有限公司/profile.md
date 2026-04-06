@@ -11,7 +11,7 @@ tags:
 - C23 非金屬礦物製品製造業
 title: 耀華玻璃股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 耀華玻璃股份有限公司

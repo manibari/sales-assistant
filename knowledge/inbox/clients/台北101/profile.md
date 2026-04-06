@@ -11,7 +11,7 @@ tags:
 - L68 不動產業
 title: 台北101 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 台北101

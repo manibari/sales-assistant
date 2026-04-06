@@ -11,7 +11,7 @@ tags:
 - C24 基本金屬製造業
 title: 華新麗華股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 華新麗華股份有限公司

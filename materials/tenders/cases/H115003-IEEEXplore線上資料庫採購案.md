@@ -9,7 +9,7 @@ job_number: H115003
 opening_date: '2026-03-31'
 scraped_date: '2026-03-24'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=A.9.6K&job_number=H115003
-status: active
+status: archived
 tags:
 - 資料庫
 title: IEEE Xplore線上資料庫採購案
@@ -17,6 +17,7 @@ type: 公開取得報價單或企劃書
 unit_id: A.9.6K
 unit_name: 國立臺北商業大學
 ---
+
 
 # IEEE Xplore線上資料庫採購案
 

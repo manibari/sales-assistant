@@ -11,7 +11,7 @@ tags:
 - O84 公共行政及國防
 title: 中華民國空軍 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 中華民國空軍

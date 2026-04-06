@@ -11,7 +11,7 @@ tags:
 - C24 基本金屬製造業
 title: 日照鋼鐵控股集團有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 日照鋼鐵控股集團有限公司

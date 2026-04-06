@@ -11,7 +11,7 @@ tags:
 - C17 石油及煤製品製造業
 title: 台塑石化股份有限公司公用部 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 台塑石化股份有限公司公用部

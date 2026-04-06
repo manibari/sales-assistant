@@ -26,3 +26,5 @@ httpx
 pre-commit
 black
 ruff
+opencc-python-reimplemented
+python-multipart

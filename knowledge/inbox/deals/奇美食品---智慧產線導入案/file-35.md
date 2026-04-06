@@ -9,19 +9,19 @@ source_id: 35
 source_type: nx_knowledge
 status: inbox
 tags:
-- 效益分析
-- 流程管理
+- Chimes AI
+- IoT
+- 量產型企業
 - 能源節約
-- 工業技術
-- 工業數據化
-- 品質穩定
-- 市場調查
-- 異常檢測
-- 生產優化
+- 效能提升
 - 設備維修
+- 行政規範
+- 跨域溝通
+- 智慧化管理
+- AutoML
 title: 文件摘要：食品業 AI 應用.pdf
 type: file-summary
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 食品業 AI 應用.pdf

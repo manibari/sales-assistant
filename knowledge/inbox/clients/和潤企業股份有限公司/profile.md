@@ -11,7 +11,7 @@ tags:
 - K64 金融服務業
 title: 和潤企業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 和潤企業股份有限公司

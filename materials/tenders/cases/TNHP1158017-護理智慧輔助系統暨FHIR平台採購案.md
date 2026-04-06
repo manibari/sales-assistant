@@ -9,7 +9,7 @@ job_number: TNHP1158017
 opening_date: null
 scraped_date: '2026-03-24'
 source_url: https://pcc-api.openfun.app/api/tender?unit_id=A.21.100.42&job_number=TNHP1158017
-status: active
+status: archived
 tags:
 - 平台
 - 醫療
@@ -18,6 +18,7 @@ type: 公開招標公告
 unit_id: A.21.100.42
 unit_name: 衛生福利部臺南醫院
 ---
+
 
 # 「護理智慧輔助系統暨FHIR平台」採購案
 

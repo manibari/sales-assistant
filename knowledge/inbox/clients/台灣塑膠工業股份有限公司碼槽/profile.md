@@ -11,7 +11,7 @@ tags:
 - C18 化學材料製造業
 title: 台灣塑膠工業股份有限公司碼槽 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 台灣塑膠工業股份有限公司碼槽

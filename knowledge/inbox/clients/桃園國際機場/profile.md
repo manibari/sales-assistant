@@ -11,7 +11,7 @@ tags:
 - H51 航空運輸業
 title: 桃園國際機場 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 桃園國際機場

@@ -11,7 +11,7 @@ tags:
 - D01 電力供應業
 title: 大園汽電共生股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 大園汽電共生股份有限公司

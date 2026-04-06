@@ -9,11 +9,11 @@ source_id: 12
 source_type: nx_deal
 status: inbox
 tags:
-- L1
 - active
+- L1
 title: 金軒揚 - 產線升級導入案
 type: deal-overview
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 金軒揚 - 產線升級導入案

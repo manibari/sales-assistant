@@ -11,7 +11,7 @@ tags:
 - C15 紙漿紙製品製造業
 title: 廣源造紙股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 廣源造紙股份有限公司

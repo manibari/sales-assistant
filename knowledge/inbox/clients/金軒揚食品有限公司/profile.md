@@ -11,7 +11,7 @@ tags:
 - C08 食品製造業
 title: 金軒揚食品有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 金軒揚食品有限公司

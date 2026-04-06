@@ -10,7 +10,7 @@ status: inbox
 tags: []
 title: 智瀚印刷科技 — 客戶情蒐報告
 type: intel
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 智瀚印刷科技 — 客戶情蒐報告

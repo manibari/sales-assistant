@@ -8,7 +8,7 @@ status: inbox
 tags: []
 title: '情報 #12'
 type: intel
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 情報 #12

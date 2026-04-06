@@ -29,3 +29,4 @@ uploads/
 .venv/
 streamlit.log
 *.log
+.gstack/

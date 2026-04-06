@@ -11,7 +11,7 @@ tags:
 - M72 研究發展服務業
 title: SBIR 聯盟 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # SBIR 聯盟

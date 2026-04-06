@@ -11,7 +11,7 @@ tags:
 - C21 橡膠製品製造業
 title: 建大工業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 建大工業股份有限公司

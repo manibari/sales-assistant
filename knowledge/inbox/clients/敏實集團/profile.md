@@ -11,7 +11,7 @@ tags:
 - C30 汽車及零件製造業
 title: 敏實集團 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 敏實集團

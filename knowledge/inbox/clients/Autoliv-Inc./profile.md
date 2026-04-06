@@ -11,7 +11,7 @@ tags:
 - C27 電腦電子光學製品製造業
 title: Autoliv Inc. — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # Autoliv Inc.

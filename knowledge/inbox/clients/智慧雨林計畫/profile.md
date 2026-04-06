@@ -11,7 +11,7 @@ tags:
 - O84 公共行政
 title: 智慧雨林計畫 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 智慧雨林計畫

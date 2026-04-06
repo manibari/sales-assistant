@@ -11,7 +11,7 @@ tags:
 - C18 化學材料製造業
 title: 中台興化工股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 中台興化工股份有限公司

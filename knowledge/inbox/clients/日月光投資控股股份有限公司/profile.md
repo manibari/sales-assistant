@@ -11,7 +11,7 @@ tags:
 - C26 電子零組件製造業
 title: 日月光投資控股股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 日月光投資控股股份有限公司

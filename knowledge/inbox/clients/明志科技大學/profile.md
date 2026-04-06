@@ -11,7 +11,7 @@ tags:
 - P85 教育業
 title: 明志科技大學 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 明志科技大學

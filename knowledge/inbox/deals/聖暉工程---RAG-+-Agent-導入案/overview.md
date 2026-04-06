@@ -9,11 +9,11 @@ source_id: 15
 source_type: nx_deal
 status: inbox
 tags:
-- L1
 - active
+- L1
 title: 聖暉工程 - RAG + Agent 導入案
 type: deal-overview
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 聖暉工程 - RAG + Agent 導入案

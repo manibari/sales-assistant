@@ -9,11 +9,11 @@ source_id: 14
 source_type: nx_deal
 status: inbox
 tags:
-- closed
 - LOST
+- closed
 title: 穩德 - 智慧產線導入案
 type: deal-overview
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 穩德 - 智慧產線導入案

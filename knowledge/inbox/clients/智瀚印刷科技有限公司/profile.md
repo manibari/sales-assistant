@@ -11,7 +11,7 @@ tags:
 - C16 印刷及資料儲存媒體複製業
 title: 智瀚印刷科技有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 智瀚印刷科技有限公司

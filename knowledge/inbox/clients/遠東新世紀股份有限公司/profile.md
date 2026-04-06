@@ -11,7 +11,7 @@ tags:
 - C11 紡織業
 title: 遠東新世紀股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 遠東新世紀股份有限公司

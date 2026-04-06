@@ -11,7 +11,7 @@ tags:
 - C26 電子零組件製造業
 title: 同欣電子工業股份有限公司 — 客戶概覽
 type: client-profile
-updated: '2026-04-01'
+updated: '2026-04-06'
 ---
 
 # 同欣電子工業股份有限公司

@@ -3,9 +3,10 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from backend.routers.nexus.auth import get_current_user
 from services.ai_provider import check_ai_available, generate_ai_response
 from services.nexus.deals import (
     create_deal,
@@ -62,6 +63,7 @@ class DealUpdate(BaseModel):
 
 class DealClose(BaseModel):
     reason: str
+    outcome: str  # 'won' | 'lost'
     notes: str | None = None
 
 
@@ -93,6 +95,7 @@ def list_deal_users():
 def list_deals(
     status: str = "active",
     view: str = "urgency",
+    _user: dict = Depends(get_current_user),
     client_id: int | None = None,
     partner_id: int | None = None,
     owner_id: int | None = None,
@@ -126,7 +129,7 @@ def read_deal(deal_id: int):
 
 
 @router.post("/", status_code=201)
-def create(body: DealCreate):
+def create(body: DealCreate, _user: dict = Depends(get_current_user)):
     return create_deal(**body.model_dump())
 
 
@@ -151,8 +154,13 @@ def advance(deal_id: int, stage: str):
 
 
 @router.post("/{deal_id}/close")
-def close(deal_id: int, body: DealClose):
-    result = close_deal(deal_id, body.reason, body.notes)
+def close(deal_id: int, body: DealClose, current_user: dict = Depends(get_current_user)):
+    if body.outcome not in ("won", "lost"):
+        raise HTTPException(400, "outcome must be 'won' or 'lost'")
+    try:
+        result = close_deal(deal_id, body.reason, body.outcome, body.notes, current_user["id"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
     if not result:
         raise HTTPException(404, "Deal not found")
     return result

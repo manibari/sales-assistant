@@ -694,6 +694,21 @@ CREATE TABLE IF NOT EXISTS nx_user (
 );
 
 ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES nx_user(id);
+ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS outcome TEXT;  -- 'won' | 'lost' | 'hold'
+
+-- Audit log for financially significant operations
+CREATE TABLE IF NOT EXISTS nx_audit_log (
+    id          SERIAL PRIMARY KEY,
+    table_name  TEXT NOT NULL,
+    record_id   INTEGER NOT NULL,
+    action      TEXT NOT NULL,  -- 'close_won' | 'close_lost' | 'hold' | 'budget_update' | 'sign'
+    changed_by  INTEGER REFERENCES nx_user(id),
+    old_values  JSONB,
+    new_values  JSONB,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_nx_audit_log_record ON nx_audit_log(table_name, record_id);
+CREATE INDEX IF NOT EXISTS idx_nx_audit_log_user ON nx_audit_log(changed_by);
 
 -- S40: Add embedding columns (JSONB for float array storage)
 ALTER TABLE nx_intel ADD COLUMN IF NOT EXISTS embedding JSONB;

@@ -97,11 +97,13 @@ class TestUserManagement:
 
     def test_create_and_delete_user_lifecycle(self, admin_session):
         # Create
+        import time
+        unique_email = f"test_qa_{int(time.time())}@nexus.local"
         resp = admin_session.post(
             f"{BASE_URL}/api/nx/auth/users",
             json={
                 "name": "Test User",
-                "email": "test_qa_user@nexus.local",
+                "email": unique_email,
                 "password": "testpass123",
                 "role": "sales",
             },
@@ -115,7 +117,7 @@ class TestUserManagement:
             f"{BASE_URL}/api/nx/auth/users",
             json={
                 "name": "Duplicate",
-                "email": "test_qa_user@nexus.local",
+                "email": unique_email,
                 "password": "testpass123",
                 "role": "sales",
             },

@@ -186,16 +186,61 @@ def advance_stage(deal_id: int, new_stage: str) -> dict | None:
             return row_to_dict(cur)
 
 
-def close_deal(deal_id: int, reason: str, notes: str | None = None) -> dict | None:
+def close_deal(
+    deal_id: int,
+    reason: str,
+    outcome: str,  # 'won' | 'lost'
+    notes: str | None = None,
+    closed_by: int | None = None,
+) -> dict | None:
+    """Close a deal.
+
+    Won deals keep stage=L7 and status='won'.
+    Lost deals set stage='LOST' and status='lost'.
+    """
+    if outcome not in ("won", "lost"):
+        raise ValueError(f"outcome must be 'won' or 'lost', got {outcome!r}")
+
+    if outcome == "won":
+        new_stage = "L7"
+        new_status = "won"
+    else:
+        new_stage = "LOST"
+        new_status = "lost"
+
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Snapshot old values for audit log
+            cur.execute("SELECT stage, status, outcome FROM nx_deal WHERE id = %s", (deal_id,))
+            old_row = cur.fetchone()
+            if not old_row:
+                return None
+            old_values = {"stage": old_row[0], "status": old_row[1], "outcome": old_row[2]}
+
             cur.execute(
-                """UPDATE nx_deal SET stage = 'LOST', status = 'closed',
+                """UPDATE nx_deal SET stage = %s, status = %s, outcome = %s,
                    close_reason = %s, close_notes = %s,
-                   updated_at = NOW() WHERE id = %s RETURNING *""",
-                (reason, notes, deal_id),
+                   last_activity_at = NOW(), updated_at = NOW()
+                   WHERE id = %s RETURNING *""",
+                (new_stage, new_status, outcome, reason, notes, deal_id),
             )
-            return row_to_dict(cur)
+            result = row_to_dict(cur)
+
+            # Write audit log
+            cur.execute(
+                """INSERT INTO nx_audit_log
+                   (table_name, record_id, action, changed_by, old_values, new_values)
+                   VALUES ('nx_deal', %s, %s, %s, %s, %s)""",
+                (
+                    deal_id,
+                    f"close_{outcome}",
+                    closed_by,
+                    json.dumps(old_values),
+                    json.dumps({"stage": new_stage, "status": new_status, "outcome": outcome}),
+                ),
+            )
+
+            return result
 
 
 def hold_deal(deal_id: int, notes: str | None = None) -> dict | None:

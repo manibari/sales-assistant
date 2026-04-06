@@ -44,6 +44,12 @@ def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+def require_finance(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user["role"] not in ("admin", "finance"):
+        raise HTTPException(status_code=403, detail="Finance or admin only")
+    return current_user
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------

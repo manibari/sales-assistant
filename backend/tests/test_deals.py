@@ -17,18 +17,23 @@ class TestDealsAccess:
 
 class TestDealsCreate:
     def test_create_deal_minimal(self, admin_session):
+        # Get a real client_id first
+        clients = admin_session.get(f"{BASE_URL}/api/nx/clients/").json()
+        assert len(clients) > 0, "Need at least one client in DB to test deal creation"
+        client_id = clients[0]["id"]
+
         resp = admin_session.post(
             f"{BASE_URL}/api/nx/deals",
             json={
                 "name": "QA Test Deal",
-                "stage": "prospect",
+                "client_id": client_id,
             },
         )
         assert resp.status_code in (200, 201)
         body = resp.json()
         assert body["name"] == "QA Test Deal"
 
-        # Cleanup: deactivate or delete if endpoint exists
+        # Cleanup
         deal_id = body.get("id")
         if deal_id:
             admin_session.delete(f"{BASE_URL}/api/nx/deals/{deal_id}")

@@ -29,70 +29,81 @@ interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  roles?: UserRole[]; // if set, overrides section-level roles for this item
 }
 
 interface NavSection {
   title?: string;
   collapsible?: boolean;
-  roles?: UserRole[];
+  roles?: UserRole[]; // if set, entire section hidden for roles not listed
   items: NavItem[];
 }
 
 const NAV_SECTIONS: NavSection[] = [
+  // Top — always visible, items filtered individually
   {
     items: [
       { label: "主畫面", href: "/home", icon: Home },
-      { label: "控制台", href: "/dashboard", icon: LayoutDashboard },
+      {
+        label: "控制台",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        roles: ["admin", "sales"],
+      },
     ],
-    roles: ["admin", "sales"],
   },
+  // 業務與銷售 — finance sees 商機+關係網 only
   {
-    title: "情資",
+    title: "業務與銷售",
+    collapsible: true,
+    items: [
+      { label: "商機 Pipeline", href: "/deals", icon: TrendingUp },
+      {
+        label: "行事曆",
+        href: "/calendar",
+        icon: Calendar,
+        roles: ["admin", "sales"],
+      },
+      { label: "關係網", href: "/contacts", icon: BookUser },
+      {
+        label: "陌開工作台",
+        href: "/outreach",
+        icon: Target,
+        roles: ["admin", "sales"],
+      },
+    ],
+  },
+  // 情報與研究 — admin/sales only
+  {
+    title: "情報與研究",
     collapsible: true,
     roles: ["admin", "sales"],
     items: [
       { label: "新增情報", href: "/capture", icon: Plus },
       { label: "情報紀錄", href: "/intel", icon: Zap },
       { label: "知識庫", href: "/knowledge", icon: Brain },
-    ],
-  },
-  {
-    title: "商機開發",
-    collapsible: true,
-    roles: ["admin", "sales"],
-    items: [
-      { label: "陌開工作台", href: "/outreach", icon: Target },
       { label: "補助案", href: "/subsidies", icon: Landmark },
       { label: "政府標案", href: "/tenders", icon: Gavel },
     ],
   },
+  // 法務與行政 — admin/sales/finance
   {
-    title: "銷售",
+    title: "法務與行政",
     collapsible: true,
-    roles: ["admin", "sales"],
+    roles: ["admin", "sales", "finance"],
     items: [
-      { label: "商機 Pipeline", href: "/deals", icon: TrendingUp },
-      { label: "行事曆", href: "/calendar", icon: Calendar },
-      { label: "關係網", href: "/contacts", icon: BookUser },
       { label: "文件追蹤", href: "/documents", icon: FileCheck },
     ],
   },
+  // 系統管理 — admin only
   {
-    title: "系統",
+    title: "系統管理",
     collapsible: true,
     roles: ["admin"],
     items: [
       { label: "使用者管理", href: "/admin/users", icon: Users },
       { label: "搜尋", href: "/search", icon: Search },
       { label: "設定", href: "/settings", icon: Settings },
-    ],
-  },
-  {
-    title: "系統",
-    collapsible: true,
-    roles: ["sales"],
-    items: [
-      { label: "搜尋", href: "/search", icon: Search },
     ],
   },
 ];
@@ -103,16 +114,12 @@ export function DesktopSidebar() {
   const { user } = useAuth();
   const role = (user?.role ?? "sales") as UserRole;
 
-  const toggleSection = (title: string) => {
-    setCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
+  const toggleSection = (key: string) => {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const isActiveInSection = (section: NavSection) =>
-    section.items.some((item) => pathname.startsWith(item.href));
-
-  const visibleSections = NAV_SECTIONS.filter(
-    (s) => !s.roles || s.roles.includes(role)
-  );
+  const isActiveInSection = (items: NavItem[]) =>
+    items.some((item) => pathname === item.href || (item.href !== "/home" && pathname.startsWith(item.href)));
 
   return (
     <aside className="hidden md:flex w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex-col">
@@ -124,10 +131,21 @@ export function DesktopSidebar() {
           Strategic Console
         </p>
       </div>
+
       <nav className="flex-1 p-3 overflow-auto">
-        {visibleSections.map((section, si) => {
+        {NAV_SECTIONS.map((section, si) => {
+          // Section-level role check
+          if (section.roles && !section.roles.includes(role)) return null;
+
+          // Item-level role filter
+          const visibleItems = section.items.filter(
+            (item) => !item.roles || item.roles.includes(role)
+          );
+          if (visibleItems.length === 0) return null;
+
           const key = section.title ? `${section.title}-${si}` : `section-${si}`;
-          const isCollapsed = section.collapsible && collapsed[key] && !isActiveInSection(section);
+          const sectionActive = isActiveInSection(visibleItems);
+          const isCollapsed = section.collapsible && collapsed[key] && !sectionActive;
 
           return (
             <div key={key} className={si > 0 ? "mt-3" : ""}>
@@ -135,16 +153,22 @@ export function DesktopSidebar() {
                 <button
                   onClick={() => section.collapsible && toggleSection(key)}
                   className={`flex items-center gap-1 w-full px-3 mb-1 py-1 rounded-md text-xs font-medium transition-colors ${
-                    section.collapsible ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" : ""
+                    section.collapsible
+                      ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      : ""
                   } ${
-                    isActiveInSection(section)
+                    sectionActive
                       ? "text-slate-900 dark:text-slate-100"
                       : "text-slate-400 dark:text-slate-500"
                   }`}
                 >
                   {section.collapsible && (
                     <span className="text-slate-300 dark:text-slate-600">
-                      {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                      {isCollapsed ? (
+                        <ChevronRight size={14} />
+                      ) : (
+                        <ChevronDown size={14} />
+                      )}
                     </span>
                   )}
                   <span>{section.title}</span>
@@ -152,8 +176,10 @@ export function DesktopSidebar() {
               )}
               {!isCollapsed && (
                 <div className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const active = pathname === item.href || (item.href !== "/home" && pathname.startsWith(item.href));
+                  {visibleItems.map((item) => {
+                    const active =
+                      pathname === item.href ||
+                      (item.href !== "/home" && pathname.startsWith(item.href));
                     const Icon = item.icon;
                     return (
                       <Link
@@ -176,6 +202,7 @@ export function DesktopSidebar() {
           );
         })}
       </nav>
+
       {user && (
         <div className="p-3 border-t border-slate-200 dark:border-slate-700">
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">

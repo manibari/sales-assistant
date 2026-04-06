@@ -214,7 +214,7 @@ function ModuleCard({ mod }: { mod: Module }) {
   const Icon = mod.icon;
   const card = (
     <div
-      className={`relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 flex flex-col gap-3 shadow-sm transition-all duration-200 ${
+      className={`relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 flex flex-col gap-3 shadow-sm transition-all duration-200 min-h-[120px] ${
         mod.comingSoon
           ? "opacity-60 cursor-default"
           : "hover:shadow-md hover:-translate-y-0.5 cursor-pointer"

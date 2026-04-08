@@ -10,6 +10,9 @@ from services.nexus.projects_nx import (
     get_project_by_deal,
     list_projects,
     update_project,
+    get_project_members,
+    add_project_member,
+    remove_project_member,
 )
 
 router = APIRouter()
@@ -19,7 +22,8 @@ class ProjectCreate(BaseModel):
     deal_id: int
     client_id: int
     name: str
-    postsale_owner: int | None = None
+    pm_id: int | None = None
+    csm_id: int | None = None
     start_date: str | None = None
     end_date: str | None = None
     notes: str | None = None
@@ -27,21 +31,26 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(BaseModel):
     status: str | None = None
-    postsale_owner: int | None = None
+    pm_id: int | None = None
+    csm_id: int | None = None
     start_date: str | None = None
     end_date: str | None = None
     notes: str | None = None
     name: str | None = None
 
 
+class MemberAdd(BaseModel):
+    user_id: int
+
+
 @router.get("/")
 def list_all(
     status: str | None = None,
     client_id: int | None = None,
-    postsale_owner: int | None = None,
+    pm_id: int | None = None,
     _user: dict = Depends(get_current_user),
 ):
-    return list_projects(status=status, client_id=client_id, postsale_owner=postsale_owner)
+    return list_projects(status=status, client_id=client_id, pm_id=pm_id)
 
 
 @router.post("/", status_code=201)
@@ -74,3 +83,19 @@ def update(project_id: int, body: ProjectUpdate, _user: dict = Depends(get_curre
     if not result:
         raise HTTPException(404, "Project not found")
     return result
+
+
+@router.get("/{project_id}/members")
+def list_members(project_id: int, _user: dict = Depends(get_current_user)):
+    return get_project_members(project_id)
+
+
+@router.post("/{project_id}/members", status_code=201)
+def add_member(project_id: int, body: MemberAdd, _user: dict = Depends(get_current_user)):
+    return add_project_member(project_id, body.user_id)
+
+
+@router.delete("/{project_id}/members/{user_id}", status_code=204)
+def remove_member(project_id: int, user_id: int, _user: dict = Depends(get_current_user)):
+    if not remove_project_member(project_id, user_id):
+        raise HTTPException(404, "Member not found")

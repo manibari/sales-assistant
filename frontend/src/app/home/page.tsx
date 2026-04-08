@@ -19,6 +19,7 @@ import {
   Users,
   Settings,
   Scale,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth, type UserRole } from "@/lib/auth-context";
@@ -124,6 +125,21 @@ const SECTIONS: Section[] = [
         icon: Gavel,
         color: "bg-orange-500",
         roles: ["admin", "manager"],
+      },
+    ],
+  },
+  {
+    id: "delivery",
+    label: "交付與專案",
+    emoji: "🚀",
+    modules: [
+      {
+        label: "專案管理",
+        description: "成交後的交付專案、PM/CSM、付款里程碑",
+        href: "/projects",
+        icon: Briefcase,
+        color: "bg-indigo-500",
+        roles: ["admin", "manager", "user"],
       },
     ],
   },

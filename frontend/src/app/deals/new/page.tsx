@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { TopBar } from "@/components/top-bar";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { nxApi, type NxClient } from "@/lib/nexus-api";
+import { useAuth } from "@/lib/auth-context";
 import { BUDGET_PRESETS, formatBudget } from "@/lib/options";
 import Link from "next/link";
 
@@ -16,16 +17,22 @@ const TIMELINE_OPTIONS = [
   { label: "未定", value: "undecided" },
 ];
 
+interface DealUser { id: number; name: string; role: string; }
+
 function NewDealForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const prefilledClientId = searchParams.get("client_id");
 
   const [clients, setClients] = useState<NxClient[]>([]);
+  const [users, setUsers] = useState<DealUser[]>([]);
   const [clientId, setClientId] = useState<number | null>(
     prefilledClientId ? Number(prefilledClientId) : null
   );
   const [name, setName] = useState("");
+  const [ownerId, setOwnerId] = useState<number | null>(null);
+  const [presalesId, setPresalesId] = useState<number | null>(null);
   const [budgetAmount, setBudgetAmount] = useState<number | null>(null);
   const [customBudget, setCustomBudget] = useState("");
   const [timeline, setTimeline] = useState("");
@@ -33,7 +40,13 @@ function NewDealForm() {
 
   useEffect(() => {
     nxApi.clients.list().then(setClients).catch(console.error);
+    nxApi.deals.listUsers().then(setUsers).catch(console.error);
   }, []);
+
+  // Default owner to self once user is known
+  useEffect(() => {
+    if (user && ownerId === null) setOwnerId(user.id);
+  }, [user, ownerId]);
 
   const handleSubmit = async () => {
     if (!name.trim() || !clientId) return;
@@ -45,6 +58,8 @@ function NewDealForm() {
         budget_amount: budgetAmount || undefined,
         budget_year: new Date().getFullYear(),
         timeline: timeline || undefined,
+        owner_id: ownerId || undefined,
+        presales_id: presalesId || undefined,
       });
       router.push(`/deals/${deal.id}`);
     } catch (err) {
@@ -96,6 +111,42 @@ function NewDealForm() {
             placeholder="例：A 食品 AOI 產線自動化"
             className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
           />
+        </div>
+
+        {/* Owner */}
+        <div>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
+            負責業務
+          </label>
+          <select
+            value={ownerId ?? ""}
+            onChange={(e) => setOwnerId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+          >
+            <option value="">未指定</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}{u.id === user?.id ? " (我)" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Pre-sales */}
+        <div>
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 block">
+            技術業務 (Pre-sales)
+          </label>
+          <select
+            value={presalesId ?? ""}
+            onChange={(e) => setPresalesId(e.target.value ? Number(e.target.value) : null)}
+            className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 text-base text-slate-900 dark:text-slate-50 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors"
+          >
+            <option value="">未指定</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
         </div>
 
         {/* Budget */}

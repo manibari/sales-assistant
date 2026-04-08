@@ -7,6 +7,7 @@ import { STAGE_LABELS } from "@/lib/deal-constants";
 import { DealCard } from "@/components/deal-card";
 import { TimelineView } from "@/components/deal-timeline";
 import { ChevronDown, ChevronRight, Plus, Search, X, User } from "lucide-react";
+import { formatBudget } from "@/lib/options";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 
@@ -19,6 +20,42 @@ const VIEW_LABELS: Record<string, string> = {
 const VIEW_ORDER: Array<"urgency" | "stage" | "timeline"> = ["urgency", "stage", "timeline"];
 
 interface DealUser { id: number; name: string; role: string; }
+
+const URGENCY_BUCKETS = [
+  { key: "critical", label: "需要立即推進", color: "text-red-500", bg: "bg-red-500/10", dot: "bg-red-500", test: (idle: number) => idle > 14 },
+  { key: "weekly",   label: "本週追蹤",     color: "text-amber-500", bg: "bg-amber-500/10", dot: "bg-amber-500", test: (idle: number) => idle > 7 && idle <= 14 },
+  { key: "active",   label: "進行中",       color: "text-green-600 dark:text-green-400", bg: "bg-green-500/10", dot: "bg-green-500", test: (idle: number) => idle <= 7 },
+];
+
+function UrgencyView({ deals }: { deals: NxDeal[] }) {
+  return (
+    <div className="space-y-6 max-w-2xl lg:max-w-4xl mx-auto">
+      {URGENCY_BUCKETS.map((bucket) => {
+        const bucketDeals = deals.filter((d) => bucket.test(d.idle_days ?? 0));
+        if (bucketDeals.length === 0) return null;
+        const budgetSum = bucketDeals.reduce((s, d) => s + (d.budget_amount ?? 0), 0);
+        return (
+          <div key={bucket.key}>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${bucket.dot}`} />
+              <span className={`text-xs font-semibold uppercase tracking-wider ${bucket.color}`}>
+                {bucket.label}
+              </span>
+              <span className="text-xs text-slate-400">
+                {bucketDeals.length} 筆{budgetSum > 0 ? ` · ${formatBudget(budgetSum)}` : ""}
+              </span>
+            </div>
+            <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+              {bucketDeals.map((deal) => (
+                <DealCard key={deal.id} deal={deal} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function DealsPage() {
   const { user } = useAuth();
@@ -166,11 +203,7 @@ export default function DealsPage() {
             <p className="text-xs mt-1">{search ? "試試其他關鍵字" : "從情報建立第一個商機"}</p>
           </div>
         ) : view === "urgency" ? (
-          <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0 max-w-2xl lg:max-w-4xl mx-auto">
-            {filteredDeals.map((deal) => (
-              <DealCard key={deal.id} deal={deal} />
-            ))}
-          </div>
+          <UrgencyView deals={filteredDeals} />
         ) : view === "stage" ? (
           <div className="space-y-4 max-w-2xl lg:max-w-4xl mx-auto">
             {stageOrder.map((stage) => {

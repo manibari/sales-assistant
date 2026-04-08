@@ -29,10 +29,14 @@ import { DealStageStepper } from "@/components/deal-stage-stepper";
 import { DealMeddic } from "@/components/deal-meddic";
 import { DealCloseModal } from "@/components/deal-close-modal";
 import { DealFilesSection } from "@/components/deal-files-section";
+import { DealDocumentsSection } from "@/components/deal-documents-section";
+import { CreateProjectModal } from "@/components/create-project-modal";
+import { Briefcase } from "lucide-react";
 import { DealAddPartnerModal } from "@/components/deal-add-partner-modal";
 import { DealAddIntelModal } from "@/components/deal-add-intel-modal";
 import { DealAddTbdModal } from "@/components/deal-add-tbd-modal";
 import { useEditableField } from "@/hooks/use-editable-field";
+import { TBD_TEMPLATES } from "@/lib/tbd-templates";
 import Link from "next/link";
 
 export default function DealDetailPage() {
@@ -53,6 +57,16 @@ export default function DealDetailPage() {
   const [showAddIntel, setShowAddIntel] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showAddTbd, setShowAddTbd] = useState(false);
+  const [showTbdTemplates, setShowTbdTemplates] = useState(false);
+  const [allUsers, setAllUsers] = useState<{ id: number; name: string }[]>([]);
+  const [editingOwner, setEditingOwner] = useState(false);
+  const [ownerValue, setOwnerValue] = useState<number | null>(null);
+  const [editingPresales, setEditingPresales] = useState(false);
+  const [presalesValue, setPresalesValue] = useState<number | null>(null);
+  const [existingProjectId, setExistingProjectId] = useState<number | null>(null);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
+  const [addingTemplates, setAddingTemplates] = useState(false);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [allPartners, setAllPartners] = useState<NxPartner[]>([]);
   const [allIntels, setAllIntels] = useState<NxIntel[]>([]);
@@ -74,6 +88,13 @@ export default function DealDetailPage() {
   }, [dealId]);
 
   useEffect(() => { loadDeal(); }, [loadDeal]);
+  useEffect(() => { nxApi.deals.listUsers().then(setAllUsers).catch(() => {}); }, []);
+  useEffect(() => {
+    nxApi.projects
+      .getByDeal(dealId)
+      .then((p) => setExistingProjectId(p.id))
+      .catch(() => setExistingProjectId(null));
+  }, [dealId]);
 
   const { editField, editValue, setEditValue, saving, startEdit, cancelEdit, saveField, handleKeyDown } =
     useEditableField({ dealId, onSaved: loadDeal });
@@ -141,7 +162,7 @@ export default function DealDetailPage() {
   }
 
   const progress: MeddicProgress = deal.meddic_progress || { completed: 0, total: 6, missing: [] };
-  const isClosed = deal.status === "won" || deal.status === "lost";
+  const isClosed = deal.status === "won" || deal.status === "lost" || deal.status === "closed";
   const isHold = deal.stage === "HOLD";
   const isInactive = isClosed || isHold;
 
@@ -192,6 +213,82 @@ export default function DealDetailPage() {
                 </h2>
               )}
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{deal.client_name} · {deal.client_industry || "—"}</p>
+
+              {/* Owner + Presales */}
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                {/* 業務 */}
+                <div className="flex items-center gap-1.5">
+                  <Users size={12} className="text-slate-400 flex-shrink-0" />
+                  {editingOwner ? (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={ownerValue ?? ""}
+                        onChange={(e) => setOwnerValue(e.target.value ? Number(e.target.value) : null)}
+                        autoFocus
+                        className="text-xs bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded px-2 py-0.5 text-slate-900 dark:text-slate-50 focus:outline-none"
+                      >
+                        <option value="">未指定</option>
+                        {allUsers.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={async () => {
+                          await nxApi.deals.update(dealId, { owner_id: ownerValue } as Partial<NxDeal>);
+                          setEditingOwner(false);
+                          loadDeal();
+                        }}
+                        className="p-0.5 text-blue-500 cursor-pointer"
+                      ><Check size={12} /></button>
+                      <button onClick={() => setEditingOwner(false)} className="p-0.5 text-slate-400 cursor-pointer"><X size={12} /></button>
+                    </div>
+                  ) : (
+                    <span
+                      onClick={() => { if (!isClosed) { setOwnerValue(deal.owner_id ?? null); setEditingOwner(true); } }}
+                      className={`text-xs ${isClosed ? "text-slate-400" : "text-slate-400 cursor-pointer hover:text-blue-400 transition-colors"}`}
+                      title={!isClosed ? "點擊指定業務" : undefined}
+                    >
+                      業務：{deal.owner_name ?? "未指定"}
+                    </span>
+                  )}
+                </div>
+
+                {/* 技術業務 */}
+                <div className="flex items-center gap-1.5">
+                  {editingPresales ? (
+                    <div className="flex items-center gap-1">
+                      <select
+                        value={presalesValue ?? ""}
+                        onChange={(e) => setPresalesValue(e.target.value ? Number(e.target.value) : null)}
+                        autoFocus
+                        className="text-xs bg-slate-100 dark:bg-slate-800 border border-blue-500 rounded px-2 py-0.5 text-slate-900 dark:text-slate-50 focus:outline-none"
+                      >
+                        <option value="">未指定</option>
+                        {allUsers.map((u) => (
+                          <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={async () => {
+                          await nxApi.deals.update(dealId, { presales_id: presalesValue } as Partial<NxDeal>);
+                          setEditingPresales(false);
+                          loadDeal();
+                        }}
+                        className="p-0.5 text-blue-500 cursor-pointer"
+                      ><Check size={12} /></button>
+                      <button onClick={() => setEditingPresales(false)} className="p-0.5 text-slate-400 cursor-pointer"><X size={12} /></button>
+                    </div>
+                  ) : (
+                    <span
+                      onClick={() => { if (!isClosed) { setPresalesValue(deal.presales_id ?? null); setEditingPresales(true); } }}
+                      className={`text-xs ${isClosed ? "text-slate-400" : "text-slate-400 cursor-pointer hover:text-blue-400 transition-colors"}`}
+                      title={!isClosed ? "點擊指定技術業務" : undefined}
+                    >
+                      技術：{deal.presales_name ?? "未指定"}
+                    </span>
+                  )}
+                </div>
+              </div>
 
               {/* Editable budget & timeline */}
               <div className="flex gap-4 mt-3 text-xs text-slate-400 dark:text-slate-500">
@@ -398,9 +495,77 @@ export default function DealDetailPage() {
             <Section
               title="TBD 清單" icon={<CircleDot size={16} className="text-amber-500" />} count={deal.tbds?.length}
               editing={editingSection === "tbds"}
-              onToggleEdit={!isClosed ? () => setEditingSection(editingSection === "tbds" ? null : "tbds") : undefined}
+              onToggleEdit={!isClosed ? () => {
+                setEditingSection(editingSection === "tbds" ? null : "tbds");
+                setShowTbdTemplates(false);
+              } : undefined}
               onAdd={editingSection === "tbds" ? () => setShowAddTbd(true) : undefined}
             >
+              {/* Stage-based template panel */}
+              {editingSection === "tbds" && TBD_TEMPLATES[deal.stage] && (
+                <div className="mb-3">
+                  <button
+                    onClick={() => {
+                      if (!showTbdTemplates) {
+                        // Pre-select all templates not already in TBD list
+                        const existing = new Set((deal.tbds ?? []).map((t) => t.question));
+                        const available = TBD_TEMPLATES[deal.stage].filter((q) => !existing.has(q));
+                        setSelectedTemplates(new Set(available));
+                      }
+                      setShowTbdTemplates((v) => !v);
+                    }}
+                    className="text-xs text-amber-500 hover:text-amber-600 font-medium cursor-pointer flex items-center gap-1"
+                  >
+                    <CircleDot size={12} />
+                    {showTbdTemplates ? "收起範本" : `從 ${deal.stage} 範本新增`}
+                  </button>
+                  {showTbdTemplates && (
+                    <div className="mt-2 border border-amber-500/20 rounded-lg bg-amber-500/5 p-3 space-y-2">
+                      {TBD_TEMPLATES[deal.stage].map((q) => {
+                        const alreadyExists = (deal.tbds ?? []).some((t) => t.question === q);
+                        const checked = selectedTemplates.has(q);
+                        return (
+                          <label key={q} className={`flex items-center gap-2 cursor-pointer ${alreadyExists ? "opacity-40" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked && !alreadyExists}
+                              disabled={alreadyExists}
+                              onChange={() => {
+                                setSelectedTemplates((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(q)) next.delete(q); else next.add(q);
+                                  return next;
+                                });
+                              }}
+                              className="rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+                            />
+                            <span className="text-xs text-slate-700 dark:text-slate-300">{q}</span>
+                            {alreadyExists && <span className="text-[10px] text-slate-400">已存在</span>}
+                          </label>
+                        );
+                      })}
+                      <button
+                        disabled={selectedTemplates.size === 0 || addingTemplates}
+                        onClick={async () => {
+                          setAddingTemplates(true);
+                          for (const q of selectedTemplates) {
+                            if (!(deal.tbds ?? []).some((t) => t.question === q)) {
+                              await nxApi.tbd.create({ question: q, linked_type: "deal", linked_id: dealId, source: "template" });
+                            }
+                          }
+                          setAddingTemplates(false);
+                          setShowTbdTemplates(false);
+                          setSelectedTemplates(new Set());
+                          loadDeal();
+                        }}
+                        className="mt-1 w-full py-1.5 text-xs font-medium bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white rounded-lg cursor-pointer transition-colors"
+                      >
+                        {addingTemplates ? "加入中..." : `加入已選取（${selectedTemplates.size} 項）`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {deal.tbds && deal.tbds.length > 0 ? (
                 deal.tbds.map((t) => (
                   <div key={t.id} className="flex items-center justify-between py-2">
@@ -411,8 +576,42 @@ export default function DealDetailPage() {
               ) : <p className="text-xs text-slate-400">無待確認事項</p>}
             </Section>
 
+            {/* Deal Documents (RFQ/Quote/SOW/PO) */}
+            {deal.client_id && (
+              <DealDocumentsSection
+                dealId={dealId}
+                clientId={deal.client_id}
+                isClosed={isClosed}
+              />
+            )}
+
             {/* Files */}
             <DealFilesSection deal={deal} dealId={dealId} isClosed={isClosed} onUpdated={loadDeal} />
+
+            {/* Won deal → create / view delivery project */}
+            {(deal.status === "won" || (deal.status === "closed" && (deal as { outcome?: string }).outcome === "won")) && (
+              existingProjectId ? (
+                <Link
+                  href={`/projects/${existingProjectId}`}
+                  className="flex items-center gap-3 bg-white dark:bg-slate-900 border border-indigo-500/30 rounded-xl p-4 cursor-pointer hover:border-indigo-500/60 transition-colors"
+                >
+                  <Briefcase size={20} className="text-indigo-500" />
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-50">
+                    前往交付專案
+                  </span>
+                </Link>
+              ) : (
+                <button
+                  onClick={() => setShowCreateProject(true)}
+                  className="w-full flex items-center gap-3 bg-white dark:bg-slate-900 border border-dashed border-indigo-500/40 rounded-xl p-4 cursor-pointer hover:border-indigo-500 hover:bg-indigo-500/5 transition-colors"
+                >
+                  <Briefcase size={20} className="text-indigo-500" />
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-50">
+                    建立交付專案
+                  </span>
+                </button>
+              )
+            )}
 
             {/* Next action */}
             {!isClosed && (
@@ -437,6 +636,14 @@ export default function DealDetailPage() {
       )}
       {showAddTbd && (
         <DealAddTbdModal dealId={dealId} onClose={() => setShowAddTbd(false)} onCreated={loadDeal} />
+      )}
+      {showCreateProject && deal?.client_id && (
+        <CreateProjectModal
+          dealId={dealId}
+          clientId={deal.client_id}
+          defaultName={deal.name}
+          onClose={() => setShowCreateProject(false)}
+        />
       )}
       {showSummaryModal && deal?.intel && (
         <IntelSummaryModal

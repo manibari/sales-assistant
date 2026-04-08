@@ -54,7 +54,29 @@ def get_all_partners(trust_level: str | None = None) -> list[dict]:
                              p.updated_at DESC""",
                 params,
             )
-            return rows_to_dicts(cur)
+            partners = rows_to_dicts(cur)
+
+            if not partners:
+                return partners
+
+            # Batch-fetch tags to avoid N+1
+            partner_ids = [p["id"] for p in partners]
+            cur.execute(
+                """SELECT et.entity_id, t.id, t.name, t.category
+                   FROM nx_entity_tag et
+                   JOIN nx_tag t ON t.id = et.tag_id
+                   WHERE et.entity_type = 'partner' AND et.entity_id = ANY(%s)""",
+                (partner_ids,),
+            )
+            tags_by_partner: dict[int, list[dict]] = {}
+            for row in cur.fetchall():
+                pid = row[0]
+                tags_by_partner.setdefault(pid, []).append({"id": row[1], "name": row[2], "category": row[3]})
+
+            for p in partners:
+                p["tags"] = tags_by_partner.get(p["id"], [])
+
+            return partners
 
 
 def update_partner(partner_id: int, **fields) -> dict | None:

@@ -47,6 +47,7 @@ export interface NxClient {
   budget_range: string | null;
   deal_budget_total: number | null;
   deal_count?: number;
+  partner_count?: number;
   pinned?: boolean;
   status: string;
   notes: string | null;
@@ -108,6 +109,8 @@ export interface NxDeal {
   client_industry?: string;
   owner_id?: number | null;
   owner_name?: string | null;
+  presales_id?: number | null;
+  presales_name?: string | null;
   stage: string;
   budget_range: string | null;
   budget_amount: number | null;
@@ -137,6 +140,25 @@ export interface NxDealPartner {
   role: string | null;
 }
 
+export interface NxProject {
+  id: number;
+  deal_id: number | null;
+  client_id: number | null;
+  name: string;
+  status: string;  // planning | active | completed | paused
+  pm_id: number | null;
+  pm_name?: string | null;
+  csm_id?: number | null;
+  csm_name?: string | null;
+  deal_name?: string | null;
+  client_name?: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface NxTag {
   id: number;
   name: string;
@@ -154,14 +176,34 @@ export interface NxTbdItem {
   created_at: string;
 }
 
+export interface NxMilestone {
+  name: string;
+  pct: number;
+  amount: number;
+  condition: string | null;
+  due_date: string | null;
+  invoice_id: number | null;
+}
+
 export interface NxDocument {
   id: number;
   client_id: number;
   doc_type: string;
+  deal_id: number | null;
+  doc_no: string | null;
+  amount: number | null;
+  currency: string;
+  version: number;
   status: string;
   sign_date: string | null;
   expiry_date: string | null;
   file_path: string | null;
+  notes: string | null;
+  milestone_json: NxMilestone[] | string | null;
+  created_at?: string;
+  updated_at?: string;
+  client_name?: string;
+  deal_name?: string;
 }
 
 export interface NxMeeting {
@@ -217,6 +259,30 @@ export interface ClientDocDetail {
   project_files: NxFile[];
   contract_files: NxFile[];
   contract_docs: NxDocument[];
+}
+
+export interface NxInvoice {
+  id: number;
+  deal_id: number | null;
+  client_id: number;
+  project_id: number | null;
+  sow_doc_id: number | null;
+  milestone_index: number | null;
+  invoice_no: string;
+  amount: number;
+  tax_rate: number;
+  currency: string;
+  status: string;  // draft | issued | paid | cancelled
+  issue_date: string | null;
+  due_date: string | null;
+  paid_date: string | null;
+  notes: string | null;
+  created_by: number | null;
+  created_at: string;
+  updated_at?: string;
+  client_name?: string;
+  deal_name?: string;
+  project_name?: string;
 }
 
 export interface NxSubsidy {
@@ -642,7 +708,7 @@ export const nxApi = {
     needsPush: (days?: number) => fetchAPI<NxDeal[]>(`/deals/needs-push${days ? `?threshold_days=${days}` : ""}`),
     listUsers: () => fetchAPI<{ id: number; name: string; role: string }[]>("/deals/users"),
     get: (id: number) => fetchAPI<NxDeal>(`/deals/${id}`),
-    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string; budget_amount?: number; budget_year?: number; owner_id?: number }) =>
+    create: (data: { name: string; client_id: number; budget_range?: string; timeline?: string; budget_amount?: number; budget_year?: number; owner_id?: number; presales_id?: number }) =>
       postAPI<NxDeal>("/deals/", data),
     update: (id: number, data: Partial<NxDeal>) =>
       patchAPI<NxDeal>(`/deals/${id}`, data),
@@ -735,6 +801,20 @@ export const nxApi = {
   documents: {
     listAll: () => fetchAPI<(NxDocument & { client_name?: string })[]>("/documents/nda-mou"),
     listByClient: (clientId: number) => fetchAPI<NxDocument[]>(`/documents/nda-mou?client_id=${clientId}`),
+    listByDeal: (dealId: number) => fetchAPI<NxDocument[]>(`/documents/nda-mou?deal_id=${dealId}`),
+    create: (data: {
+      client_id: number;
+      doc_type: string;
+      deal_id?: number | null;
+      doc_no?: string | null;
+      amount?: number | null;
+      version?: number;
+      status?: string;
+      sign_date?: string | null;
+      expiry_date?: string | null;
+      notes?: string | null;
+      milestone_json?: NxMilestone[] | null;
+    }) => postAPI<NxDocument>("/documents/nda-mou", data),
     expiring: (withinDays?: number) =>
       fetchAPI<(NxDocument & { client_name?: string })[]>(`/documents/nda-mou/expiring?within_days=${withinDays || 30}`),
     update: (docId: number, data: Partial<NxDocument>) =>
@@ -751,6 +831,64 @@ export const nxApi = {
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       return res.json() as Promise<NxDocument>;
     },
+  },
+  invoices: {
+    list: (params?: { deal_id?: number; client_id?: number; project_id?: number; status?: string }) => {
+      const p = new URLSearchParams();
+      if (params?.deal_id)    p.set("deal_id",    String(params.deal_id));
+      if (params?.client_id)  p.set("client_id",  String(params.client_id));
+      if (params?.project_id) p.set("project_id", String(params.project_id));
+      if (params?.status)     p.set("status",     params.status);
+      return fetchAPI<NxInvoice[]>(`/invoices/?${p}`);
+    },
+    get: (id: number) => fetchAPI<NxInvoice>(`/invoices/${id}`),
+    create: (data: {
+      deal_id: number;
+      client_id: number;
+      invoice_no: string;
+      amount: number;
+      tax_rate?: number;
+      currency?: string;
+      issue_date?: string | null;
+      due_date?: string | null;
+      notes?: string | null;
+      project_id?: number | null;
+      sow_doc_id?: number | null;
+      milestone_index?: number | null;
+    }) => postAPI<NxInvoice>("/invoices/", data),
+    update: (id: number, data: Partial<NxInvoice>) =>
+      patchAPI<NxInvoice>(`/invoices/${id}`, data),
+  },
+  projects: {
+    list: (params?: { status?: string; client_id?: number; pm_id?: number }) => {
+      const p = new URLSearchParams();
+      if (params?.status)    p.set("status",    params.status);
+      if (params?.client_id) p.set("client_id", String(params.client_id));
+      if (params?.pm_id)     p.set("pm_id",     String(params.pm_id));
+      return fetchAPI<NxProject[]>(`/projects/?${p}`);
+    },
+    get: (id: number) => fetchAPI<NxProject>(`/projects/${id}`),
+    getByDeal: (dealId: number) => fetchAPI<NxProject>(`/projects/by-deal/${dealId}`),
+    create: (data: {
+      deal_id: number;
+      client_id: number;
+      name: string;
+      pm_id?: number | null;
+      csm_id?: number | null;
+      start_date?: string | null;
+      end_date?: string | null;
+      notes?: string | null;
+    }) => postAPI<NxProject>("/projects/", data),
+    update: (id: number, data: Partial<NxProject>) =>
+      patchAPI<NxProject>(`/projects/${id}`, data),
+    listMembers: (id: number) =>
+      fetchAPI<{ id: number; project_id: number; user_id: number; user_name: string; user_email: string; created_at: string }[]>(
+        `/projects/${id}/members`
+      ),
+    addMember: (id: number, userId: number) =>
+      postAPI<{ id: number; project_id: number; user_id: number }>(`/projects/${id}/members`, { user_id: userId }),
+    removeMember: (id: number, userId: number) =>
+      deleteAPI(`/projects/${id}/members/${userId}`),
   },
   outreach: {
     industries: () => fetchAPI<{ industry: string; case_studies: number; solutions: number }[]>("/outreach/industries"),

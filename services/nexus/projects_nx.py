@@ -9,7 +9,8 @@ def create_project(
     deal_id: int,
     client_id: int,
     name: str,
-    postsale_owner: int | None = None,
+    pm_id: int | None = None,
+    csm_id: int | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     notes: str | None = None,
@@ -18,11 +19,11 @@ def create_project(
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO nx_project
-                   (deal_id, client_id, name, status, postsale_owner,
+                   (deal_id, client_id, name, status, pm_id, csm_id,
                     start_date, end_date, notes)
-                   VALUES (%s, %s, %s, 'planning', %s, %s, %s, %s)
+                   VALUES (%s, %s, %s, 'planning', %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, client_id, name, postsale_owner, start_date, end_date, notes),
+                (deal_id, client_id, name, pm_id, csm_id, start_date, end_date, notes),
             )
             return row_to_dict(cur)
 
@@ -47,25 +48,36 @@ def get_project_by_deal(deal_id: int) -> dict | None:
 def list_projects(
     status: str | None = None,
     client_id: int | None = None,
-    postsale_owner: int | None = None,
+    pm_id: int | None = None,
 ) -> list[dict]:
     clauses = []
     params: list = []
     if status is not None:
-        clauses.append("status = %s")
+        clauses.append("p.status = %s")
         params.append(status)
     if client_id is not None:
-        clauses.append("client_id = %s")
+        clauses.append("p.client_id = %s")
         params.append(client_id)
-    if postsale_owner is not None:
-        clauses.append("postsale_owner = %s")
-        params.append(postsale_owner)
+    if pm_id is not None:
+        clauses.append("p.pm_id = %s")
+        params.append(pm_id)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                f"SELECT * FROM nx_project {where} ORDER BY created_at DESC",
+                f"""SELECT p.*,
+                           d.name AS deal_name,
+                           c.name AS client_name,
+                           pm.name AS pm_name,
+                           csm.name AS csm_name
+                    FROM nx_project p
+                    LEFT JOIN nx_deal d ON d.id = p.deal_id
+                    LEFT JOIN nx_client c ON c.id = p.client_id
+                    LEFT JOIN nx_user pm ON pm.id = p.pm_id
+                    LEFT JOIN nx_user csm ON csm.id = p.csm_id
+                    {where}
+                    ORDER BY p.created_at DESC""",
                 params,
             )
             return rows_to_dicts(cur)
@@ -74,7 +86,8 @@ def list_projects(
 def update_project(
     project_id: int,
     status: str | None = None,
-    postsale_owner: int | None = None,
+    pm_id: int | None = None,
+    csm_id: int | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
     notes: str | None = None,
@@ -88,9 +101,12 @@ def update_project(
             raise ValueError(f"Invalid status: {status}")
         fields.append("status = %s")
         params.append(status)
-    if postsale_owner is not None:
-        fields.append("postsale_owner = %s")
-        params.append(postsale_owner)
+    if pm_id is not None:
+        fields.append("pm_id = %s")
+        params.append(pm_id)
+    if csm_id is not None:
+        fields.append("csm_id = %s")
+        params.append(csm_id)
     if start_date is not None:
         fields.append("start_date = %s")
         params.append(start_date)
@@ -116,3 +132,48 @@ def update_project(
                 params,
             )
             return row_to_dict(cur)
+
+
+def get_project_members(project_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT pm.*, u.name AS user_name, u.email AS user_email
+                   FROM nx_project_member pm
+                   JOIN nx_user u ON u.id = pm.user_id
+                   WHERE pm.project_id = %s
+                   ORDER BY pm.created_at ASC""",
+                (project_id,),
+            )
+            return rows_to_dicts(cur)
+
+
+def add_project_member(project_id: int, user_id: int) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO nx_project_member (project_id, user_id)
+                   VALUES (%s, %s)
+                   ON CONFLICT (project_id, user_id) DO NOTHING
+                   RETURNING *""",
+                (project_id, user_id),
+            )
+            row = row_to_dict(cur)
+            if not row:
+                # Already existed — fetch it
+                cur.execute(
+                    "SELECT * FROM nx_project_member WHERE project_id = %s AND user_id = %s",
+                    (project_id, user_id),
+                )
+                row = row_to_dict(cur)
+            return row
+
+
+def remove_project_member(project_id: int, user_id: int) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM nx_project_member WHERE project_id = %s AND user_id = %s",
+                (project_id, user_id),
+            )
+            return cur.rowcount > 0

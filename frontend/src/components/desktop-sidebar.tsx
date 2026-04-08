@@ -17,6 +17,7 @@ import {
   Target,
   Settings,
   Gavel,
+  Briefcase,
   ChevronDown,
   ChevronRight,
   Home,
@@ -87,6 +88,15 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "知識庫", href: "/knowledge", icon: Brain },
       { label: "補助案", href: "/subsidies", icon: Landmark },
       { label: "政府標案", href: "/tenders", icon: Gavel },
+    ],
+  },
+  // 交付與專案 — admin/sales/finance（成案後的執行階段）
+  {
+    title: "交付與專案",
+    collapsible: true,
+    roles: ["admin", "manager", "user"],
+    items: [
+      { label: "專案管理", href: "/projects", icon: Briefcase },
     ],
   },
   // 法務與行政 — admin/sales/finance

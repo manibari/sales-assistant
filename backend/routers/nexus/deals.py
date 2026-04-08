@@ -48,6 +48,7 @@ class DealCreate(BaseModel):
     budget_amount: float | None = None
     budget_year: int | None = None
     owner_id: int | None = None
+    presales_id: int | None = None
 
 
 class DealUpdate(BaseModel):
@@ -59,6 +60,7 @@ class DealUpdate(BaseModel):
     budget_year: int | None = None
     created_at: str | None = None
     owner_id: int | None = None
+    presales_id: int | None = None
 
 
 class DealClose(BaseModel):

@@ -23,13 +23,14 @@ def create_deal(
     budget_amount: float | None = None,
     budget_year: int | None = None,
     owner_id: int | None = None,
+    presales_id: int | None = None,
 ) -> dict:
     meddic_init = json.dumps({k: None for k in MEDDIC_KEYS})
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year, owner_id)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """INSERT INTO nx_deal (name, client_id, budget_range, timeline, meddic_json, budget_amount, budget_year, owner_id, presales_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (
                     name,
@@ -40,6 +41,7 @@ def create_deal(
                     budget_amount,
                     budget_year,
                     owner_id,
+                    presales_id,
                 ),
             )
             deal = row_to_dict(cur)
@@ -63,10 +65,12 @@ def get_deal(deal_id: int) -> dict | None:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT d.*, c.name AS client_name, c.industry AS client_industry,
-                          u.name AS owner_name
+                          u.name AS owner_name,
+                          ps.name AS presales_name
                    FROM nx_deal d
                    JOIN nx_client c ON d.client_id = c.id
                    LEFT JOIN nx_user u ON d.owner_id = u.id
+                   LEFT JOIN nx_user ps ON d.presales_id = ps.id
                    WHERE d.id = %s""",
                 (deal_id,),
             )
@@ -83,10 +87,12 @@ def get_all_deals(status: str = "active", owner_id: int | None = None) -> list[d
         with conn.cursor() as cur:
             cur.execute(
                 f"""SELECT d.*, c.name AS client_name, c.industry AS client_industry,
-                           u.name AS owner_name
+                           u.name AS owner_name,
+                           ps.name AS presales_name
                     FROM nx_deal d
                     JOIN nx_client c ON d.client_id = c.id
                     LEFT JOIN nx_user u ON d.owner_id = u.id
+                    LEFT JOIN nx_user ps ON d.presales_id = ps.id
                     WHERE {where}
                     ORDER BY d.last_activity_at ASC""",
                 params,
@@ -106,10 +112,12 @@ def get_deals_by_urgency(owner_id: int | None = None) -> list[dict]:
             cur.execute(
                 f"""SELECT d.*, c.name AS client_name, c.industry AS client_industry,
                            u.name AS owner_name,
+                           ps.name AS presales_name,
                            EXTRACT(DAY FROM NOW() - d.last_activity_at)::INTEGER AS idle_days
                     FROM nx_deal d
                     JOIN nx_client c ON d.client_id = c.id
                     LEFT JOIN nx_user u ON d.owner_id = u.id
+                    LEFT JOIN nx_user ps ON d.presales_id = ps.id
                     WHERE {where}
                     ORDER BY idle_days DESC""",
                 params if params else None,
@@ -150,6 +158,7 @@ def update_deal(deal_id: int, **fields) -> dict | None:
         "budget_year",
         "created_at",
         "owner_id",
+        "presales_id",
     }
     filtered = {k: v for k, v in fields.items() if k in allowed}
     if not filtered:
@@ -195,18 +204,14 @@ def close_deal(
 ) -> dict | None:
     """Close a deal.
 
-    Won deals keep stage=L7 and status='won'.
-    Lost deals set stage='LOST' and status='lost'.
+    Both won and lost deals get status='closed'; outcome distinguishes them.
+    Won deals keep stage=L7. Lost deals set stage='LOST'.
     """
     if outcome not in ("won", "lost"):
         raise ValueError(f"outcome must be 'won' or 'lost', got {outcome!r}")
 
-    if outcome == "won":
-        new_stage = "L7"
-        new_status = "won"
-    else:
-        new_stage = "LOST"
-        new_status = "lost"
+    new_status = "closed"
+    new_stage = "L7" if outcome == "won" else "LOST"
 
     with get_connection() as conn:
         with conn.cursor() as cur:

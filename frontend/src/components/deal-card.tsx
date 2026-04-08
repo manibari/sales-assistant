@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, UserCircle } from "lucide-react";
 import { STAGE_LABELS } from "@/lib/deal-constants";
 import { formatBudget } from "@/lib/options";
 import type { NxDeal } from "@/lib/nexus-api";
@@ -24,8 +24,14 @@ export function DealCard({ deal }: { deal: NxDeal }) {
           <h3 className="text-base font-semibold text-slate-900 dark:text-slate-50 truncate">
             {deal.name}
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            {deal.client_name} · {deal.client_industry || "—"}
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+            <span>{deal.client_name} · {deal.client_industry || "—"}</span>
+            {deal.owner_name && (
+              <span className="flex items-center gap-0.5 text-slate-400 dark:text-slate-500">
+                <UserCircle size={11} />
+                {deal.owner_name}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">

@@ -24,6 +24,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<NxUser[]>([]);
   const [fetching, setFetching] = useState(true);
   const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState("");
   const [editActive, setEditActive] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -50,7 +51,7 @@ export default function AdminUsersPage() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ role: editRole, is_active: editActive }),
+      body: JSON.stringify({ name: editName, role: editRole, is_active: editActive }),
     });
     setEditId(null);
     fetchUsers();
@@ -151,7 +152,15 @@ export default function AdminUsersPage() {
                 <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-400 text-xs">載入中...</td></tr>
               ) : users.map((u) => (
                 <tr key={u.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-                  <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">{u.name}</td>
+                  <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+                    {editId === u.id ? (
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : u.name}
+                  </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{u.email}</td>
                   <td className="px-4 py-3">
                     {editId === u.id ? (
@@ -190,7 +199,7 @@ export default function AdminUsersPage() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => { setEditId(u.id); setEditRole(u.role); setEditActive(u.is_active); }}
+                        onClick={() => { setEditId(u.id); setEditName(u.name); setEditRole(u.role); setEditActive(u.is_active); }}
                         className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
                         title="編輯"
                       >

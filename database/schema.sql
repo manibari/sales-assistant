@@ -751,6 +751,33 @@ CREATE INDEX IF NOT EXISTS idx_nx_audit_log_user ON nx_audit_log(changed_by);
 -- S40: Add embedding columns (JSONB for float array storage)
 ALTER TABLE nx_intel ADD COLUMN IF NOT EXISTS embedding JSONB;
 
+-- S41: Document flow standardization (RFQ / Quote / SOW / PO)
+-- Extend nx_document for full sales document lifecycle
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS deal_id      INTEGER REFERENCES nx_deal(id);
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS doc_no       TEXT;          -- Q-2026-001, SOW-2026-001
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS amount       NUMERIC;       -- 報價金額 (quote/sow)
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS version      INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS milestone_json JSONB;
+-- milestone_json format (sow only):
+-- [{"name":"簽約款","pct":50,"amount":500000,"condition":"簽約後","due_date":"2026-07","invoice_id":null}, ...]
+
+CREATE INDEX IF NOT EXISTS idx_nx_document_deal ON nx_document(deal_id);
+
+-- doc_type values: nda | mou | rfq | quote | sow | po | contract
+-- (existing nda/mou continue to work unchanged)
+
+-- Link invoices to delivery projects and SOW milestones
+ALTER TABLE nx_invoice ADD COLUMN IF NOT EXISTS project_id       INTEGER REFERENCES nx_project(id);
+ALTER TABLE nx_invoice ADD COLUMN IF NOT EXISTS sow_doc_id       INTEGER REFERENCES nx_document(id);
+ALTER TABLE nx_invoice ADD COLUMN IF NOT EXISTS milestone_index  INTEGER;  -- index into sow.milestone_json
+
+CREATE INDEX IF NOT EXISTS idx_nx_invoice_project ON nx_invoice(project_id);
+
+-- Standardize deal status semantics:
+--   status:  active | hold | closed   (lifecycle state)
+--   outcome: won | lost               (only meaningful when status='closed')
+-- No data migration needed: existing 'won'/'lost' status values map to closed+outcome
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -761,3 +788,34 @@ BEGIN
         ALTER TABLE nx_knowledge ALTER COLUMN embedding TYPE JSONB USING NULL;
     END IF;
 END$$;
+
+-- S42: Deal/Project role expansion
+-- Deal roles: sales (owner_id) + pre-sales (presales_id)
+ALTER TABLE nx_deal ADD COLUMN IF NOT EXISTS presales_id INTEGER REFERENCES nx_user(id);
+
+-- Project roles: PM + CSM (CSM assigned after delivery) + team members
+-- Rename postsale_owner → pm_id (safe: IF EXISTS prevents error on re-run)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'nx_project' AND column_name = 'postsale_owner'
+    ) THEN
+        ALTER TABLE nx_project RENAME COLUMN postsale_owner TO pm_id;
+    END IF;
+END$$;
+
+ALTER TABLE nx_project ADD COLUMN IF NOT EXISTS csm_id INTEGER REFERENCES nx_user(id);
+
+CREATE TABLE IF NOT EXISTS nx_project_member (
+    id          SERIAL PRIMARY KEY,
+    project_id  INTEGER NOT NULL REFERENCES nx_project(id) ON DELETE CASCADE,
+    user_id     INTEGER NOT NULL REFERENCES nx_user(id) ON DELETE CASCADE,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(project_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_nx_project_member ON nx_project_member(project_id);
+
+-- S43: Multi-currency support (record currency, no FX conversion)
+ALTER TABLE nx_invoice  ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TWD';
+ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TWD';

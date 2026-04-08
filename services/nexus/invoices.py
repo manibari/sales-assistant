@@ -1,4 +1,4 @@
-"""Invoice service — create, read, and update invoices linked to deals."""
+"""Invoice service — create, read, and update invoices linked to deals/projects/SOW."""
 
 from database.connection import get_connection, row_to_dict, rows_to_dicts
 
@@ -12,20 +12,26 @@ def create_invoice(
     amount: float,
     created_by: int,
     tax_rate: float = 0.05,
+    currency: str = "TWD",
     issue_date: str | None = None,
     due_date: str | None = None,
     notes: str | None = None,
+    project_id: int | None = None,
+    sow_doc_id: int | None = None,
+    milestone_index: int | None = None,
 ) -> dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO nx_invoice
-                   (deal_id, client_id, invoice_no, amount, tax_rate,
-                    status, issue_date, due_date, notes, created_by)
-                   VALUES (%s, %s, %s, %s, %s, 'draft', %s, %s, %s, %s)
+                   (deal_id, client_id, invoice_no, amount, tax_rate, currency,
+                    status, issue_date, due_date, notes, created_by,
+                    project_id, sow_doc_id, milestone_index)
+                   VALUES (%s, %s, %s, %s, %s, %s, 'draft', %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, client_id, invoice_no, amount, tax_rate,
-                 issue_date, due_date, notes, created_by),
+                (deal_id, client_id, invoice_no, amount, tax_rate, currency,
+                 issue_date, due_date, notes, created_by,
+                 project_id, sow_doc_id, milestone_index),
             )
             return row_to_dict(cur)
 
@@ -33,31 +39,58 @@ def create_invoice(
 def get_invoice(invoice_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM nx_invoice WHERE id = %s", (invoice_id,))
+            cur.execute(
+                """SELECT i.*,
+                          c.name AS client_name,
+                          d.name AS deal_name,
+                          p.name AS project_name
+                   FROM nx_invoice i
+                   LEFT JOIN nx_client c ON c.id = i.client_id
+                   LEFT JOIN nx_deal d ON d.id = i.deal_id
+                   LEFT JOIN nx_project p ON p.id = i.project_id
+                   WHERE i.id = %s""",
+                (invoice_id,),
+            )
             return row_to_dict(cur)
 
 
 def list_invoices(
     deal_id: int | None = None,
     client_id: int | None = None,
+    project_id: int | None = None,
     status: str | None = None,
 ) -> list[dict]:
-    clauses = []
+    clauses: list[str] = []
     params: list = []
     if deal_id is not None:
-        clauses.append("deal_id = %s")
+        clauses.append("i.deal_id = %s")
         params.append(deal_id)
     if client_id is not None:
-        clauses.append("client_id = %s")
+        clauses.append("i.client_id = %s")
         params.append(client_id)
+    if project_id is not None:
+        clauses.append("i.project_id = %s")
+        params.append(project_id)
     if status is not None:
-        clauses.append("status = %s")
+        clauses.append("i.status = %s")
         params.append(status)
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(f"SELECT * FROM nx_invoice {where} ORDER BY created_at DESC", params)
+            cur.execute(
+                f"""SELECT i.*,
+                           c.name AS client_name,
+                           d.name AS deal_name,
+                           p.name AS project_name
+                    FROM nx_invoice i
+                    LEFT JOIN nx_client c ON c.id = i.client_id
+                    LEFT JOIN nx_deal d ON d.id = i.deal_id
+                    LEFT JOIN nx_project p ON p.id = i.project_id
+                    {where}
+                    ORDER BY i.created_at DESC""",
+                params,
+            )
             return rows_to_dicts(cur)
 
 
@@ -68,6 +101,9 @@ def update_invoice(
     issue_date: str | None = None,
     due_date: str | None = None,
     notes: str | None = None,
+    amount: float | None = None,
+    invoice_no: str | None = None,
+    currency: str | None = None,
 ) -> dict | None:
     fields: list[str] = []
     params: list = []
@@ -89,6 +125,15 @@ def update_invoice(
     if notes is not None:
         fields.append("notes = %s")
         params.append(notes)
+    if amount is not None:
+        fields.append("amount = %s")
+        params.append(amount)
+    if invoice_no is not None:
+        fields.append("invoice_no = %s")
+        params.append(invoice_no)
+    if currency is not None:
+        fields.append("currency = %s")
+        params.append(currency)
 
     if not fields:
         return get_invoice(invoice_id)

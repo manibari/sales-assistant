@@ -331,13 +331,20 @@ export default function ContactsPage() {
                             </h3>
                             {c.pinned && <Pin size={12} className="text-amber-500 flex-shrink-0" />}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-slate-500 dark:text-slate-400">
-                              {industryLabel(c.industry)}
-                            </span>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {c.industry && (
+                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium">
+                                {industryLabel(c.industry)}
+                              </span>
+                            )}
                             {(c.deal_count ?? 0) > 0 && (
                               <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-medium">
                                 {c.deal_count} 商機
+                              </span>
+                            )}
+                            {(c.partner_count ?? 0) > 0 && (
+                              <span className="text-[11px] px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 font-medium">
+                                {c.partner_count} 夥伴
                               </span>
                             )}
                             {c.deal_budget_total != null && c.deal_budget_total > 0 && (
@@ -346,6 +353,18 @@ export default function ContactsPage() {
                               </span>
                             )}
                           </div>
+                          {c.tags && c.tags.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {c.tags.slice(0, 3).map((tag) => (
+                                <span key={tag.id} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                  {tag.name}
+                                </span>
+                              ))}
+                              {c.tags.length > 3 && (
+                                <span className="text-[10px] text-slate-400">+{c.tags.length - 3}</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         {!selectMode && (
                           <button
@@ -445,7 +464,7 @@ export default function ContactsPage() {
                         </h3>
                         {p.pinned && <Pin size={12} className="text-amber-500 flex-shrink-0" />}
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span
                           className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
                             TRUST_COLORS[p.trust_level] || "bg-slate-700 text-slate-400"
@@ -461,6 +480,11 @@ export default function ContactsPage() {
                             {p.deal_count} 商機
                           </span>
                         )}
+                        {p.tags && p.tags.slice(0, 2).map((tag) => (
+                          <span key={tag.id} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                            {tag.name}
+                          </span>
+                        ))}
                       </div>
                     </div>
                     {!selectMode && (

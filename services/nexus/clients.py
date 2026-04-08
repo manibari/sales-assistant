@@ -80,7 +80,11 @@ def get_all_clients(status: str | None = None) -> list[dict]:
                             WHERE d.client_id = c.id AND d.status = 'active') AS deal_budget_total,
                            (SELECT COUNT(*)
                             FROM nx_deal d
-                            WHERE d.client_id = c.id AND d.status = 'active') AS deal_count
+                            WHERE d.client_id = c.id AND d.status = 'active') AS deal_count,
+                           (SELECT COUNT(DISTINCT dp.partner_id)
+                            FROM nx_deal d
+                            JOIN nx_deal_partner dp ON dp.deal_id = d.id
+                            WHERE d.client_id = c.id) AS partner_count
                     FROM nx_client c {where}
                     ORDER BY c.pinned DESC,
                              (SELECT COUNT(*) FROM nx_deal d WHERE d.client_id = c.id AND d.status = 'active') DESC,
@@ -88,7 +92,29 @@ def get_all_clients(status: str | None = None) -> list[dict]:
                              c.updated_at DESC""",
                 params,
             )
-            return rows_to_dicts(cur)
+            clients = rows_to_dicts(cur)
+
+            if not clients:
+                return clients
+
+            # Batch-fetch tags to avoid N+1
+            client_ids = [c["id"] for c in clients]
+            cur.execute(
+                """SELECT et.entity_id, t.id, t.name, t.category
+                   FROM nx_entity_tag et
+                   JOIN nx_tag t ON t.id = et.tag_id
+                   WHERE et.entity_type = 'client' AND et.entity_id = ANY(%s)""",
+                (client_ids,),
+            )
+            tags_by_client: dict[int, list[dict]] = {}
+            for row in cur.fetchall():
+                cid = row[0]
+                tags_by_client.setdefault(cid, []).append({"id": row[1], "name": row[2], "category": row[3]})
+
+            for c in clients:
+                c["tags"] = tags_by_client.get(c["id"], [])
+
+            return clients
 
 
 def toggle_pin_client(client_id: int) -> dict | None:

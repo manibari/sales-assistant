@@ -49,7 +49,7 @@ All ports are defined here. Do NOT hardcode port numbers elsewhere — reference
 |---------|------|-----|-------|
 | Next.js frontend | **3002** | `http://localhost:3002` | Dev server |
 | FastAPI backend | **8002** | `http://localhost:8002` | `next.config.ts` rewrites `/api/*` here |
-| Supabase PostgreSQL | 5432 | via `DATABASE_URL` in `.env` | Remote, no local DB |
+| Docker PostgreSQL | **5433** | `localhost:5433` | Docker maps `5433→5432`; avoids conflict with macOS native Postgres on 5432 |
 | Production frontend | 443 | `https://sales.phyra.uk` | Deployed |
 | Production backend | 443 | `https://api.phyra.uk` | Deployed |
 | Telegram webhook | — | `https://api.phyra.uk/api/nx/telegram/webhook` | Set via Telegram API |

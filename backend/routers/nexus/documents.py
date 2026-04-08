@@ -8,8 +8,10 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from services.nexus.documents import (
+    create_document,
     get_all_documents,
     get_documents_by_client,
+    get_documents_by_deal,
     update_document,
     get_expiring_documents,
     create_file,
@@ -39,12 +41,32 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 router = APIRouter()
 
 
+class DocumentCreate(BaseModel):
+    client_id: int
+    doc_type: str          # rfq | quote | sow | po | contract | nda | mou
+    deal_id: int | None = None
+    doc_no: str | None = None
+    amount: float | None = None
+    currency: str = "TWD"
+    version: int = 1
+    status: str = "pending"
+    sign_date: str | None = None
+    expiry_date: str | None = None
+    notes: str | None = None
+    milestone_json: list | None = None
+
+
 class DocumentUpdate(BaseModel):
     status: str | None = None
     sign_date: str | None = None
     expiry_date: str | None = None
     file_path: str | None = None
     notes: str | None = None
+    doc_no: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    version: int | None = None
+    milestone_json: list | None = None
 
 
 class FileCreate(BaseModel):
@@ -110,14 +132,21 @@ async def upload_contract_file(
     return result
 
 
-# --- NDA/MOU Documents ---
+# --- Documents (NDA/MOU/RFQ/Quote/SOW/PO) ---
 
 
 @router.get("/nda-mou")
-def list_documents(client_id: int | None = None):
+def list_documents(client_id: int | None = None, deal_id: int | None = None):
+    if deal_id:
+        return get_documents_by_deal(deal_id)
     if client_id:
         return get_documents_by_client(client_id)
     return get_all_documents()
+
+
+@router.post("/nda-mou", status_code=201)
+def create_doc(body: DocumentCreate):
+    return create_document(**body.model_dump())
 
 
 @router.get("/nda-mou/expiring")

@@ -637,10 +637,9 @@ export default function DealDetailPage() {
       {showAddTbd && (
         <DealAddTbdModal dealId={dealId} onClose={() => setShowAddTbd(false)} onCreated={loadDeal} />
       )}
-      {showCreateProject && deal?.client_id && (
+      {showCreateProject && deal && (
         <CreateProjectModal
           dealId={dealId}
-          clientId={deal.client_id}
           defaultName={deal.name}
           onClose={() => setShowCreateProject(false)}
         />

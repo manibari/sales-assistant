@@ -6,11 +6,11 @@ VALID_STATUSES = {"draft", "issued", "paid", "cancelled"}
 
 
 def create_invoice(
-    deal_id: int,
     client_id: int,
     invoice_no: str,
     amount: float,
     created_by: int,
+    deal_id: int | None = None,
     tax_rate: float = 0.05,
     currency: str = "TWD",
     issue_date: str | None = None,

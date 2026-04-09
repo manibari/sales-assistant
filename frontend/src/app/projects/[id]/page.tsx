@@ -560,6 +560,14 @@ export default function ProjectDetailPage() {
                     >
                       {INVOICE_STATUS_LABELS[inv.status] || inv.status}
                     </span>
+                    {!inv.deal_id && (
+                      <span
+                        title="此發票未連結到商機 — 建議補上 deal_id 以追溯來源"
+                        className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-medium"
+                      >
+                        ⚠ 無商機
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-slate-400">
                     <span>{formatDate(inv.issue_date)}</span>

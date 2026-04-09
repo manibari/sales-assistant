@@ -20,7 +20,6 @@ router = APIRouter()
 
 class ProjectCreate(BaseModel):
     deal_id: int
-    client_id: int
     name: str
     pm_id: int | None = None
     csm_id: int | None = None

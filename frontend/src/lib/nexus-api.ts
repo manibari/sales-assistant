@@ -142,8 +142,7 @@ export interface NxDealPartner {
 
 export interface NxProject {
   id: number;
-  deal_id: number | null;
-  client_id: number | null;
+  deal_id: number;  // required; client is derived from deal
   name: string;
   status: string;  // planning | active | completed | paused
   pm_id: number | null;
@@ -151,6 +150,7 @@ export interface NxProject {
   csm_id?: number | null;
   csm_name?: string | null;
   deal_name?: string | null;
+  client_id?: number;       // derived from deal via JOIN, not stored
   client_name?: string | null;
   start_date: string | null;
   end_date: string | null;
@@ -843,7 +843,7 @@ export const nxApi = {
     },
     get: (id: number) => fetchAPI<NxInvoice>(`/invoices/${id}`),
     create: (data: {
-      deal_id: number;
+      deal_id?: number | null;  // nullable: supports standalone client invoices (maintenance fees, misc charges)
       client_id: number;
       invoice_no: string;
       amount: number;
@@ -871,7 +871,6 @@ export const nxApi = {
     getByDeal: (dealId: number) => fetchAPI<NxProject>(`/projects/by-deal/${dealId}`),
     create: (data: {
       deal_id: number;
-      client_id: number;
       name: string;
       pm_id?: number | null;
       csm_id?: number | null;

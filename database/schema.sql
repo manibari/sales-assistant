@@ -720,11 +720,11 @@ CREATE INDEX IF NOT EXISTS idx_nx_invoice_status ON nx_invoice(status);
 -- Delivery projects (created automatically on deal Won)
 CREATE TABLE IF NOT EXISTS nx_project (
     id              SERIAL PRIMARY KEY,
-    deal_id         INTEGER REFERENCES nx_deal(id),
-    client_id       INTEGER REFERENCES nx_client(id),
+    deal_id         INTEGER NOT NULL REFERENCES nx_deal(id),  -- client derived via deal, no redundant column
     name            TEXT NOT NULL,
     status          TEXT NOT NULL DEFAULT 'planning',  -- planning | active | completed | paused
-    postsale_owner  INTEGER REFERENCES nx_user(id),
+    pm_id           INTEGER REFERENCES nx_user(id),
+    csm_id          INTEGER REFERENCES nx_user(id),
     start_date      DATE,
     end_date        DATE,
     notes           TEXT,
@@ -819,3 +819,30 @@ CREATE INDEX IF NOT EXISTS idx_nx_project_member ON nx_project_member(project_id
 -- S43: Multi-currency support (record currency, no FX conversion)
 ALTER TABLE nx_invoice  ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TWD';
 ALTER TABLE nx_document ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'TWD';
+
+-- S44: Remove redundant nx_project.client_id (derive from deal.client_id).
+-- Existing rows (if any) are backfilled from deal before dropping.
+-- Projects now require a deal_id — all delivery projects come from a won deal.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'nx_project' AND column_name = 'client_id'
+    ) THEN
+        -- Safety: ensure no rows would lose data during drop
+        -- (projects with deal_id NULL would lose their client linkage)
+        UPDATE nx_project SET deal_id = (
+            SELECT id FROM nx_deal WHERE client_id = nx_project.client_id LIMIT 1
+        )
+        WHERE deal_id IS NULL AND client_id IS NOT NULL;
+        ALTER TABLE nx_project DROP COLUMN client_id;
+    END IF;
+END$$;
+
+-- Projects must have a deal (enforce NOT NULL only if no violating rows exist)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM nx_project WHERE deal_id IS NULL) THEN
+        ALTER TABLE nx_project ALTER COLUMN deal_id SET NOT NULL;
+    END IF;
+END$$;

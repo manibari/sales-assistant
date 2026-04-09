@@ -7,12 +7,10 @@ import { nxApi } from "@/lib/nexus-api";
 
 export function CreateProjectModal({
   dealId,
-  clientId,
   defaultName,
   onClose,
 }: {
   dealId: number;
-  clientId: number;
   defaultName: string;
   onClose: () => void;
 }) {
@@ -36,7 +34,6 @@ export function CreateProjectModal({
     try {
       const proj = await nxApi.projects.create({
         deal_id: dealId,
-        client_id: clientId,
         name: name.trim(),
         pm_id: pmId,
         start_date: startDate || null,

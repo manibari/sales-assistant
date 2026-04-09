@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Plus, ChevronDown, ChevronRight, Pencil, Check, X, Trash2 } from "lucide-react";
+import { FileText, Plus, ChevronDown, ChevronRight, Check, X, Trash2 } from "lucide-react";
 import { nxApi, type NxDocument, type NxMilestone } from "@/lib/nexus-api";
-import { Section } from "@/components/collapsible-section";
 
 const DOC_TYPE_LABELS: Record<string, string> = {
   rfq: "RFQ 需求書",
@@ -490,7 +489,6 @@ export function DealDocumentsSection({
 }) {
   const [docs, setDocs] = useState<NxDocument[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [editing, setEditing] = useState(false);
 
   const loadDocs = useCallback(async () => {
     try {
@@ -507,17 +505,29 @@ export function DealDocumentsSection({
 
   return (
     <>
-      <Section
-        title="商務文件"
-        icon={<FileText size={16} className="text-indigo-500" />}
-        count={docs.length}
-        editing={editing}
-        onToggleEdit={!isClosed ? () => setEditing(!editing) : undefined}
-        onAdd={editing ? () => setShowCreate(true) : undefined}
-      >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-indigo-500" />
+            <span className="text-sm font-semibold text-slate-900 dark:text-slate-50">
+              商務文件
+            </span>
+            <span className="text-xs text-slate-400">({docs.length})</span>
+          </div>
+          {!isClosed && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg border border-blue-500/30 text-blue-500 hover:bg-blue-500/10 cursor-pointer transition-colors"
+            >
+              <Plus size={12} />
+              新增文件
+            </button>
+          )}
+        </div>
+
         {docs.length === 0 ? (
           <p className="text-xs text-slate-400 py-2">
-            尚無商務文件 {!isClosed && "· 點擊編輯後可新增"}
+            尚無商務文件 {!isClosed && "· 點擊右上角新增報價單 / SOW / PO"}
           </p>
         ) : (
           <div className="space-y-2">
@@ -526,7 +536,7 @@ export function DealDocumentsSection({
             ))}
           </div>
         )}
-      </Section>
+      </div>
 
       {showCreate && (
         <CreateDocModal

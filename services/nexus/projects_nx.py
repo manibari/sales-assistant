@@ -7,7 +7,6 @@ VALID_STATUSES = {"planning", "active", "completed", "paused"}
 
 def create_project(
     deal_id: int,
-    client_id: int,
     name: str,
     pm_id: int | None = None,
     csm_id: int | None = None,
@@ -15,15 +14,16 @@ def create_project(
     end_date: str | None = None,
     notes: str | None = None,
 ) -> dict:
+    """Create a delivery project linked to a won deal. Client is derived from the deal."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """INSERT INTO nx_project
-                   (deal_id, client_id, name, status, pm_id, csm_id,
+                   (deal_id, name, status, pm_id, csm_id,
                     start_date, end_date, notes)
-                   VALUES (%s, %s, %s, 'planning', %s, %s, %s, %s, %s)
+                   VALUES (%s, %s, 'planning', %s, %s, %s, %s, %s)
                    RETURNING *""",
-                (deal_id, client_id, name, pm_id, csm_id, start_date, end_date, notes),
+                (deal_id, name, pm_id, csm_id, start_date, end_date, notes),
             )
             return row_to_dict(cur)
 
@@ -31,7 +31,21 @@ def create_project(
 def get_project(project_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM nx_project WHERE id = %s", (project_id,))
+            cur.execute(
+                """SELECT p.*,
+                          d.client_id,
+                          d.name AS deal_name,
+                          c.name AS client_name,
+                          pm.name AS pm_name,
+                          csm.name AS csm_name
+                   FROM nx_project p
+                   JOIN nx_deal d ON d.id = p.deal_id
+                   LEFT JOIN nx_client c ON c.id = d.client_id
+                   LEFT JOIN nx_user pm ON pm.id = p.pm_id
+                   LEFT JOIN nx_user csm ON csm.id = p.csm_id
+                   WHERE p.id = %s""",
+                (project_id,),
+            )
             return row_to_dict(cur)
 
 
@@ -39,7 +53,11 @@ def get_project_by_deal(deal_id: int) -> dict | None:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT * FROM nx_project WHERE deal_id = %s ORDER BY created_at DESC LIMIT 1",
+                """SELECT p.*, d.client_id
+                   FROM nx_project p
+                   JOIN nx_deal d ON d.id = p.deal_id
+                   WHERE p.deal_id = %s
+                   ORDER BY p.created_at DESC LIMIT 1""",
                 (deal_id,),
             )
             return row_to_dict(cur)
@@ -56,7 +74,8 @@ def list_projects(
         clauses.append("p.status = %s")
         params.append(status)
     if client_id is not None:
-        clauses.append("p.client_id = %s")
+        # Client is derived from deal, not stored on project
+        clauses.append("d.client_id = %s")
         params.append(client_id)
     if pm_id is not None:
         clauses.append("p.pm_id = %s")
@@ -67,13 +86,14 @@ def list_projects(
         with conn.cursor() as cur:
             cur.execute(
                 f"""SELECT p.*,
+                           d.client_id,
                            d.name AS deal_name,
                            c.name AS client_name,
                            pm.name AS pm_name,
                            csm.name AS csm_name
                     FROM nx_project p
-                    LEFT JOIN nx_deal d ON d.id = p.deal_id
-                    LEFT JOIN nx_client c ON c.id = p.client_id
+                    JOIN nx_deal d ON d.id = p.deal_id
+                    LEFT JOIN nx_client c ON c.id = d.client_id
                     LEFT JOIN nx_user pm ON pm.id = p.pm_id
                     LEFT JOIN nx_user csm ON csm.id = p.csm_id
                     {where}

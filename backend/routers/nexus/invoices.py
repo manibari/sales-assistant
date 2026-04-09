@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 class InvoiceCreate(BaseModel):
-    deal_id: int
+    deal_id: int | None = None  # nullable: standalone client invoices (maintenance, misc)
     client_id: int
     invoice_no: str
     amount: float
@@ -60,6 +60,7 @@ def create(body: InvoiceCreate, current_user: dict = Depends(require_finance)):
             invoice_no=body.invoice_no,
             amount=body.amount,
             tax_rate=body.tax_rate,
+            currency=body.currency,
             issue_date=body.issue_date,
             due_date=body.due_date,
             notes=body.notes,

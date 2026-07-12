@@ -1,84 +1,75 @@
+---
+generated: 2026-07-12
+total_subsidies: 56
+total_case_studies: 2
+total_solutions: 3
+---
+
 # Materials Health Report
 
-> Generated: 2026-03-25
+> Generated: 2026-07-12 09:00 (manual run via /material-health)
 
 ## Summary
 
 | Check | Status | Issues |
 |-------|--------|--------|
-| Case study frontmatter | PASS | 0 issues |
-| Case study content | WARN | 2 files have TODO placeholders |
-| Expired subsidies | WARN | 1 to archive |
-| Subsidy missing status | WARN | 6 files missing `status` field |
-| Company info staleness | PASS | 0 stale files (all updated 2026-03-16) |
-| Company TODO placeholders | WARN | 4 files with unfilled content |
-| INDEX consistency | PASS | 0 mismatches |
-| Orphaned files | PASS | 0 orphans |
-| Solutions coverage | WARN | `saas/` category empty |
+| Case study frontmatter | ✅ pass | 0 issues |
+| Expired subsidies | ✅ pass | 0 to archive |
+| Company info staleness | ⚠️ warn | 5 files stale (118 days), 4 still hold TODO placeholders |
+| INDEX consistency | ✅ pass | 0 mismatches |
+| Orphaned files | ✅ pass | 0 orphans (1 iCloud conflict dupe removed) |
 
 ## Details
 
-### Case Studies
+### Case Studies (2 files)
 
-Frontmatter 完整性 — 全部通過（client, industry, solution_type, year, outcome 皆有值）。
+Frontmatter 完整性：兩份案例的必填欄位（client / industry / solution_type / year / outcome）皆齊全。
 
-內容 TODO — 以下檔案有尚未填寫的區塊：
+⚠️ 內容品質備註（非 frontmatter 問題）：兩份案例的內文仍是模板佔位狀態 —
+- `chimei-foods_2025.md` — 客戶背景 / 挑戰 / 方案架構 / 客戶證言皆為 TODO 或空白
+- `example-tech_2025.md` — 同上，且「範例科技」為示範資料，建議確認是否保留
 
-| 檔案 | 問題 |
-|------|------|
-| `chimei-foods_2025.md` | `<!-- TODO: 填入客戶背景描述 -->`，規模/主要產品/挑戰皆為空 |
-| `example-tech_2025.md` | `<!-- TODO: 填入客戶背景描述 -->`，規模/主要產品/挑戰皆為空 |
+### Subsidies (56 active / 30 archived)
 
-### Subsidies
+- 到期檢查：以 2026-07-12 為基準，**0 件已過期**。全部 56 件 `status: active`，與 `programs/` 位置一致。
+- `programs/archived/` 30 件均無 `status: active` 殘留，狀態一致。
+- 近期截止（30 天內），提案時優先引用：
+  - 航太產業AERO輔導計畫（115年度） — **2026-07-17（剩 5 天）**
+  - 關鍵醫材國產量能自主整合補助計畫（115年度） — **2026-07-31（剩 19 天）**
+- INDEX 產生於 2026-07-09（subsidy-scraper），資料新鮮。
 
-#### 應歸檔（deadline 已過）
+### Company Info (5 files) ⚠️
 
-| 補助名稱 | 截止日期 | 建議動作 |
-|----------|----------|----------|
-| 服務業創新研發計畫 (SIIR) — 115年度 | 2026-01-30 | 移至 `archived/`，第二梯次待公告後建新檔 |
+全部 5 檔最後修改日為 **2026-03-16（118 天前，超過 90 天門檻）**：
 
-#### 缺少 `status` 欄位
+| 檔案 | 過期 | TODO 佔位 |
+|------|------|-----------|
+| profile.md | ⚠️ 118 天 | ⚠️ `<!-- TODO: 請填入實際公司資訊 -->` |
+| capabilities.md | ⚠️ 118 天 | — |
+| team.md | ⚠️ 118 天 | ⚠️ `<!-- TODO: 請填入實際團隊資訊 -->` |
+| methodology.md | ⚠️ 118 天 | ⚠️ `<!-- TODO: 請填入實際方法論 -->` |
+| differentiators.md | ⚠️ 118 天 | ⚠️ `<!-- TODO: 請填入實際差異化優勢 -->` |
 
-以下 6 個 program 檔案 frontmatter 未設定 `status` 欄位：
+> 此項自 2026-07-05 上次健檢即為 warn，持續未處理。公司資料是所有 sales deck 的素材源頭，建議優先補齊（正傑科技 / 詠鋐智能 雙公司脈絡）。
 
-1. `SBIR-企業跨域研發補助.md`
-2. `中小型製造業低碳及智慧化升級轉型個案補助.md`
-3. `協助傳統產業技術開發計畫-CITD-115年度第1梯次.md`
-4. `小型企業創新研發計畫-SBIR-115年度.md`
-5. `服務業創新研發計畫-SIIR-115年度.md`
-6. `補助中小用戶導入節能服務.md`
+### INDEX Consistency
 
-#### 即將到期（30 天內）
+| INDEX | 目錄實際 | INDEX 記載 | 結果 |
+|-------|----------|-----------|------|
+| case-studies/INDEX.md | 2 檔 | 2 筆 | ✅ |
+| solutions/INDEX.md | 3 檔（ai-data ×2, consulting ×1） | 3 筆 | ✅ |
+| subsidies/INDEX.md | programs/ 56 檔 | 56 筆（自報 56 件） | ✅ |
 
-| 補助名稱 | 截止日期 |
-|----------|----------|
-| 商業服務業節能設備補助 | 2026-04-10 |
-| 中小型製造業接班傳承AI應用數位轉型 | 2026-04-27 |
-
-#### INDEX 一致性
-
-- INDEX 宣稱 50 筆，programs/ 實際 50 筆 — 一致
-- 無 `archived/` 目錄（已過期檔案尚未歸檔）
-
-### Company Info
-
-所有 5 檔皆於 2026-03-16 更新，未超過 90 天門檻。
-
-TODO / 待填內容：
-
-| 檔案 | 問題 |
-|------|------|
-| `profile.md` | `<!-- TODO: 請填入實際公司資訊 -->`，公司介紹/產業列表為空 |
-| `team.md` | `<!-- TODO: 請填入實際團隊資訊 -->`，團隊/夥伴描述為空 |
-| `methodology.md` | `<!-- TODO: 請填入實際方法論 -->`，AI/管顧/品控方法論為空 |
-| `differentiators.md` | `<!-- TODO: 請填入實際差異化優勢 -->`，ICP 描述為空 |
-
-### Solutions
-
-- `ai-data/`: 2 個方案（predictive-maintenance, data-driven-platform）— INDEX 一致
-- `consulting/`: 1 個方案（digital-transformation）— INDEX 一致
-- `saas/`: 0 個方案 — INDEX 標記「待新增」
+備註：`solutions/saas/` 目錄為空，INDEX 中為「待新增」佔位 — 一致，非錯誤。
 
 ### Orphaned Files
 
-無孤立檔案。所有 .md 檔皆已在對應 INDEX 中登錄。
+- case-studies / solutions：無未列入 INDEX 的 .md 檔。
+- 已清理：`HEALTH_REPORT 2.md`（2026-03-18 的 iCloud 衝突副本，較正本舊，經 mtime 比對後刪除）。
+- 觀察（不計入 orphan）：`clients/` 與 `subsidies/` 內累積大量 scraper 的 `.jsonl` / `.log` 日常產出檔（clients 237 檔、subsidies 168 檔中多數為此類）；`tenders/` 有 3,547 檔。不影響素材健康，但若要控制 repo 體積可考慮定期歸檔或加入 .gitignore。
+
+## Action Items
+
+1. **（重複警告）補齊 `company/` 5 檔** — 118 天未更新且 4 檔仍是 TODO 模板，是目前素材庫最大缺口。
+2. 兩份案例（奇美食品、範例科技）內文仍為模板骨架，接到真實提案前建議至少完成一份完整案例。
+3. 航太 AERO（07-17）、關鍵醫材（07-31）兩件補助即將截止，如有相關客戶請於本週引用。

@@ -3,8 +3,8 @@ name: "服務業創新研發計畫 (SIIR) — 115年度"
 agency: "經濟部商業發展署、運動部 / 執行：財團法人中國生產力中心"
 program_type: siir
 category: "服務業創新研發"
-deadline: "2026-06-30"
-deadline_text: "第一梯次已截止(115/1/30)；第二梯次預計115年5月1日起受理至115年6月30日（視經費用罄提前截止）"
+deadline: "2026-01-30"
+deadline_text: "第一梯次115/1/30截止；第二梯次因115年度補助經費已用罄取消（官網2026-05-20公告不受理第二梯次申請）"
 funding_amount: "個別創新：每案最高150萬元（運動服務領域200萬元）。
 合作創新：每案最高500萬元（運動服務領域700萬元）。
 國際化進階創新：個別最高500萬元（運動服務600萬元）/ 合作最高1,000萬元（運動服務1,200萬元）。
@@ -22,8 +22,8 @@ industry_tags: [科技業, 服務業, 設計業]
 company_size: all
 reference_url: "https://gcis.nat.gov.tw/neo-s"
 source_id: "SIIR"
-last_scraped: "2026-04-06"
-status: active
+last_scraped: "2026-06-15"
+status: expired
 ---
 
 # 服務業創新研發計畫 (SIIR) — 115年度

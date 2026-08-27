@@ -33,3 +33,9 @@ uploads/
 streamlit.log
 *.log
 .gstack/
+
+# Subsidy scraper runtime logs (session transcripts, not data)
+materials/subsidies/scraper-*.jsonl
+materials/subsidies/scraper-*.log
+materials/subsidies/*-stderr.log
+materials/subsidies/*-stdout.log

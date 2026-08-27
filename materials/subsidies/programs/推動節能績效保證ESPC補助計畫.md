@@ -12,7 +12,7 @@ industry_tags: [製造業, 服務業]
 company_size: sme
 reference_url: "https://www.sme.gov.tw/drsme/drsme/Plan/plan_more?id=7242968073d946ab9ba26f90596fac80"
 source_id: "DRSME"
-last_scraped: "2026-08-03"
+last_scraped: "2026-08-24"
 status: active
 ---
 

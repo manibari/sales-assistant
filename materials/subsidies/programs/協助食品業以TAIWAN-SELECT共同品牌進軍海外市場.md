@@ -15,7 +15,7 @@ industry_tags: [科技業, 零售業, 農業, 設計業]
 company_size: all
 reference_url: "https://www.sme.gov.tw/drsme/drsme/Plan/plan_more?id=6219baca4ad74bfa993aadc416bce2db"
 source_id: "DRSME"
-last_scraped: "2026-03-16"
+last_scraped: "2026-08-24"
 status: active
 ---
 

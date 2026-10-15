@@ -4,7 +4,7 @@ agency: "經濟部中小及新創企業署"
 program_type: sbir
 category: "跨域研發"
 deadline: ""
-deadline_text: "115年度第一梯次已結束（114/12/9截止），下一梯次待公告"
+deadline_text: "116年度梯次受理中至115/12/7，詳見 SBIR-企業跨域研發補助-116年度.md"
 funding_amount: "最高補助新臺幣 700 萬元，補助比例不超過全案總經費 50%"
 eligibility: "至少2家企業組成研發聯盟，其中至少1家須為新創企業（民國106年10月17日後成立）。
 中小企業定義：實收資本額≦1億元或員工數<200人。
@@ -17,7 +17,7 @@ industry_tags: [科技業, 製造業, 全產業]
 company_size: sme
 reference_url: "https://sbir.org.tw/cross/info"
 source_id: sbir
-last_scraped: "2026-10-12"
+last_scraped: "2026-10-15"
 status: active
 ---
 
@@ -31,7 +31,7 @@ status: active
 | 大類 | 跨域研發 |
 | 補助額度 | 最高新臺幣 700 萬元（補助比例≦50%） |
 | 申請資格 | 至少2家企業組成研發聯盟（含至少1家新創） |
-| 申請期間 | 115年度第一梯次已結束，下一梯次待公告 |
+| 申請期間 | 116年度梯次受理中（至115/12/7），見 [116年度](SBIR-企業跨域研發補助-116年度.md) |
 | 申請連結 | https://sbir.org.tw/cross/info |
 
 ## 補助範圍

@@ -25,7 +25,7 @@ industry_tags: [服務業, 全產業]
 company_size: sme
 reference_url: "https://sbir.org.tw"
 source_id: "SBIR"
-last_scraped: "2026-10-15"
+last_scraped: "2026-10-19"
 status: active
 ---
 

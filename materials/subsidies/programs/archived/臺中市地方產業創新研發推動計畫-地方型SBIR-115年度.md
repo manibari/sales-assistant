@@ -13,7 +13,8 @@ company_size: sme
 reference_url: "https://www.economic.taichung.gov.tw/16103/16107/16114/3274817"
 source_id: sbir
 last_scraped: "2026-07-02"
-status: expired---
+status: expired
+---
 
 # 臺中市地方產業創新研發推動計畫（地方型SBIR）115年度
 

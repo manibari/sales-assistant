@@ -14,7 +14,8 @@ company_size: all
 reference_url: "https://www.sme.gov.tw/drsme/drsme/Plan/plan_more?id=a5b97c4e223941459cb72b72dec2cb66"
 source_id: "DRSME"
 last_scraped: "2026-07-02"
-status: expired---
+status: expired
+---
 
 # 提升臺灣產業國際形象計畫－Taiwan Excellence為品牌推廣海外市場
 

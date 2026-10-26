@@ -16,7 +16,7 @@ industry_tags: [科技業, 製造業, 全產業]
 company_size: sme
 reference_url: "https://sbir.org.tw/cross/notice_content?id=12468"
 source_id: sbir
-last_scraped: "2026-10-22"
+last_scraped: "2026-10-26"
 status: active
 ---
 

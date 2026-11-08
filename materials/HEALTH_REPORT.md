@@ -1,52 +1,54 @@
 ---
-generated: 2026-11-01
-total_subsidies: 58
-total_archived_subsidies: 41
+generated: 2026-11-08
+total_subsidies: 55
+total_archived_subsidies: 44
 total_case_studies: 2
 total_solutions: 3
 ---
 
 # Materials Health Report
 
-> Generated: 2026-11-01 (via /sales-material-health)
+> Generated: 2026-11-08 (via /sales-material-health)
 
 ## Summary
 
 | Check | Status | Issues |
 |-------|--------|--------|
 | Case study frontmatter | ✅ pass | 0 issues（必填欄位齊全；內文 TODO 佔位另計） |
-| Expired subsidies | ⚠️ warn | 4 to archive（截止日 2026-10-30） |
-| Company info staleness | ⚠️ warn | 5 stale files（230 天），4 份仍是 TODO 佔位 |
-| INDEX consistency | ✅ pass | 0 mismatches（補助 58/58、案例 2/2、方案 3/3） |
+| Expired subsidies | ✅ pass | 0 to archive（上週 4 件已處理） |
+| Company info staleness | ⚠️ warn | 5 stale files（237 天），4 份仍是 TODO 佔位 |
+| INDEX consistency | ✅ pass | 0 mismatches（補助 55/55、案例 2/2、方案 3/3） |
 | Orphaned files | ✅ pass | 0 orphans（無死連結） |
 
 ## Details
 
 ### Case Studies
 
-必填欄位（client / industry / solution_type / year / outcome）兩份皆齊全，`year` 皆為數字。
+必填欄位（client / industry / solution_type / year / outcome）兩份皆齊全；`solution_type` 為陣列、`year` 為數字。
 
 內容層面待補（不影響 frontmatter 檢查）：
 
-- `chimei-foods_2025.md` — L16 `<!-- TODO: 填入客戶背景描述 -->`，規模、主要產品欄位空白
+- `chimei-foods_2025.md` — L16 `<!-- TODO: 填入客戶背景描述 -->`
 - `example-tech_2025.md` — L16 同上；客戶名「範例科技」為範例資料，非真實案例
 
-> 案例庫目前只有 1 份可能為真實案例，提案素材配對能力有限。
+> 案例庫實質只有 1 份可能為真實案例，提案素材配對能力有限。
 
 ### Subsidies
 
-**應歸檔（deadline < 2026-11-01，status 仍為 active）：**
+**應歸檔（deadline < 2026-11-08）：** 0 件。
 
-| 檔案 | 截止日 |
-|------|--------|
-| `programs/臺法創新研發合作補助計畫-115年度.md` | 2026-10-30 |
-| `programs/補助廠商分散及開拓海外市場.md` | 2026-10-30 |
-| `programs/關鍵礦物應用高值化推動計畫-115年度.md` | 2026-10-30 |
-| `programs/雲市集工業館-AI工具庫點數補助計畫-115年度.md` | 2026-10-30 |
+上週（2026-11-01）報告的 4 件已處理（2026-11-02 scraper refresh）：
 
-連帶影響：`subsidies/INDEX.md` 及 `by-industry/`（all-industries / manufacturing / retail / technology）仍列出這 4 件。下次 `/gov-subsidy-scraper` 執行時應會自動歸檔並重建索引；若要立即處理可手動跑一次 scraper。
+| 檔案 | 處理結果 |
+|------|----------|
+| `臺法創新研發合作補助計畫-115年度.md` | 已移入 `programs/archived/` |
+| `補助廠商分散及開拓海外市場.md` | 已移入 `programs/archived/` |
+| `關鍵礦物應用高值化推動計畫-115年度.md` | 已移入 `programs/archived/` |
+| `雲市集工業館-AI工具庫點數補助計畫-115年度.md` | 仍有效 — 截止日更新為 2027-10-20（116/10/20 前送件） |
 
-**狀態不一致：** 0 件（programs/ 下全部 `status: active`）。
+**狀態不一致：** 0 件（programs/ 下 55 件全部 `status: active`）。
+
+**無截止日（`deadline: ""`）：** 41 / 55 件。多為常態受理或「洽計畫辦公室」型計畫，無法自動判斷是否過期，僅供參考，非本次 warn 項目。
 
 **即將截止（60 天內）：**
 
@@ -56,7 +58,7 @@ total_solutions: 3
 
 ### Company Info
 
-5 份檔案最後修改日皆為 2026-03-16（230 天，超過 90 天門檻）：
+5 份檔案最後修改日皆為 2026-03-16（237 天，超過 90 天門檻）：
 
 | 檔案 | 狀態 |
 |------|------|
@@ -66,13 +68,13 @@ total_solutions: 3
 | `differentiators.md` | 超過 90 天未更新 + 尚未填入（L3 TODO） |
 | `capabilities.md` | 超過 90 天未更新（無 TODO） |
 
-> 此問題已連續多週出現。公司基本資料是所有提案的底稿，建議優先補齊 profile / team（需區分正傑科技與詠鋐智能兩個身分）。
+> 此問題已連續多週出現且是目前唯一的 warn。公司基本資料是所有提案的底稿，建議優先補齊 profile / team（需區分正傑科技與詠鋐智能兩個身分）。
 
 ### INDEX Mismatches
 
-- `case-studies/INDEX.md`：列 2 件，目錄 2 件 ✅
+- `case-studies/INDEX.md`：表格 + 清單共 4 個連結，對應 2 個檔案，目錄 2 件 ✅
 - `solutions/INDEX.md`：列 3 件，子目錄 3 件 ✅（`saas/` 目錄不存在，INDEX 中 SaaS 區塊為「待新增」佔位）
-- `subsidies/INDEX.md`：宣稱 58 件、連結 58 件、`programs/*.md` 58 件 ✅
+- `subsidies/INDEX.md`：宣稱 55 件、連結 55 件、`programs/*.md` 55 件 ✅；`by-industry/*.md` 無死連結
 
 ### Orphaned Files
 
